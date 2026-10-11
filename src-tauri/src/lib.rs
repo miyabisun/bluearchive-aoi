@@ -108,6 +108,10 @@ impl Recognizer {
     /// Reads as if the snapshot lacked the items drawn with icon `missing`.
     fn read_without(&self, image: &RgbImage, missing: Option<usize>) -> Vec<Cell> {
         let cards = grid::find_cards(image);
+        let badges: Vec<Option<u32>> = cards
+            .iter()
+            .map(|card| grid::badge_bottom(image, card))
+            .collect();
         let candidates: Vec<usize> = (0..self.icon_keys.len())
             .filter(|&i| Some(i) != missing)
             .collect();
@@ -117,13 +121,15 @@ impl Recognizer {
         let options: Vec<Option<Vec<ListKey>>> = std::thread::scope(|scope| {
             let workers: Vec<_> = cards
                 .chunks(per_thread)
-                .map(|chunk| {
+                .zip(badges.chunks(per_thread))
+                .map(|(chunk, badges)| {
                     let candidates = &candidates;
                     scope.spawn(move || {
                         chunk
                             .iter()
-                            .map(|card| {
-                                let icon = self.matcher.identify(image, card, candidates)?;
+                            .zip(badges)
+                            .map(|(card, &badge)| {
+                                let icon = self.matcher.identify(image, card, badge, candidates)?;
                                 Some(self.icon_keys[icon].clone())
                             })
                             .collect::<Vec<_>>()
@@ -135,12 +141,30 @@ impl Recognizer {
                 .flat_map(|worker| worker.join().expect("a card worker panicked"))
                 .collect()
         });
-        order::resolve(&options)
+        // Time-limited items (with a badge) are not in id order, so they take no part
+        // in it and are named only when their icon belongs to a single item.
+        let ordered: Vec<Option<Vec<ListKey>>> = options
+            .iter()
+            .zip(&badges)
+            .map(|(keys, badge)| keys.clone().filter(|_| badge.is_none()))
+            .collect();
+        order::resolve(&ordered)
             .into_iter()
+            .zip(options.iter().zip(&badges))
             .zip(&cards)
-            .map(|(key, card)| Cell {
-                id: key.map(|(_, id)| id),
-                quantity: self.digits.read(image, card),
+            .map(|((key, (keys, badge)), card)| {
+                let key = if badge.is_some() {
+                    keys.as_deref().and_then(|keys| match keys {
+                        [only] => Some(*only),
+                        _ => None,
+                    })
+                } else {
+                    key
+                };
+                Cell {
+                    id: key.map(|(_, id)| id),
+                    quantity: self.digits.read(image, card),
+                }
             })
             .collect()
     }

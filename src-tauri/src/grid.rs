@@ -42,10 +42,39 @@ impl Card {
 }
 
 fn is_background(image: &RgbImage, x: u32, y: u32) -> bool {
-    let p = image.get_pixel(x, y).0;
+    is_colour(image.get_pixel(x, y).0, BACKGROUND, BACKGROUND_TOLERANCE)
+}
+
+fn is_colour(p: [u8; 3], colour: [u8; 3], tolerance: u8) -> bool {
     p.iter()
-        .zip(BACKGROUND)
-        .all(|(&a, b)| a.abs_diff(b) <= BACKGROUND_TOLERANCE)
+        .zip(colour)
+        .all(|(&a, b)| a.abs_diff(b) <= tolerance)
+}
+
+/// The flat colour of the remaining-time badge ("16日") time-limited items wear.
+const BADGE: [u8; 3] = [42, 64, 90];
+const BADGE_TOLERANCE: u8 = 8;
+/// A row through a badge is mostly badge over this share of the card width.
+const BADGE_ROW_SHARE: f32 = 0.25;
+
+/// The first row below the remaining-time badge over the card's top, when it
+/// wears one. The badge hides the top of the icon.
+pub fn badge_bottom(image: &RgbImage, card: &Card) -> Option<u32> {
+    let height = card.height as f32;
+    let first = (card.top as f32 - 0.1 * height).max(0.0) as u32;
+    let last = ((card.top as f32 + 0.35 * height) as u32).min(image.height());
+    (first..last)
+        .filter(|&y| {
+            let shift = card.shift_at(y as f32);
+            let from = (card.left + shift).max(0.0) as u32;
+            let to = ((card.left + card.width + shift) as u32).min(image.width());
+            let badge = (from..to)
+                .filter(|&x| is_colour(image.get_pixel(x, y).0, BADGE, BADGE_TOLERANCE))
+                .count();
+            badge as f32 >= BADGE_ROW_SHARE * card.width
+        })
+        .max()
+        .map(|y| y + 3)
 }
 
 /// Longest horizontal run of background pixels in row `y`, as `(start, len)`.
@@ -206,5 +235,40 @@ mod tests {
     #[test]
     fn finds_full_rows_in_4_by_3() {
         check("items-4x3-ooparts.png", 30, 133, 148.5);
+    }
+
+    #[derive(serde::Deserialize)]
+    struct Fixture {
+        image: String,
+        cells: Vec<Label>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct Label {
+        #[serde(default)]
+        badge: bool,
+    }
+
+    #[test]
+    fn finds_the_remaining_time_badges() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let fixtures: Vec<Fixture> =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("labels.json")).unwrap())
+                .unwrap();
+        let mut wrong = Vec::new();
+        for fixture in fixtures {
+            let image = fixture_image(&dir, &fixture.image);
+            for (i, (card, label)) in find_cards(&image).iter().zip(&fixture.cells).enumerate() {
+                let found = badge_bottom(&image, card).is_some();
+                if found != label.badge {
+                    wrong.push(format!("{} cell {i}: badge {found}", fixture.image));
+                }
+            }
+        }
+        assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
+    }
+
+    fn fixture_image(dir: &Path, name: &str) -> RgbImage {
+        image::open(dir.join(name)).unwrap().to_rgb8()
     }
 }

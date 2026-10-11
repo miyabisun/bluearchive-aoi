@@ -426,7 +426,8 @@
       },
       {
         "id": 6999,
-        "quantity": 1
+        "quantity": 1,
+        "badge": true
       },
       {
         "id": 9998,
@@ -451,6 +452,82 @@
       {
         "id": 10004,
         "quantity": 173
+      }
+    ]
+  },
+  {
+    "image": "items-16x9-event-items.png",
+    "role": "tune",
+    "note": "2026-10-11 capture, 2222x1250. Time-limited event items carry a remaining-time badge over the icon top and are not in ascending id order. The Point envelope is not in the SchaleDB snapshot; the P (イベントPt) and the dice coupons share their icon with other ids. Labels by eye.",
+    "cells": [
+      {
+        "id": 26014,
+        "quantity": 7
+      },
+      {
+        "id": 26016,
+        "quantity": 5
+      },
+      {
+        "id": null,
+        "quantity": 40,
+        "badge": true
+      },
+      {
+        "id": null,
+        "quantity": 28,
+        "badge": true
+      },
+      {
+        "id": 80883,
+        "quantity": 2,
+        "badge": true
+      },
+      {
+        "id": 80660,
+        "quantity": 1480,
+        "badge": true
+      },
+      {
+        "id": 80661,
+        "quantity": 2037,
+        "badge": true
+      },
+      {
+        "id": 80662,
+        "quantity": 2042,
+        "badge": true
+      },
+      {
+        "id": null,
+        "quantity": 4,
+        "badge": true
+      },
+      {
+        "id": null,
+        "quantity": 1,
+        "badge": true
+      },
+      {
+        "id": null,
+        "quantity": 1,
+        "badge": true
+      },
+      {
+        "id": 180000,
+        "quantity": 1
+      },
+      {
+        "id": 180001,
+        "quantity": 1
+      },
+      {
+        "id": 180002,
+        "quantity": 1
+      },
+      {
+        "id": 180003,
+        "quantity": 1
       }
     ]
   }

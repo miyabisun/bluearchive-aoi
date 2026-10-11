@@ -65,9 +65,11 @@ impl Template {
         Self { width, grid }
     }
 
-    fn pixels(&self) -> impl Iterator<Item = (u32, u32, Rgb)> + '_ {
+    /// The pixels taking part, from row `from` down (rows above it are hidden).
+    fn pixels(&self, from: u32) -> impl Iterator<Item = (u32, u32, Rgb)> + '_ {
         (0u32..)
             .zip(&self.grid)
+            .skip((from * self.width) as usize)
             .filter_map(|(i, p)| p.map(|rgb| (i % self.width, i / self.width, rgb)))
     }
 
@@ -78,9 +80,9 @@ impl Template {
     /// How far the average hue of `image` under the icon is from the icon's own:
     /// the summed difference of their chromaticities (each channel's share of the
     /// brightness), 0 for the same tint.
-    fn tint(&self, image: &RgbImage, ox: u32, oy: u32) -> f32 {
+    fn tint(&self, image: &RgbImage, ox: u32, oy: u32, from: u32) -> f32 {
         let (mut t, mut p) = ([0.0f32; 3], [0.0f32; 3]);
-        for (x, y, rgb) in self.pixels() {
+        for (x, y, rgb) in self.pixels(from) {
             let px = image.get_pixel(ox + x, oy + y).0;
             for c in 0..3 {
                 t[c] += rgb[c];
@@ -95,10 +97,10 @@ impl Template {
         (0..3).map(|c| (t[c] - p[c]).abs()).sum()
     }
 
-    /// Similarity with `image` placed at `(ox, oy)`.
-    fn score(&self, image: &RgbImage, ox: u32, oy: u32) -> f32 {
+    /// Similarity with `image` placed at `(ox, oy)`, from template row `from` down.
+    fn score(&self, image: &RgbImage, ox: u32, oy: u32, from: u32) -> f32 {
         ncc(self
-            .pixels()
+            .pixels(from)
             .map(|(x, y, t)| (t, image.get_pixel(ox + x, oy + y).0)))
     }
 }
@@ -163,12 +165,33 @@ impl IconMatcher {
         image::imageops::resize(&crop, out_w, out_h, FilterType::Triangle)
     }
 
-    /// The icon among `candidates` that the card clearly shows, if any.
-    pub fn identify(&self, image: &RgbImage, card: &Card, candidates: &[usize]) -> Option<usize> {
+    /// The first template row (of a template `height` tall) below image row
+    /// `hidden`, plus `margin` rows for the position search.
+    fn first_visible_row(card: &Card, hidden: Option<u32>, height: u32, margin: u32) -> u32 {
+        let Some(hidden) = hidden else { return 0 };
+        let canvas = card.height as f32 * ICON_HEIGHT_RATIO;
+        let canvas_top = card.center_y() - canvas / 2.0;
+        let rows = ((hidden as f32 - canvas_top) / canvas * height as f32)
+            .ceil()
+            .max(0.0);
+        (rows as u32 + margin).min(height)
+    }
+
+    /// The icon among `candidates` that the card clearly shows, if any. Image rows
+    /// above `hidden` (a badge over the icon) are left out.
+    pub fn identify(
+        &self,
+        image: &RgbImage,
+        card: &Card,
+        hidden: Option<u32>,
+        candidates: &[usize],
+    ) -> Option<usize> {
+        let coarse_from = Self::first_visible_row(card, hidden, COARSE_HEIGHT, 1);
+        let from = Self::first_visible_row(card, hidden, FINE_HEIGHT, SEARCH);
         let coarse = Self::sample(image, card, COARSE_HEIGHT, 0);
         let mut shortlist: Vec<(usize, f32)> = candidates
             .iter()
-            .map(|&i| (i, self.coarse[i].score(&coarse, 0, 0)))
+            .map(|&i| (i, self.coarse[i].score(&coarse, 0, 0, coarse_from)))
             .collect();
         shortlist.sort_by(|a, b| b.1.total_cmp(&a.1));
         shortlist.truncate(SHORTLIST);
@@ -195,7 +218,7 @@ impl IconMatcher {
                 let mut best = (f32::MIN, &samples[1], (0, 0));
                 for oy in 0..=2 * SEARCH {
                     for ox in 0..=2 * SEARCH {
-                        let score = t.score(&samples[1], ox, oy);
+                        let score = t.score(&samples[1], ox, oy, from);
                         if score > best.0 {
                             best = (score, &samples[1], (ox, oy));
                         }
@@ -205,7 +228,7 @@ impl IconMatcher {
                 for fine in [&samples[0], &samples[2]] {
                     for oy in by.saturating_sub(1)..=(by + 1).min(2 * SEARCH) {
                         for ox in bx.saturating_sub(1)..=(bx + 1).min(2 * SEARCH) {
-                            let score = t.score(fine, ox, oy);
+                            let score = t.score(fine, ox, oy, from);
                             if score > best.0 {
                                 best = (score, fine, (ox, oy));
                             }
@@ -219,7 +242,7 @@ impl IconMatcher {
 
         let &(best, score, fine, (ox, oy)) = ranked.first()?;
         // A recoloured twin (a green ticket for a blue one) matches in shape only.
-        if self.fine[best].tint(fine, ox, oy) > MAX_TINT {
+        if self.fine[best].tint(fine, ox, oy, from) > MAX_TINT {
             return None;
         }
         let Some(&(runner_up, next, _, _)) = ranked.get(1) else {
@@ -235,7 +258,7 @@ impl IconMatcher {
         // Compare both icons where they differ, at the winner's position.
         let (a, b) = (&self.fine[best], &self.fine[runner_up]);
         let differing: Vec<(Rgb, Rgb, [u8; 3])> = a
-            .pixels()
+            .pixels(from)
             .filter_map(|(x, y, ta)| {
                 let tb = b.at(x, y)?;
                 let diff: f32 = (0..3).map(|c| (ta[c] - tb[c]).abs()).sum();

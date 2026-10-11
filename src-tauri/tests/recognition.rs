@@ -17,6 +17,9 @@ struct Fixture {
 struct Label {
     id: Option<i64>,
     quantity: Option<u32>,
+    /// The cell shows a remaining-time badge over its icon.
+    #[serde(default)]
+    badge: bool,
 }
 
 fn fixtures_dir() -> PathBuf {
@@ -28,10 +31,17 @@ fn fixtures() -> Vec<Fixture> {
     serde_json::from_str(&json).unwrap()
 }
 
+/// Items with a remaining-time badge keep an order of their own; the others
+/// follow the list's ascending ids.
 #[test]
 fn labels_follow_ascending_item_ids() {
     for fixture in fixtures() {
-        let ids: Vec<i64> = fixture.cells.iter().filter_map(|c| c.id).collect();
+        let ids: Vec<i64> = fixture
+            .cells
+            .iter()
+            .filter(|c| !c.badge)
+            .filter_map(|c| c.id)
+            .collect();
         assert!(
             ids.windows(2).all(|w| w[0] < w[1]),
             "{}: ids are not ascending: {ids:?}",
@@ -48,10 +58,10 @@ fn reads_every_fully_visible_cell() {
         let image = image::open(fixtures_dir().join(&fixture.image))
             .unwrap()
             .to_rgb8();
-        let read: Vec<Label> = recognizer
+        let read: Vec<(Option<i64>, Option<u32>)> = recognizer
             .read(&image)
             .into_iter()
-            .map(|Cell { id, quantity }| Label { id, quantity })
+            .map(|Cell { id, quantity }| (id, quantity))
             .collect();
         if read.len() != fixture.cells.len() {
             failures.push(format!(
@@ -62,7 +72,8 @@ fn reads_every_fully_visible_cell() {
             ));
         }
         for (i, (got, want)) in read.iter().zip(&fixture.cells).enumerate() {
-            if got != want {
+            let want = (want.id, want.quantity);
+            if *got != want {
                 failures.push(format!(
                     "{} cell {i}: got {got:?}, want {want:?}",
                     fixture.image
