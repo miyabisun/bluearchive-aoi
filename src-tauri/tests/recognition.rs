@@ -20,6 +20,9 @@ struct Label {
     /// The cell shows a remaining-time badge over its icon.
     #[serde(default)]
     badge: bool,
+    /// An item the user does not track: recognized, never reported.
+    #[serde(default)]
+    ignored: bool,
 }
 
 fn fixtures_dir() -> PathBuf {
@@ -58,10 +61,16 @@ fn reads_every_fully_visible_cell() {
         let image = image::open(fixtures_dir().join(&fixture.image))
             .unwrap()
             .to_rgb8();
-        let read: Vec<(Option<i64>, Option<u32>)> = recognizer
+        let read: Vec<(Option<i64>, Option<u32>, bool)> = recognizer
             .read(&image)
             .into_iter()
-            .map(|Cell { id, quantity }| (id, quantity))
+            .map(
+                |Cell {
+                     id,
+                     quantity,
+                     ignored,
+                 }| (id, quantity, ignored),
+            )
             .collect();
         if read.len() != fixture.cells.len() {
             failures.push(format!(
@@ -72,7 +81,7 @@ fn reads_every_fully_visible_cell() {
             ));
         }
         for (i, (got, want)) in read.iter().zip(&fixture.cells).enumerate() {
-            let want = (want.id, want.quantity);
+            let want = (want.id, want.quantity, want.ignored);
             if *got != want {
                 failures.push(format!(
                     "{} cell {i}: got {got:?}, want {want:?}",

@@ -13,8 +13,9 @@ fn main() {
             .id
             .and_then(|id| recognizer.items().iter().find(|item| item.id == id))
             .map_or("?", |item| item.name.as_str());
+        let ignored = if cell.ignored { " (ignored)" } else { "" };
         println!(
-            "{i:2} {:>8} x{:<6} {name}",
+            "{i:2} {:>8} x{:<6} {name}{ignored}",
             format!("{:?}", cell.id),
             format!("{:?}", cell.quantity)
         );

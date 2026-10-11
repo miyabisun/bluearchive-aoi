@@ -1,7 +1,7 @@
 //! Reads item kinds and counts from screenshots of the Blue Archive item list.
 
 pub mod grid;
-mod icon;
+pub mod icon;
 mod order;
 pub mod quantity;
 
@@ -20,9 +20,21 @@ pub struct Cell {
     pub id: Option<i64>,
     /// Count shown as "xN", or `None` when it could not be read.
     pub quantity: Option<u32>,
+    /// An item the user does not keep track of (see `tracked`): the cell is read
+    /// for the list order but is not to be shown or exported.
+    pub ignored: bool,
 }
 
-/// An entry of the SchaleDB snapshot (`data/schaledb/items.json`).
+/// Whether the user keeps track of an item. On 2026-10-11 they dropped, from the
+/// event point (P) on, the time-limited event items (gone with their event and
+/// looked up on the event page) and the Valentine chocolates (they pile up for
+/// every student within a few years). Consumables in that id range stay.
+pub fn tracked(item: &Item) -> bool {
+    item.category == "Consumable" || !(80_000..190_000).contains(&item.id)
+}
+
+/// An entry of the SchaleDB snapshot (`data/schaledb/items.json`), or of the
+/// items it lacks (`data/extra/items.json`).
 #[derive(Deserialize, Debug, Clone)]
 pub struct Item {
     pub id: i64,
@@ -52,28 +64,59 @@ pub struct Recognizer {
     /// List positions of the items drawn with each icon, ascending; the
     /// matcher's icon indices point here.
     icon_keys: Vec<Vec<ListKey>>,
+    /// Whether every item drawn with each icon is untracked.
+    icon_ignored: Vec<bool>,
     matcher: IconMatcher,
     digits: Digits,
 }
 
 impl Recognizer {
-    /// Loads the SchaleDB snapshot from `data` (the crate's `data` directory).
+    /// Loads the SchaleDB snapshot (`data/schaledb`) and the items it lacks
+    /// (`data/extra`, icons cut from screenshots) from `data`, the crate's
+    /// `data` directory.
     pub fn load(data: &Path) -> Result<Self, String> {
-        let dir = data.join("schaledb");
-        let json = std::fs::read_to_string(dir.join("items.json")).map_err(|e| e.to_string())?;
-        let items: Vec<Item> = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+        let read = |dir: &Path| -> Result<Vec<Item>, String> {
+            let path = dir.join("items.json");
+            let json =
+                std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            serde_json::from_str(&json).map_err(|e| format!("{}: {e}", path.display()))
+        };
+        let (schaledb, extra) = (data.join("schaledb"), data.join("extra"));
+        let mut items = read(&schaledb)?;
+        let extras = read(&extra)?;
+        if let Some(both) = extras.iter().find(|e| items.iter().any(|i| i.id == e.id)) {
+            return Err(format!(
+                "SchaleDB now has id {} ({}); remove it from data/extra",
+                both.id, both.name
+            ));
+        }
+        let extra_icons: Vec<String> = extras.iter().map(|e| e.icon.clone()).collect();
+        items.extend(extras);
         let mut icons: Vec<&str> = items.iter().map(|i| i.icon.as_str()).collect();
         icons.sort_unstable();
         icons.dedup();
         let images = icons
             .iter()
             .map(|name| {
-                let path = dir.join("icons").join(format!("{name}.webp"));
+                let path = if extra_icons.iter().any(|e| e == name) {
+                    extra.join("icons").join(format!("{name}.png"))
+                } else {
+                    schaledb.join("icons").join(format!("{name}.webp"))
+                };
                 image::open(&path)
                     .map(|i| i.to_rgba8())
                     .map_err(|e| format!("{}: {e}", path.display()))
             })
             .collect::<Result<Vec<_>, _>>()?;
+        let icon_ignored = icons
+            .iter()
+            .map(|name| {
+                items
+                    .iter()
+                    .filter(|i| i.icon == *name)
+                    .all(|i| !tracked(i))
+            })
+            .collect();
         let icon_keys = icons
             .iter()
             .map(|name| {
@@ -90,6 +133,7 @@ impl Recognizer {
             std::fs::read_to_string(data.join("digits.json")).map_err(|e| e.to_string())?;
         Ok(Self {
             icon_keys,
+            icon_ignored,
             matcher: IconMatcher::new(&images),
             digits: serde_json::from_str(&digits).map_err(|e| e.to_string())?,
             items,
@@ -118,7 +162,7 @@ impl Recognizer {
         // Cards are told apart independently, so they share out over the CPU's cores.
         let threads = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
         let per_thread = cards.len().div_ceil(threads).max(1);
-        let options: Vec<Option<Vec<ListKey>>> = std::thread::scope(|scope| {
+        let found: Vec<Result<usize, Vec<usize>>> = std::thread::scope(|scope| {
             let workers: Vec<_> = cards
                 .chunks(per_thread)
                 .zip(badges.chunks(per_thread))
@@ -129,8 +173,7 @@ impl Recognizer {
                             .iter()
                             .zip(badges)
                             .map(|(card, &badge)| {
-                                let icon = self.matcher.identify(image, card, badge, candidates)?;
-                                Some(self.icon_keys[icon].clone())
+                                self.matcher.identify(image, card, badge, candidates)
                             })
                             .collect::<Vec<_>>()
                     })
@@ -141,20 +184,32 @@ impl Recognizer {
                 .flat_map(|worker| worker.join().expect("a card worker panicked"))
                 .collect()
         });
+        let icons: Vec<Option<usize>> = found.iter().map(|f| f.as_ref().ok().copied()).collect();
+        // A cell is ignored when its icon, or every icon it could be, is untracked.
+        let ignored: Vec<bool> = found
+            .iter()
+            .map(|f| match f {
+                Ok(icon) => self.icon_ignored[*icon],
+                Err(tied) => !tied.is_empty() && tied.iter().all(|&i| self.icon_ignored[i]),
+            })
+            .collect();
         // Time-limited items (with a badge) are not in id order, so they take no part
         // in it and are named only when their icon belongs to a single item.
-        let ordered: Vec<Option<Vec<ListKey>>> = options
+        let ordered: Vec<Option<Vec<ListKey>>> = icons
             .iter()
             .zip(&badges)
-            .map(|(keys, badge)| keys.clone().filter(|_| badge.is_none()))
+            .map(|(icon, badge)| {
+                icon.filter(|_| badge.is_none())
+                    .map(|i| self.icon_keys[i].clone())
+            })
             .collect();
         order::resolve(&ordered)
             .into_iter()
-            .zip(options.iter().zip(&badges))
-            .zip(&cards)
-            .map(|((key, (keys, badge)), card)| {
+            .zip(icons.iter().zip(&badges))
+            .zip(cards.iter().zip(ignored))
+            .map(|((key, (&icon, badge)), (card, ignored))| {
                 let key = if badge.is_some() {
-                    keys.as_deref().and_then(|keys| match keys {
+                    icon.and_then(|i| match self.icon_keys[i].as_slice() {
                         [only] => Some(*only),
                         _ => None,
                     })
@@ -164,6 +219,7 @@ impl Recognizer {
                 Cell {
                     id: key.map(|(_, id)| id),
                     quantity: self.digits.read(image, card),
+                    ignored,
                 }
             })
             .collect()

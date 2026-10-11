@@ -150,6 +150,12 @@ impl IconMatcher {
         }
     }
 
+    /// The card's icon area at SchaleDB's canvas size, for making the icon of an
+    /// item SchaleDB lacks.
+    pub fn canvas(image: &RgbImage, card: &Card) -> RgbImage {
+        Self::sample(image, card, CANVAS.1, 0)
+    }
+
     /// The card area where the icon sits, resampled so the icon is `height` tall,
     /// with `margin` extra pixels on every side for the position search.
     fn sample(image: &RgbImage, card: &Card, height: u32, margin: u32) -> RgbImage {
@@ -177,15 +183,16 @@ impl IconMatcher {
         (rows as u32 + margin).min(height)
     }
 
-    /// The icon among `candidates` that the card clearly shows, if any. Image rows
-    /// above `hidden` (a badge over the icon) are left out.
+    /// The icon among `candidates` that the card clearly shows, or else the icons it
+    /// could be (none when nothing is close). Image rows above `hidden` (a badge
+    /// over the icon) are left out.
     pub fn identify(
         &self,
         image: &RgbImage,
         card: &Card,
         hidden: Option<u32>,
         candidates: &[usize],
-    ) -> Option<usize> {
+    ) -> Result<usize, Vec<usize>> {
         let coarse_from = Self::first_visible_row(card, hidden, COARSE_HEIGHT, 1);
         let from = Self::first_visible_row(card, hidden, FINE_HEIGHT, SEARCH);
         let coarse = Self::sample(image, card, COARSE_HEIGHT, 0);
@@ -240,20 +247,34 @@ impl IconMatcher {
             .collect();
         ranked.sort_by(|a, b| b.1.total_cmp(&a.1));
 
-        let &(best, score, fine, (ox, oy)) = ranked.first()?;
+        let Some(&(best, score, fine, (ox, oy))) = ranked.first() else {
+            return Err(Vec::new());
+        };
         // A recoloured twin (a green ticket for a blue one) matches in shape only.
         if self.fine[best].tint(fine, ox, oy, from) > MAX_TINT {
-            return None;
+            return Err(Vec::new());
         }
+        // The icons the card could be when no single one stands out.
+        let tied = || -> Vec<usize> {
+            ranked
+                .iter()
+                .take_while(|r| r.1 >= CLEAR.0 && score - r.1 < CLOSE.1)
+                .map(|r| r.0)
+                .collect()
+        };
         let Some(&(runner_up, next, _, _)) = ranked.get(1) else {
-            return (score >= CLEAR.0).then_some(best);
+            return if score >= CLEAR.0 {
+                Ok(best)
+            } else {
+                Err(Vec::new())
+            };
         };
         let lead = score - next;
         if (score >= CLOSE.0 && lead >= CLOSE.1) || (score >= CLEAR.0 && lead >= CLEAR.1) {
-            return Some(best);
+            return Ok(best);
         }
         if score < DETAIL.0 || lead >= CLOSE.1 {
-            return None;
+            return Err(tied());
         }
         // Compare both icons where they differ, at the winner's position.
         let (a, b) = (&self.fine[best], &self.fine[runner_up]);
@@ -267,6 +288,10 @@ impl IconMatcher {
             .collect();
         let score_a = ncc(differing.iter().map(|&(ta, _, p)| (ta, p)));
         let score_b = ncc(differing.iter().map(|&(_, tb, p)| (tb, p)));
-        (score_a >= DETAIL.1 && score_a - score_b >= DETAIL.2).then_some(best)
+        if score_a >= DETAIL.1 && score_a - score_b >= DETAIL.2 {
+            Ok(best)
+        } else {
+            Err(tied())
+        }
     }
 }

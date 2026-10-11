@@ -370,7 +370,7 @@
   {
     "image": "items-16x9-gifts-tickets.png",
     "role": "tune",
-    "note": "2026-10-11 capture, 2222x1250. A time-limited ticket badge (35日) spills into the gap above its row. The green 1/10 tickets are not in the SchaleDB snapshot (its two ticket icons are the blue ones), so they read as unknown. Labels by eye against SchaleDB icons.",
+    "note": "2026-10-11 capture, 2222x1250. A time-limited ticket badge (35日) spills into the gap above its row. The green tickets are 1回/10回アーカイブ募集チケット, which SchaleDB lacks; their icons in data/extra were cut from this screenshot. Labels by eye against SchaleDB icons.",
     "cells": [
       {
         "id": 5104,
@@ -413,11 +413,11 @@
         "quantity": 8
       },
       {
-        "id": null,
+        "id": 6996,
         "quantity": 180
       },
       {
-        "id": null,
+        "id": 6997,
         "quantity": 12
       },
       {
@@ -458,7 +458,7 @@
   {
     "image": "items-16x9-event-items.png",
     "role": "tune",
-    "note": "2026-10-11 capture, 2222x1250. Time-limited event items carry a remaining-time badge over the icon top and are not in ascending id order. The Point envelope is not in the SchaleDB snapshot; the P (イベントPt) and the dice coupons share their icon with other ids. Labels by eye.",
+    "note": "2026-10-11 capture, 2222x1250. Time-limited event items carry a remaining-time badge over the icon top and are not in ascending id order. The Point envelope is アーカイブポイント, cut into data/extra from this screenshot. From the event point (P) on, event items and Valentine chocolates are ignored: recognized but never reported. Labels by eye.",
     "cells": [
       {
         "id": 26014,
@@ -469,65 +469,77 @@
         "quantity": 5
       },
       {
-        "id": null,
+        "id": 79999,
         "quantity": 40,
         "badge": true
       },
       {
         "id": null,
         "quantity": 28,
-        "badge": true
+        "badge": true,
+        "ignored": true
       },
       {
         "id": 80883,
         "quantity": 2,
-        "badge": true
+        "badge": true,
+        "ignored": true
       },
       {
         "id": 80660,
         "quantity": 1480,
-        "badge": true
+        "badge": true,
+        "ignored": true
       },
       {
         "id": 80661,
         "quantity": 2037,
-        "badge": true
+        "badge": true,
+        "ignored": true
       },
       {
         "id": 80662,
         "quantity": 2042,
-        "badge": true
+        "badge": true,
+        "ignored": true
       },
       {
         "id": null,
         "quantity": 4,
-        "badge": true
+        "badge": true,
+        "ignored": true
       },
       {
         "id": null,
         "quantity": 1,
-        "badge": true
+        "badge": true,
+        "ignored": true
       },
       {
         "id": null,
         "quantity": 1,
-        "badge": true
+        "badge": true,
+        "ignored": true
       },
       {
         "id": 180000,
-        "quantity": 1
+        "quantity": 1,
+        "ignored": true
       },
       {
         "id": 180001,
-        "quantity": 1
+        "quantity": 1,
+        "ignored": true
       },
       {
         "id": 180002,
-        "quantity": 1
+        "quantity": 1,
+        "ignored": true
       },
       {
         "id": 180003,
-        "quantity": 1
+        "quantity": 1,
+        "ignored": true
       }
     ]
   }
