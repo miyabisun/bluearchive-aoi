@@ -21,23 +21,35 @@ const SEARCH: u32 = 2;
 const SHORTLIST: usize = 12;
 /// Template pixels below this alpha are background and ignored.
 const OPAQUE: u8 = 230;
-/// The "xN" count covers the bottom right of the icon canvas; that part is
-/// left out of the comparison (fractions of the canvas width and height).
-const COUNT_AREA: (f32, f32) = (0.25, 0.8);
+/// The part of the icon canvas that other drawings cover and the comparison
+/// leaves out: from `left` to the right edge and from `top` to the bottom
+/// (fractions of the canvas width and height).
+#[derive(Debug, Clone, Copy)]
+pub struct Mask {
+    pub left: f32,
+    pub top: f32,
+}
 /// A match is accepted when it is this close and leads the runner-up by `CLOSE.1`,
 const CLOSE: (f32, f32) = (0.93, 0.05);
-/// or when it is this close and leads the runner-up by `CLEAR.1`. Look-alikes
-/// (tiers of one material, students' elephs in the same frame) score up to
-/// about 0.9, while faint icons such as a written page may score only 0.83.
+/// or, down to `CLEAR.0`, by a lead that grows on the line from `CLOSE` to
+/// `CLEAR` (0.3 at 0.8). Look-alikes (tiers of one material, students' elephs
+/// in the same frame) score up to about 0.9, while faint icons such as a
+/// written page may score only 0.83 and a titanium spring 0.898 (lead 0.2).
 const CLEAR: (f32, f32) = (0.8, 0.3);
-/// Icons that differ only in a detail (a gift box with a "?" or a tick tag)
-/// tie overall (lead under `CLOSE.1`); then the winner needs at least `DETAIL.0` overall and,
-/// on the pixels where the two icons differ, at least `DETAIL.1` and a lead of
-/// `DETAIL.2` over the runner-up.
-const DETAIL: (f32, f32, f32) = (0.9, 0.9, 0.3);
+/// Icons that differ only in a detail (a gift box with a "?" or a tick tag, the
+/// universal blueprints of two categories) tie overall (lead under `CLOSE.1`);
+/// then the winner needs at least `DETAIL.0` overall and, on the pixels where
+/// the two icons differ, at least `DETAIL.1` (a gloves universal blueprint
+/// measures 0.898) and a lead of `DETAIL.2` over the runner-up.
+const DETAIL: (f32, f32, f32) = (0.9, 0.88, 0.3);
 /// Most difference in average tint (`Template::tint`) for a match. Matches measure
 /// up to about 0.03; a green ticket against the blue one 0.05 and more.
 const MAX_TINT: f32 = 0.04;
+/// Most difference in average brightness (`Template::level`) for a candidate.
+/// Matches measure up to 0.036 (180 matches of 0.85 or more, 2026-10-12); a
+/// chrome spring against the titanium one, which NCC and tint cannot tell
+/// apart, 0.10 and more.
+const MAX_LEVEL: f32 = 0.07;
 /// Two icons differ at a pixel when their channels differ by this much in sum.
 const DIFFERENT: f32 = 90.0;
 
@@ -50,15 +62,15 @@ struct Template {
 }
 
 impl Template {
-    fn new(icon: &RgbaImage, height: u32) -> Self {
+    fn new(icon: &RgbaImage, height: u32, mask: Mask) -> Self {
         let width = scaled_width(height);
         let small = image::imageops::resize(icon, width, height, FilterType::Triangle);
         let grid = small
             .enumerate_pixels()
             .map(|(x, y, p)| {
-                let in_count = x as f32 >= COUNT_AREA.0 * width as f32
-                    && y as f32 >= COUNT_AREA.1 * height as f32;
-                (p.0[3] >= OPAQUE && !in_count)
+                let covered =
+                    x as f32 >= mask.left * width as f32 && y as f32 >= mask.top * height as f32;
+                (p.0[3] >= OPAQUE && !covered)
                     .then(|| [f32::from(p.0[0]), f32::from(p.0[1]), f32::from(p.0[2])])
             })
             .collect();
@@ -97,6 +109,19 @@ impl Template {
         (0..3).map(|c| (t[c] - p[c]).abs()).sum()
     }
 
+    /// How far the average brightness of `image` under the icon is from the
+    /// icon's own, as a share of full brightness.
+    fn level(&self, image: &RgbImage, ox: u32, oy: u32, from: u32) -> f32 {
+        let (mut t, mut p, mut n) = (0.0f32, 0.0f32, 0.0f32);
+        for (x, y, rgb) in self.pixels(from) {
+            let px = image.get_pixel(ox + x, oy + y).0;
+            t += rgb.iter().sum::<f32>();
+            p += px.iter().map(|&v| f32::from(v)).sum::<f32>();
+            n += 3.0;
+        }
+        ((t - p) / n.max(1.0) / 255.0).abs()
+    }
+
     /// Similarity with `image` placed at `(ox, oy)`, from template row `from` down.
     fn score(&self, image: &RgbImage, ox: u32, oy: u32, from: u32) -> f32 {
         ncc(self
@@ -127,6 +152,13 @@ fn ncc(pairs: impl Iterator<Item = (Rgb, [u8; 3])>) -> f32 {
     (sti - st * si / n) / (var_t * var_i).sqrt()
 }
 
+/// The lead a match of `score` needs over the runner-up: `CLOSE.1` from
+/// `CLOSE.0` up, growing on a line to `CLEAR.1` at `CLEAR.0`.
+fn needed_lead(score: f32) -> f32 {
+    let t = ((CLOSE.0 - score) / (CLOSE.0 - CLEAR.0)).clamp(0.0, 1.0);
+    CLOSE.1 + t * (CLEAR.1 - CLOSE.1)
+}
+
 fn scaled_width(height: u32) -> u32 {
     (height * CANVAS.0 + CANVAS.1 / 2) / CANVAS.1
 }
@@ -137,15 +169,16 @@ pub struct IconMatcher {
 }
 
 impl IconMatcher {
-    pub fn new(icons: &[RgbaImage]) -> Self {
+    /// Templates of `icons`, leaving out the canvas part under `mask`.
+    pub fn new(icons: &[RgbaImage], mask: Mask) -> Self {
         Self {
             coarse: icons
                 .iter()
-                .map(|i| Template::new(i, COARSE_HEIGHT))
+                .map(|i| Template::new(i, COARSE_HEIGHT, mask))
                 .collect(),
             fine: icons
                 .iter()
-                .map(|i| Template::new(i, FINE_HEIGHT))
+                .map(|i| Template::new(i, FINE_HEIGHT, mask))
                 .collect(),
         }
     }
@@ -196,12 +229,18 @@ impl IconMatcher {
         let coarse_from = Self::first_visible_row(card, hidden, COARSE_HEIGHT, 1);
         let from = Self::first_visible_row(card, hidden, FINE_HEIGHT, SEARCH);
         let coarse = Self::sample(image, card, COARSE_HEIGHT, 0);
-        let mut shortlist: Vec<(usize, f32)> = candidates
+        let shortlist: Vec<(usize, f32)> = candidates
             .iter()
             .map(|&i| (i, self.coarse[i].score(&coarse, 0, 0, coarse_from)))
             .collect();
+        // Thin icons (a barrel, a firing pin) leave too few pixels to score at low
+        // resolution once the count is masked; they always go on to the fine
+        // comparison.
+        let (unscored, mut shortlist): (Vec<_>, Vec<_>) =
+            shortlist.into_iter().partition(|s| s.1 <= -1.0);
         shortlist.sort_by(|a, b| b.1.total_cmp(&a.1));
         shortlist.truncate(SHORTLIST);
+        shortlist.extend(unscored);
 
         // Fine detail (a page of writing) suffers from a pixel's error in the measured
         // card height, so the card is also sampled a pixel smaller and larger.
@@ -245,6 +284,9 @@ impl IconMatcher {
                 (i, best.0, best.1, best.2)
             })
             .collect();
+        // Icons as bright as the card's (NCC and tint ignore brightness).
+        ranked
+            .retain(|&(i, _, fine, (ox, oy))| self.fine[i].level(fine, ox, oy, from) <= MAX_LEVEL);
         ranked.sort_by(|a, b| b.1.total_cmp(&a.1));
 
         let Some(&(best, score, fine, (ox, oy))) = ranked.first() else {
@@ -270,7 +312,7 @@ impl IconMatcher {
             };
         };
         let lead = score - next;
-        if (score >= CLOSE.0 && lead >= CLOSE.1) || (score >= CLEAR.0 && lead >= CLEAR.1) {
+        if score >= CLEAR.0 && lead >= needed_lead(score) {
             return Ok(best);
         }
         if score < DETAIL.0 || lead >= CLOSE.1 {

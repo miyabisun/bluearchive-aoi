@@ -1,8 +1,9 @@
 # bluearchive-aoi
 
-Aoi counts your Blue Archive items for you. Keep it open next to the game and scroll
-through the item list. Aoi reads each item and its count from the game's window, up to
-30 times a second, and lists what it has seen by name.
+Aoi counts your Blue Archive items and equipment for you. Keep it open next to the game
+and scroll through the item list or the equipment list. Aoi reads each entry and its
+count from the game's window, up to 30 times a second, and lists what it has seen by
+name.
 
 It only looks: it sends no input to the game and saves nothing. The list lasts until
 you close Aoi.
@@ -29,19 +30,23 @@ It is a single exe with nothing to install; run it from anywhere.
 ## Use
 
 1. Start Aoi, before or after the game. It finds the game's window by itself.
-2. In the game, open the item list (アイテム) and sort it by **デフォルト** with the
-   ascending arrow (≡↑), the game's default.
-3. Scroll the list. Items appear in Aoi in the game's order with their counts; type in
-   **名前で検索** to find one.
+2. In the game, open the item list (アイテム) or the equipment list (装備) and sort it by
+   **デフォルト** with the ascending arrow (≡↑), the game's default.
+3. Scroll the list. Entries appear in Aoi in the game's order with their counts, under
+   the tab of their list; type in **名前で検索** to find one. Equipment names carry their
+   tier (T1 to T10), since a blueprint's name alone does not tell it.
+
+Aoi switches to the tab of the list the game starts showing; a tab you pick stays until
+the game shows another list.
 
 The badge at the top right tells what Aoi sees:
 
-| Badge          | Meaning                                                                          |
-| -------------- | -------------------------------------------------------------------------------- |
-| ゲーム未検出   | Blue Archive is not running.                                                     |
-| 対象外の画面   | The game shows another screen, or the list in another order. Nothing is counted. |
-| 集計中 N fps   | The list is being read, N frames a second.                                       |
-| キャプチャ失敗 | Windows refused to capture the game's window; the reason is shown below.         |
+| Badge                                       | Meaning                                                                          |
+| ------------------------------------------- | -------------------------------------------------------------------------------- |
+| ゲーム未検出                                | Blue Archive is not running.                                                     |
+| 対象外の画面                                | The game shows another screen, or the list in another order. Nothing is counted. |
+| アイテムを集計中 N fps / 装備を集計中 N fps | That list is being read, N frames a second.                                      |
+| キャプチャ失敗                              | Windows refused to capture the game's window; the reason is shown below.         |
 
 Other windows may cover the game; Aoi reads the game window itself, not the screen.
 
@@ -62,8 +67,9 @@ Other windows may cover the game; Aoi reads the game window itself, not the scre
 
 ## Item data
 
-Names and icons come from a snapshot of [SchaleDB](https://schaledb.com) built into the
-exe. A few items SchaleDB lacks are added in `src-tauri/data/extra`, with icons cut from
+Names and icons of items and equipment come from a snapshot of
+[SchaleDB](https://schaledb.com) built into the exe. A few items SchaleDB lacks, and a
+few icons the game draws unlike SchaleDB, are added in `src-tauri/data/extra`, cut from
 the game. `tools/schaledb/update.ps1` refreshes the snapshot.
 
 ## Development

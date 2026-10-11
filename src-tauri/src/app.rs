@@ -6,7 +6,7 @@ use serde::Serialize;
 use tauri::{Emitter, Manager};
 
 use crate::{
-    Recognizer, Row,
+    List, Recognizer, Row,
     watch::{self, Status},
 };
 
@@ -14,7 +14,8 @@ use crate::{
 #[derive(Debug, Clone, Serialize)]
 pub struct Snapshot {
     status: Status,
-    rows: Vec<Row>,
+    items: Vec<Row>,
+    equipment: Vec<Row>,
 }
 
 /// The newest snapshot, for a page that loads after it was sent.
@@ -38,7 +39,8 @@ pub fn run(context: tauri::Context) {
     tauri::Builder::default()
         .manage(Latest(Mutex::new(Snapshot {
             status: Status::NoGame,
-            rows: Vec::new(),
+            items: Vec::new(),
+            equipment: Vec::new(),
         })))
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -46,8 +48,10 @@ pub fn run(context: tauri::Context) {
                 let latest = handle.state::<Latest>();
                 let mut snapshot = latest.0.lock().unwrap_or_else(PoisonError::into_inner);
                 snapshot.status = status.clone();
-                if let Some(rows) = rows {
-                    snapshot.rows = rows;
+                match rows {
+                    Some((List::Items, rows)) => snapshot.items = rows,
+                    Some((List::Equipment, rows)) => snapshot.equipment = rows,
+                    None => {}
                 }
                 let _ = handle.emit(EVENT, &*snapshot);
             });

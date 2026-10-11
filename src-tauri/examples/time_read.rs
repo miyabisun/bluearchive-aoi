@@ -1,4 +1,4 @@
-//! Times `Recognizer::read` on each fixture screenshot.
+//! Times `Recognizer::read_list` (the whole read of a frame) on each fixture screenshot.
 //! Run with `cargo run --release --example time_read`.
 
 use std::path::Path;
@@ -18,7 +18,7 @@ fn main() {
         let runs = 20;
         let started = Instant::now();
         for _ in 0..runs {
-            std::hint::black_box(recognizer.read(&image));
+            std::hint::black_box(recognizer.read_list(&image));
         }
         let whole = started.elapsed() / runs;
         let started = Instant::now();

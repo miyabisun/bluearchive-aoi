@@ -1,11 +1,13 @@
-//! Cuts the icon of an item SchaleDB lacks out of a screenshot, as a 146x116 PNG
-//! with transparency, for `data/extra/icons`.
+//! Cuts the icon of an item SchaleDB lacks (or draws unlike the game) out of a
+//! screenshot, as a 146x116 PNG with transparency, for `data/extra/icons` or
+//! `data/extra/equipment-icons`.
 //!
-//! Run with `cargo run --example make_icon -- <screenshot> <cell> <out.png> [shape]`.
+//! Run with `cargo run --example make_icon -- <screenshot> <cell> <out.png> [shape | seed=x,y ...]`.
 //! `cell` counts the fully visible cells from the top left. With `shape` (a SchaleDB
 //! icon of the same outline, such as the normal recruitment ticket for an archive
 //! one) its transparency is used; otherwise the card's background is taken away by
-//! filling it in from the canvas border.
+//! filling it in from the canvas border, and from each `seed` (a canvas pixel) for
+//! background the icon encloses, such as inside a necklace's cord.
 
 use std::{collections::VecDeque, path::Path};
 
@@ -26,7 +28,15 @@ fn main() {
         let p = canvas.get_pixel(x, y).0;
         Rgba([p[0], p[1], p[2], 255])
     });
-    if let Some(shape) = args.get(4) {
+    let seeds: Vec<(u32, u32)> = args[4..]
+        .iter()
+        .filter_map(|a| a.strip_prefix("seed="))
+        .map(|s| {
+            let (x, y) = s.split_once(',').expect("seed=x,y");
+            (x.parse().unwrap(), y.parse().unwrap())
+        })
+        .collect();
+    if let Some(shape) = args.get(4).filter(|a| !a.starts_with("seed=")) {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("data/schaledb/icons")
             .join(format!("{shape}.webp"));
@@ -45,6 +55,7 @@ fn main() {
         let mut queue: VecDeque<(u32, u32)> = (0..width)
             .flat_map(|x| [(x, 0), (x, height - 1)])
             .chain((0..height).flat_map(|y| [(0, y), (width - 1, y)]))
+            .chain(seeds)
             .collect();
         for &(x, y) in &queue {
             background[(y * width + x) as usize] = true;

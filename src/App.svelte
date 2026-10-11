@@ -1,69 +1,128 @@
 <script>
   import { onMount } from "svelte";
   import { follow } from "./lib/snapshot.js";
-  import { filterRows, formatCount, statusView } from "./lib/view.js";
+  import { LISTS, filterRows, followTab, formatCount, statusView } from "./lib/view.js";
 
-  let snapshot = $state({ status: { state: "no_game" }, rows: [] });
+  /** What each tab tells before anything of its list is read. */
+  const EMPTY = {
+    items:
+      "ブルーアーカイブのアイテム一覧を「デフォルト」の昇順で開いてスクロールすると、見えたアイテムの個数がここに並びます。",
+    equipment:
+      "ブルーアーカイブの装備一覧を「デフォルト」の昇順で開いてスクロールすると、見えた装備の個数がここに並びます。",
+  };
+
+  let snapshot = $state({ status: { state: "no_game" }, items: [], equipment: [] });
+  let view = $state({ tab: "items", lastRead: null });
   let query = $state("");
 
   const status = $derived(statusView(snapshot.status));
-  const shown = $derived(filterRows(snapshot.rows, query));
+  const rows = $derived(snapshot[view.tab]);
+  const shown = $derived(filterRows(rows, query));
+  const heading = $derived(LISTS.find((l) => l.id === view.tab).name);
 
   onMount(() => {
-    follow((next) => (snapshot = next));
+    follow((next) => {
+      snapshot = next;
+      view = followTab(view, next.status);
+    });
   });
 </script>
 
-<header class="app-header">
-  <h1>Aoi</h1>
-  <p class="status" data-tone={status.tone} role="status">
-    <span class="dot" aria-hidden="true"></span>{status.label}
-  </p>
-</header>
+<div class="top">
+  <header class="app-header">
+    <h1>Aoi</h1>
+    <p class="status" data-tone={status.tone} role="status">
+      <span class="dot" aria-hidden="true"></span>{status.label}
+    </p>
+  </header>
+  <div class="tabs" role="tablist">
+    {#each LISTS as list (list.id)}
+      <button
+        type="button"
+        role="tab"
+        id="tab-{list.id}"
+        aria-selected={view.tab === list.id}
+        aria-controls="list"
+        onclick={() => (view = { ...view, tab: list.id })}>{list.name}</button
+      >
+    {/each}
+  </div>
+</div>
 
 <main class="content">
-  {#if snapshot.status.state === "failed"}
-    <p class="error" role="alert">{snapshot.status.message}</p>
-  {/if}
-
-  {#if snapshot.rows.length === 0}
-    <p class="empty" data-state="empty">
-      ブルーアーカイブのアイテム一覧を「デフォルト」の昇順で開いてスクロールすると、見えたアイテムの個数がここに並びます。
-    </p>
-  {:else}
-    <label class="search">
-      <span>名前で検索</span>
-      <input type="search" bind:value={query} autocomplete="off" />
-    </label>
-    {#if shown.length === 0}
-      <p class="empty" data-state="no-match">一致する項目がありません</p>
-    {:else}
-      <table data-state="success">
-        <thead>
-          <tr><th scope="col">アイテム</th><th scope="col" class="count">個数</th></tr>
-        </thead>
-        <tbody>
-          {#each shown as row (row.id)}
-            <tr><td>{row.name}</td><td class="count">{formatCount(row.count)}</td></tr>
-          {/each}
-        </tbody>
-      </table>
+  <div id="list" role="tabpanel" aria-labelledby="tab-{view.tab}">
+    {#if snapshot.status.state === "failed"}
+      <p class="error" role="alert">{snapshot.status.message}</p>
     {/if}
-  {/if}
+
+    {#if rows.length === 0}
+      <p class="empty" data-state="empty">{EMPTY[view.tab]}</p>
+    {:else}
+      <label class="search">
+        <span>名前で検索</span>
+        <input type="search" bind:value={query} autocomplete="off" />
+      </label>
+      {#if shown.length === 0}
+        <p class="empty" data-state="no-match">一致する項目がありません</p>
+      {:else}
+        <table data-state="success">
+          <thead>
+            <tr><th scope="col">{heading}</th><th scope="col" class="count">個数</th></tr>
+          </thead>
+          <tbody>
+            {#each shown as row (row.id)}
+              <tr>
+                <td>
+                  {#if row.tier}<span class="tier">T{row.tier}</span>{/if}{row.name}
+                </td>
+                <td class="count">{formatCount(row.count)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
+    {/if}
+  </div>
 </main>
 
 <style lang="sass">
-  .app-header
+  .top
     position: sticky
     top: 0
+    background: var(--c-wash-base)
+    border-bottom: 1px solid var(--c-border)
+
+  .app-header
     display: flex
     align-items: center
     justify-content: space-between
     gap: var(--sp-3)
     height: 48px
     padding: 0 var(--sp-3)
-    background: var(--c-wash-base)
-    border-bottom: 1px solid var(--c-border)
+
+  .tabs
+    display: flex
+    padding: 0 var(--sp-1)
+    button
+      height: 40px
+      padding: 0 var(--sp-3)
+      border: 0
+      border-bottom: 2px solid transparent
+      background: none
+      color: var(--c-muted)
+      font: inherit
+      font-size: var(--fs-sm)
+      cursor: pointer
+      &[aria-selected="true"]
+        border-bottom-color: var(--c-accent)
+        color: var(--c-on-surface)
+        font-weight: 600
+
+  .tier
+    margin-right: var(--sp-2)
+    color: var(--c-muted)
+    font-size: var(--fs-sm)
+    font-variant-numeric: tabular-nums
 
   h1
     margin: 0

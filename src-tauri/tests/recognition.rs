@@ -1,6 +1,7 @@
 //! Accuracy against screenshots labeled by eye (tests/fixtures/labels.json).
-//! Labels list the fully visible cells in reading order; cut-off cells are
-//! not listed and must not be reported.
+//! Labels list the fully visible cells in reading order, with their counts as
+//! the game shows them ("1383", "51K"); cut-off cells are not listed and must
+//! not be reported.
 
 use std::{
     collections::HashMap,
@@ -8,8 +9,7 @@ use std::{
 };
 
 use aoi::{
-    Cell, Recognizer,
-    quantity::Count,
+    List, Recognizer,
     tally::{CONFIRM, Tally},
 };
 use serde::Deserialize;
@@ -17,19 +17,24 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 struct Fixture {
     image: String,
+    list: List,
     cells: Vec<Label>,
 }
 
-#[derive(Deserialize, Clone, Copy, PartialEq, Debug)]
+#[derive(Deserialize, Clone, PartialEq, Debug)]
 struct Label {
     id: Option<i64>,
-    quantity: Option<u32>,
+    quantity: Option<String>,
     /// The cell shows a remaining-time badge over its icon.
     #[serde(default)]
     badge: bool,
     /// An item the user does not track: recognized, never reported.
     #[serde(default)]
     ignored: bool,
+    /// The selected cell, whose blinking frame may hide the end of its count:
+    /// an unreadable count is fine there, a wrong one is not.
+    #[serde(default)]
+    selected: bool,
 }
 
 fn fixtures_dir() -> PathBuf {
@@ -41,10 +46,24 @@ fn fixtures() -> Vec<Fixture> {
     serde_json::from_str(&json).unwrap()
 }
 
+fn recognizer() -> Recognizer {
+    Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap()
+}
+
+fn open(name: &str) -> image::RgbImage {
+    image::open(fixtures_dir().join(name)).unwrap().to_rgb8()
+}
+
+const OTHER_SCREENS: [&str; 3] = [
+    "other/home.png",
+    "other/momotalk.png",
+    "other/event-stages.png",
+];
+
 /// Items with a remaining-time badge keep an order of their own; the others
 /// follow the list's ascending ids.
 #[test]
-fn labels_follow_ascending_item_ids() {
+fn labels_follow_ascending_ids() {
     for fixture in fixtures() {
         let ids: Vec<i64> = fixture
             .cells
@@ -62,23 +81,10 @@ fn labels_follow_ascending_item_ids() {
 
 #[test]
 fn reads_every_fully_visible_cell() {
-    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let recognizer = recognizer();
     let mut failures = Vec::new();
     for fixture in fixtures() {
-        let image = image::open(fixtures_dir().join(&fixture.image))
-            .unwrap()
-            .to_rgb8();
-        let read: Vec<(Option<i64>, Option<Count>, bool)> = recognizer
-            .read(&image)
-            .into_iter()
-            .map(
-                |Cell {
-                     id,
-                     quantity,
-                     ignored,
-                 }| (id, quantity, ignored),
-            )
-            .collect();
+        let read = recognizer.read(&open(&fixture.image), fixture.list);
         if read.len() != fixture.cells.len() {
             failures.push(format!(
                 "{}: read {} cells, expected {}",
@@ -87,12 +93,18 @@ fn reads_every_fully_visible_cell() {
                 fixture.cells.len()
             ));
         }
-        for (i, (got, want)) in read.iter().zip(&fixture.cells).enumerate() {
-            let want = (want.id, want.quantity.map(Count::Exact), want.ignored);
-            if *got != want {
+        for (i, (cell, want)) in read.iter().zip(&fixture.cells).enumerate() {
+            let quantity = cell.quantity.map(|q| q.to_string());
+            let quantity_ok = quantity == want.quantity || (want.selected && quantity.is_none());
+            if cell.id != want.id || cell.ignored != want.ignored || !quantity_ok {
                 failures.push(format!(
-                    "{} cell {i}: got {got:?}, want {want:?}",
-                    fixture.image
+                    "{} cell {i}: got {:?} x{quantity:?}{}, want {:?} x{:?}{}",
+                    fixture.image,
+                    cell.id,
+                    if cell.ignored { " ignored" } else { "" },
+                    want.id,
+                    want.quantity,
+                    if want.ignored { " ignored" } else { "" },
                 ));
             }
         }
@@ -100,48 +112,77 @@ fn reads_every_fully_visible_cell() {
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
 
+/// Item and equipment ids overlap, so a list read with the other list's
+/// entries must name nothing.
 #[test]
-fn other_screens_give_no_cells() {
-    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
-    for name in [
-        "other/home.png",
-        "other/momotalk.png",
-        "other/event-stages.png",
-    ] {
-        let image = image::open(fixtures_dir().join(name)).unwrap().to_rgb8();
-        assert!(recognizer.read_list(&image).is_none(), "{name}");
+fn neither_list_is_read_as_the_other() {
+    let recognizer = recognizer();
+    for fixture in fixtures() {
+        let other = match fixture.list {
+            List::Items => List::Equipment,
+            List::Equipment => List::Items,
+        };
+        let named: Vec<i64> = recognizer
+            .read(&open(&fixture.image), other)
+            .iter()
+            .filter_map(|c| c.id)
+            .collect();
+        assert!(
+            named.is_empty(),
+            "{} as {other:?}: {named:?}",
+            fixture.image
+        );
     }
-    let list = image::open(fixtures_dir().join("items-16x9-secretstone.png"))
-        .unwrap()
-        .to_rgb8();
-    assert_eq!(
-        recognizer.read_list(&list).map(|cells| cells.len()),
-        Some(15)
-    );
+}
+
+#[test]
+fn each_list_is_told_apart_and_other_screens_give_nothing() {
+    let recognizer = recognizer();
+    for fixture in fixtures() {
+        let shown = recognizer.read_list(&open(&fixture.image));
+        assert_eq!(
+            shown.map(|(list, cells)| (list, cells.len())),
+            Some((fixture.list, fixture.cells.len())),
+            "{}",
+            fixture.image
+        );
+    }
+    for name in OTHER_SCREENS {
+        assert!(recognizer.read_list(&open(name)).is_none(), "{name}");
+    }
 }
 
 /// The labeled screenshots shown one after another, each for a few frames, with
-/// other screens between them, tally to exactly the labeled counts.
+/// other screens between them, tally to exactly the labeled counts of each list.
 #[test]
 fn a_run_of_frames_tallies_to_the_labels() {
-    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
-    let open = |name: &str| image::open(fixtures_dir().join(name)).unwrap().to_rgb8();
-    let mut tally = Tally::default();
-    let mut expected = HashMap::new();
+    let recognizer = recognizer();
+    let mut tallies: HashMap<List, Tally> = HashMap::new();
+    let mut expected: HashMap<List, HashMap<i64, String>> = HashMap::new();
     for fixture in fixtures() {
-        for name in [fixture.image.as_str(), "other/home.png"] {
+        for name in [fixture.image.as_str(), OTHER_SCREENS[0]] {
             let image = open(name);
             for _ in 0..CONFIRM {
-                if let Some(cells) = recognizer.read_list(&image) {
-                    tally.observe(&cells);
+                if let Some((list, cells)) = recognizer.read_list(&image) {
+                    tallies.entry(list).or_default().observe(&cells);
                 }
             }
         }
-        for label in fixture.cells.iter().filter(|l| !l.ignored) {
-            if let (Some(id), Some(quantity)) = (label.id, label.quantity) {
-                expected.insert(id, Count::Exact(quantity));
+        for label in fixture.cells.iter().filter(|l| !l.ignored && !l.selected) {
+            if let (Some(id), Some(quantity)) = (label.id, &label.quantity) {
+                expected
+                    .entry(fixture.list)
+                    .or_default()
+                    .insert(id, quantity.clone());
             }
         }
     }
-    assert_eq!(tally.counts(), &expected);
+    let counted: HashMap<List, HashMap<i64, String>> = tallies
+        .iter()
+        .map(|(list, tally)| {
+            let counts = tally.counts().iter().map(|(id, q)| (*id, q.to_string()));
+            (*list, counts.collect())
+        })
+        .collect();
+    assert_eq!(counted, expected);
 }

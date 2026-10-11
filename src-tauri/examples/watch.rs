@@ -16,7 +16,7 @@ fn main() {
     watch::start(recognizer, move |status, rows| {
         let at = started.elapsed().as_secs_f32();
         match rows {
-            Some(rows) => println!("{at:6.1}s rows {}", rows.len()),
+            Some((list, rows)) => println!("{at:6.1}s {list:?} rows {}", rows.len()),
             None => println!("{at:6.1}s {}", serde_json::to_string(status).unwrap()),
         }
     });

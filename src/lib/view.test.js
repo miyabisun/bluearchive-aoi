@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterRows, formatCount, statusView } from "./view.js";
+import { filterRows, followTab, formatCount, statusView } from "./view.js";
 
 const rows = [
   { id: 10, name: "初級戦術教育BD（ゲヘナ）", count: 12 },
@@ -27,8 +27,12 @@ describe("statusView", () => {
   it("names each state and marks which are trouble", () => {
     expect(statusView({ state: "no_game" })).toEqual({ label: "ゲーム未検出", tone: "idle" });
     expect(statusView({ state: "other_screen" })).toEqual({ label: "対象外の画面", tone: "idle" });
-    expect(statusView({ state: "reading", fps: 27.5, dropped: 3 })).toEqual({
-      label: "集計中 28 fps",
+    expect(statusView({ state: "reading", list: "items", fps: 27.5, dropped: 3 })).toEqual({
+      label: "アイテムを集計中 28 fps",
+      tone: "active",
+    });
+    expect(statusView({ state: "reading", list: "equipment", fps: 9.6, dropped: 0 })).toEqual({
+      label: "装備を集計中 10 fps",
       tone: "active",
     });
     expect(statusView({ state: "failed", message: "denied" })).toEqual({
@@ -43,5 +47,29 @@ describe("formatCount", () => {
     expect(formatCount({ exact: 1383 })).toBe("1,383");
     expect(formatCount({ exact: 7 })).toBe("7");
     expect(formatCount({ thousands: 51 })).toBe("51K");
+  });
+});
+
+describe("followTab", () => {
+  const reading = (list) => ({ state: "reading", list, fps: 20, dropped: 0 });
+
+  it("moves to the list the game starts showing", () => {
+    expect(followTab({ tab: "items", lastRead: null }, reading("equipment"))).toEqual({
+      tab: "equipment",
+      lastRead: "equipment",
+    });
+  });
+
+  it("keeps a tab chosen by hand while the same list goes on being read", () => {
+    expect(followTab({ tab: "items", lastRead: "equipment" }, reading("equipment"))).toEqual({
+      tab: "items",
+      lastRead: "equipment",
+    });
+  });
+
+  it("stays put while no list is read", () => {
+    const view = { tab: "equipment", lastRead: "equipment" };
+    expect(followTab(view, { state: "other_screen" })).toEqual(view);
+    expect(followTab(view, { state: "no_game" })).toEqual(view);
   });
 });

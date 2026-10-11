@@ -2,6 +2,7 @@
 //! list from the newest frame, dropping frames the reader could not keep up with.
 
 use std::{
+    collections::HashMap,
     sync::{
         Arc, Condvar, Mutex, PoisonError,
         atomic::{AtomicU32, Ordering},
@@ -23,7 +24,7 @@ use windows_capture::{
     window::Window,
 };
 
-use crate::{Recognizer, Row, tally::Tally};
+use crate::{List, Recognizer, Row, tally::Tally};
 
 const GAME: &str = "BlueArchive.exe";
 /// Frames are taken at most this often (30 a second).
@@ -37,11 +38,11 @@ const LOOK_INTERVAL: Duration = Duration::from_secs(1);
 pub enum Status {
     /// Blue Archive is not running (or shows no window).
     NoGame,
-    /// The game shows something other than the item list in its default order.
+    /// The game shows something other than a list in its default order.
     OtherScreen,
-    /// The item list is being read, `fps` frames a second; `dropped` frames
-    /// arrived while the reader was busy and were replaced by newer ones.
-    Reading { fps: f32, dropped: u32 },
+    /// `list` is being read, `fps` frames a second; `dropped` frames arrived
+    /// while the reader was busy and were replaced by newer ones.
+    Reading { list: List, fps: f32, dropped: u32 },
     /// The window cannot be captured.
     Failed { message: String },
 }
@@ -58,8 +59,8 @@ enum Game {
 #[derive(Debug, Clone, PartialEq, Default)]
 struct Seen {
     game: Game,
-    /// The last frame read showed the item list in its default order.
-    on_list: bool,
+    /// The list the last frame read showed in its default order.
+    on_list: Option<List>,
     fps: f32,
     dropped: u32,
 }
@@ -70,15 +71,18 @@ fn status(seen: &Seen) -> Status {
         Game::Failed(message) => Status::Failed {
             message: message.clone(),
         },
-        Game::Captured if seen.on_list => Status::Reading {
-            fps: seen.fps,
-            dropped: seen.dropped,
+        Game::Captured => match seen.on_list {
+            Some(list) => Status::Reading {
+                list,
+                fps: seen.fps,
+                dropped: seen.dropped,
+            },
+            None => Status::OtherScreen,
         },
-        Game::Captured => Status::OtherScreen,
     }
 }
 
-type Report = dyn Fn(&Status, Option<Vec<Row>>) + Send + Sync;
+type Report = dyn Fn(&Status, Option<(List, Vec<Row>)>) + Send + Sync;
 
 /// Keeps what is seen and reports the status whenever it changes.
 struct Board {
@@ -97,9 +101,9 @@ impl Board {
         }
     }
 
-    fn rows(&self, rows: Vec<Row>) {
+    fn rows(&self, list: List, rows: Vec<Row>) {
         let guard = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
-        (self.report)(&status(&guard.0), Some(rows));
+        (self.report)(&status(&guard.0), Some((list, rows)));
     }
 }
 
@@ -280,7 +284,7 @@ fn capture(
 /// the tally with the rows to show.
 pub fn start(
     recognizer: Arc<Recognizer>,
-    report: impl Fn(&Status, Option<Vec<Row>>) + Send + Sync + 'static,
+    report: impl Fn(&Status, Option<(List, Vec<Row>)>) + Send + Sync + 'static,
 ) {
     let board = Arc::new(Board {
         seen: Mutex::new((Seen::default(), None)),
@@ -293,13 +297,16 @@ pub fn start(
     {
         let (board, latest, frames) = (board.clone(), latest.clone(), frames.clone());
         thread::spawn(move || {
-            let mut tally = Tally::default();
+            let mut tallies: HashMap<List, Tally> = HashMap::new();
             loop {
-                let cells = recognizer.read_list(&latest.take());
+                let read = recognizer.read_list(&latest.take());
                 frames.fetch_add(1, Ordering::Relaxed);
-                board.update(|seen| seen.on_list = cells.is_some());
-                if cells.is_some_and(|cells| tally.observe(&cells)) {
-                    board.rows(recognizer.rows(&tally));
+                board.update(|seen| seen.on_list = read.as_ref().map(|(list, _)| *list));
+                if let Some((list, cells)) = read {
+                    let tally = tallies.entry(list).or_default();
+                    if tally.observe(&cells) {
+                        board.rows(list, recognizer.rows(list, tally));
+                    }
                 }
             }
         });
@@ -345,7 +352,7 @@ pub fn start(
 
 #[cfg(test)]
 mod tests {
-    use super::{Game, Seen, Status, is_game, status};
+    use super::{Game, List, Seen, Status, is_game, status};
 
     #[test]
     fn the_game_is_known_by_its_exe_name() {
@@ -363,17 +370,19 @@ mod tests {
             fps: 28.5,
             dropped: 4,
         };
-        assert_eq!(status(&seen(Game::Absent, true)), Status::NoGame);
+        let items = Some(List::Items);
+        assert_eq!(status(&seen(Game::Absent, items)), Status::NoGame);
         assert_eq!(
-            status(&seen(Game::Failed("denied".into()), false)),
+            status(&seen(Game::Failed("denied".into()), None)),
             Status::Failed {
                 message: "denied".into()
             }
         );
-        assert_eq!(status(&seen(Game::Captured, false)), Status::OtherScreen);
+        assert_eq!(status(&seen(Game::Captured, None)), Status::OtherScreen);
         assert_eq!(
-            status(&seen(Game::Captured, true)),
+            status(&seen(Game::Captured, Some(List::Equipment))),
             Status::Reading {
+                list: List::Equipment,
                 fps: 28.5,
                 dropped: 4
             }

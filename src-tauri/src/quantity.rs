@@ -287,7 +287,9 @@ mod tests {
 
     #[derive(Deserialize)]
     struct Label {
-        quantity: Option<u32>,
+        quantity: Option<String>,
+        #[serde(default)]
+        selected: bool,
     }
 
     #[test]
@@ -300,9 +302,10 @@ mod tests {
         for fixture in fixtures {
             let image = image::open(dir.join(&fixture.image)).unwrap().to_rgb8();
             for (i, (card, label)) in find_cards(&image).iter().zip(&fixture.cells).enumerate() {
-                let want = label.quantity.map(|q| q.to_string().len());
+                let want = label.quantity.as_ref().map(|q| q.chars().count());
                 let got = glyphs(&image, card).map(|g| g.len());
-                if got != want {
+                // Under the selected card's frame the count may be unreadable.
+                if got != want && !(label.selected && got.is_none()) {
                     wrong.push(format!(
                         "{} cell {i}: {got:?} glyphs for {:?}",
                         fixture.image, label.quantity
