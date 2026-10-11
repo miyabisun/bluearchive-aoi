@@ -1,14 +1,20 @@
-﻿# Elevated half of the game input helper, started by the "aoi-game-input"
+# Elevated half of the game input helper, started by the "aoi-game-input"
 # scheduled task. Blue Archive runs as administrator, so UIPI drops input sent
 # from a normal process. This script reads one request written by send.ps1,
 # acts only on the Blue Archive window, and writes the result next to it.
+#
+# A scheduled task may start without the user's environment variables, so
+# folders come from the Windows API, and failures go to input-error.log.
 $ErrorActionPreference = 'Stop'
-$dir = Join-Path $env:LOCALAPPDATA 'aoi-dev'
+$local = [Environment]::GetFolderPath('LocalApplicationData')
+$dir = Join-Path $local 'aoi-dev'
 $requestPath = Join-Path $dir 'input.json'
 $resultPath = Join-Path $dir 'input-result.json'
+$logPath = Join-Path $dir 'input-error.log'
 # Present while the user plays the game; the pause-button window creates it.
 $pausePath = Join-Path $dir 'user-operating'
 $sent = 0
+if (-not $env:TEMP) { $env:TEMP = Join-Path $local 'Temp'; $env:TMP = $env:TEMP }
 
 function Finish([bool]$ok, [string]$message, [bool]$paused = $false) {
   @{ ok = $ok; paused = $paused; sent = $sent; message = $message; at = (Get-Date).ToString('o') } |
@@ -16,7 +22,8 @@ function Finish([bool]$ok, [string]$message, [bool]$paused = $false) {
   exit
 }
 
-Add-Type @"
+try {
+  Add-Type @"
 using System; using System.Runtime.InteropServices;
 public static class AoiInput {
   public struct RECT { public int L, T, R, B; }
@@ -29,21 +36,41 @@ public static class AoiInput {
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
-  [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+  [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT p);
+  [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint flags);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr pid);
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);
   [DllImport("user32.dll")] public static extern void mouse_event(uint flags, int dx, int dy, int data, UIntPtr extra);
-  // Windows only lets the foreground process change focus; a tapped Alt lifts that lock.
-  public static void Focus(IntPtr h) {
-    keybd_event(0x12, 0, 0, UIntPtr.Zero);
-    keybd_event(0x12, 0, 2, UIntPtr.Zero);
+  [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+  // Windows lets only the foreground thread, or the sender of the last input,
+  // hand focus over. First borrow the foreground thread's input state; failing
+  // that, send F24, a key no application uses, and try again.
+  public static bool Focus(IntPtr h) {
+    IntPtr current = GetForegroundWindow();
+    if (current == h) return true;
+    uint mine = GetCurrentThreadId();
+    uint theirs = GetWindowThreadProcessId(current, IntPtr.Zero);
+    AttachThreadInput(mine, theirs, true);
     SetForegroundWindow(h);
+    BringWindowToTop(h);
+    AttachThreadInput(mine, theirs, false);
+    if (GetForegroundWindow() == h) return true;
+    keybd_event(0x87, 0, 0, UIntPtr.Zero);
+    keybd_event(0x87, 0, 2, UIntPtr.Zero);
+    SetForegroundWindow(h);
+    return GetForegroundWindow() == h;
   }
 }
 "@
 
-try {
   if (-not (Test-Path $requestPath)) { Finish $false 'no request' }
   $request = Get-Content -Raw $requestPath | ConvertFrom-Json
   Remove-Item $requestPath
+  # install.ps1 checks that the task runs at all.
+  if ($request.action -eq 'ping') { Finish $true 'pong' }
 
   # The request file is user-writable, so every field is checked before use.
   if ($request.action -ne 'wheel') { Finish $false "unknown action: $($request.action)" }
@@ -61,6 +88,7 @@ try {
     Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } | Select-Object -First 1
   if (-not $game) { Finish $false 'Blue Archive window not found' }
   $hwnd = $game.MainWindowHandle
+  if ([AoiInput]::IsIconic($hwnd)) { Finish $false 'Blue Archive is minimized' }
 
   $rect = New-Object AoiInput+RECT
   [AoiInput]::GetClientRect($hwnd, [ref]$rect) | Out-Null
@@ -80,29 +108,42 @@ try {
       $sent++
       Start-Sleep -Milliseconds $interval
     }
-  } else {
-    # Real wheel input reaches whatever is under the cursor, so the game is
-    # brought forward briefly and the user's cursor and focus are put back.
-    $savedCursor = New-Object AoiInput+POINT
-    [AoiInput]::GetCursorPos([ref]$savedCursor) | Out-Null
-    $savedWindow = [AoiInput]::GetForegroundWindow()
-    [AoiInput]::Focus($hwnd)
-    [AoiInput]::SetCursorPos($point.X, $point.Y) | Out-Null
-    Start-Sleep -Milliseconds 50
-    try {
-      for ($i = 0; $i -lt $count; $i++) {
-        if (Test-Path $pausePath) { break }
-        [AoiInput]::mouse_event(0x0800, 0, 0, $delta, [UIntPtr]::Zero)
-        $sent++
-        Start-Sleep -Milliseconds $interval
-      }
-    } finally {
-      [AoiInput]::SetCursorPos($savedCursor.X, $savedCursor.Y) | Out-Null
-      if ($savedWindow -ne [IntPtr]::Zero -and $savedWindow -ne $hwnd) { [AoiInput]::Focus($savedWindow) }
-    }
-    if ($sent -lt $count) { Finish $false 'the user is operating the game' $true }
+    Finish $true "sent $sent x $notches notch(es) by post"
   }
-  Finish $true "sent $sent x $notches notch(es) by $($request.mode)"
+
+  # The game reads the wheel only while it is in front and the cursor is over
+  # the list, so both are checked before anything is sent. The user's cursor
+  # and window are put back afterwards.
+  $savedCursor = New-Object AoiInput+POINT
+  [AoiInput]::GetCursorPos([ref]$savedCursor) | Out-Null
+  $savedWindow = [AoiInput]::GetForegroundWindow()
+  $problem = $null
+  try {
+    if (-not [AoiInput]::Focus($hwnd)) {
+      $problem = 'could not bring Blue Archive to the front'
+    } else {
+      [AoiInput]::SetCursorPos($point.X, $point.Y) | Out-Null
+      Start-Sleep -Milliseconds 50
+      $under = [AoiInput]::GetAncestor([AoiInput]::WindowFromPoint($point), 2)
+      if ($under -ne $hwnd) {
+        $problem = 'another window covers the list'
+      } else {
+        for ($i = 0; $i -lt $count; $i++) {
+          if (Test-Path $pausePath) { break }
+          [AoiInput]::mouse_event(0x0800, 0, 0, $delta, [UIntPtr]::Zero)
+          $sent++
+          Start-Sleep -Milliseconds $interval
+        }
+      }
+    }
+  } finally {
+    [AoiInput]::SetCursorPos($savedCursor.X, $savedCursor.Y) | Out-Null
+    if ($savedWindow -ne [IntPtr]::Zero -and $savedWindow -ne $hwnd) { [AoiInput]::Focus($savedWindow) | Out-Null }
+  }
+  if ($problem) { Finish $false $problem }
+  if ($sent -lt $count) { Finish $false 'the user is operating the game' $true }
+  Finish $true "sent $sent x $notches notch(es) by input"
 } catch {
+  "$(Get-Date -Format o) $($_.Exception.Message)" | Add-Content -Encoding utf8 $logPath
   Finish $false $_.Exception.Message
 }
