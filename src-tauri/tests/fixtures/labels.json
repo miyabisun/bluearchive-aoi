@@ -1,0 +1,283 @@
+[
+  {
+    "image": "items-16x9-secretstone.png",
+    "role": "tune",
+    "note": "2026-10-11 capture, 2222x1250. Labels by eye against SchaleDB icons sorted by Id.",
+    "cells": [
+      {
+        "id": 20001,
+        "quantity": 1
+      },
+      {
+        "id": 20002,
+        "quantity": 2
+      },
+      {
+        "id": 20003,
+        "quantity": 3
+      },
+      {
+        "id": 20005,
+        "quantity": 16
+      },
+      {
+        "id": 20006,
+        "quantity": 70
+      },
+      {
+        "id": 20008,
+        "quantity": 37
+      },
+      {
+        "id": 20010,
+        "quantity": 117
+      },
+      {
+        "id": 20012,
+        "quantity": 37
+      },
+      {
+        "id": 20013,
+        "quantity": 138
+      },
+      {
+        "id": 20014,
+        "quantity": 103
+      },
+      {
+        "id": 20015,
+        "quantity": 3
+      },
+      {
+        "id": 20016,
+        "quantity": 2
+      },
+      {
+        "id": 20018,
+        "quantity": 1
+      },
+      {
+        "id": 20019,
+        "quantity": 95
+      },
+      {
+        "id": 20020,
+        "quantity": 49
+      }
+    ]
+  },
+  {
+    "image": "items-4x3-ooparts.png",
+    "role": "eval",
+    "note": "2026-03-28 capture by the abandoned project, 1744x1308. Labels by eye against SchaleDB icons sorted by Id.",
+    "cells": [
+      {
+        "id": 110,
+        "quantity": 1875
+      },
+      {
+        "id": 111,
+        "quantity": 597
+      },
+      {
+        "id": 112,
+        "quantity": 450
+      },
+      {
+        "id": 113,
+        "quantity": 59
+      },
+      {
+        "id": 120,
+        "quantity": 1938
+      },
+      {
+        "id": 121,
+        "quantity": 856
+      },
+      {
+        "id": 122,
+        "quantity": 496
+      },
+      {
+        "id": 123,
+        "quantity": 52
+      },
+      {
+        "id": 130,
+        "quantity": 260
+      },
+      {
+        "id": 131,
+        "quantity": 305
+      },
+      {
+        "id": 132,
+        "quantity": 218
+      },
+      {
+        "id": 133,
+        "quantity": 1
+      },
+      {
+        "id": 140,
+        "quantity": 1493
+      },
+      {
+        "id": 141,
+        "quantity": 574
+      },
+      {
+        "id": 142,
+        "quantity": 300
+      },
+      {
+        "id": 143,
+        "quantity": 60
+      },
+      {
+        "id": 150,
+        "quantity": 2619
+      },
+      {
+        "id": 151,
+        "quantity": 1005
+      },
+      {
+        "id": 152,
+        "quantity": 482
+      },
+      {
+        "id": 153,
+        "quantity": 274
+      },
+      {
+        "id": 160,
+        "quantity": 577
+      },
+      {
+        "id": 161,
+        "quantity": 1027
+      },
+      {
+        "id": 162,
+        "quantity": 471
+      },
+      {
+        "id": 163,
+        "quantity": 82
+      },
+      {
+        "id": 170,
+        "quantity": 503
+      },
+      {
+        "id": 171,
+        "quantity": 53
+      },
+      {
+        "id": 172,
+        "quantity": 59
+      },
+      {
+        "id": 173,
+        "quantity": 63
+      },
+      {
+        "id": 180,
+        "quantity": 2652
+      },
+      {
+        "id": 181,
+        "quantity": 964
+      }
+    ]
+  },
+  {
+    "image": "items-16x9-list-top.png",
+    "role": "tune",
+    "note": "2026-10-11 capture at the top of the list, 2222x1250. Labels by eye; books and boxes that share one SchaleDB icon get the only ids the ascending order allows.",
+    "cells": [
+      {
+        "id": 100000,
+        "quantity": 13
+      },
+      {
+        "id": 100008,
+        "quantity": 56
+      },
+      {
+        "id": 100009,
+        "quantity": 9
+      },
+      {
+        "id": 150000,
+        "quantity": 830
+      },
+      {
+        "id": 150001,
+        "quantity": 244
+      },
+      {
+        "id": 150002,
+        "quantity": 26
+      },
+      {
+        "id": 150003,
+        "quantity": 24
+      },
+      {
+        "id": 150004,
+        "quantity": 429
+      },
+      {
+        "id": 150005,
+        "quantity": 169
+      },
+      {
+        "id": 150006,
+        "quantity": 18
+      },
+      {
+        "id": 150007,
+        "quantity": 19
+      },
+      {
+        "id": 150008,
+        "quantity": 672
+      },
+      {
+        "id": 150009,
+        "quantity": 667
+      },
+      {
+        "id": 150010,
+        "quantity": 479
+      },
+      {
+        "id": 150011,
+        "quantity": 104
+      },
+      {
+        "id": 150012,
+        "quantity": 6
+      },
+      {
+        "id": 150013,
+        "quantity": 7
+      },
+      {
+        "id": 150014,
+        "quantity": 4
+      },
+      {
+        "id": 150017,
+        "quantity": 6
+      },
+      {
+        "id": 150018,
+        "quantity": 6
+      }
+    ]
+  }
+]
