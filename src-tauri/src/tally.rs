@@ -6,16 +6,16 @@
 
 use std::collections::HashMap;
 
-use crate::Cell;
+use crate::{Cell, quantity::Count};
 
 /// Frames in a row that must agree before a count is taken.
 pub const CONFIRM: u8 = 3;
 
 #[derive(Default)]
 pub struct Tally {
-    counts: HashMap<i64, u32>,
+    counts: HashMap<i64, Count>,
     /// The latest value read for each item and in how many frames in a row.
-    streaks: HashMap<i64, (u32, u8)>,
+    streaks: HashMap<i64, (Count, u8)>,
 }
 
 impl Tally {
@@ -41,20 +41,20 @@ impl Tally {
     }
 
     /// The taken counts by item id.
-    pub fn counts(&self) -> &HashMap<i64, u32> {
+    pub fn counts(&self) -> &HashMap<i64, Count> {
         &self.counts
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{CONFIRM, Tally};
+    use super::{CONFIRM, Count, Tally};
     use crate::Cell;
 
     fn cell(id: i64, quantity: u32) -> Cell {
         Cell {
             id: Some(id),
-            quantity: Some(quantity),
+            quantity: Some(Count::Exact(quantity)),
             ignored: false,
         }
     }
@@ -69,7 +69,7 @@ mod tests {
         let changes = frames(&mut tally, &[cell(110, 1875)], CONFIRM);
         assert_eq!(changes.last(), Some(&true));
         assert!(changes[..changes.len() - 1].iter().all(|c| !c));
-        assert_eq!(tally.counts().get(&110), Some(&1875));
+        assert_eq!(tally.counts().get(&110), Some(&Count::Exact(1875)));
     }
 
     #[test]
@@ -78,7 +78,7 @@ mod tests {
         frames(&mut tally, &[cell(110, 1875)], CONFIRM);
         assert!(!tally.observe(&[cell(110, 187)]));
         frames(&mut tally, &[cell(110, 1875)], 1);
-        assert_eq!(tally.counts().get(&110), Some(&1875));
+        assert_eq!(tally.counts().get(&110), Some(&Count::Exact(1875)));
     }
 
     #[test]
@@ -87,7 +87,7 @@ mod tests {
         frames(&mut tally, &[cell(110, 1875)], CONFIRM);
         let changes = frames(&mut tally, &[cell(110, 1874)], CONFIRM);
         assert_eq!(changes.last(), Some(&true));
-        assert_eq!(tally.counts().get(&110), Some(&1874));
+        assert_eq!(tally.counts().get(&110), Some(&Count::Exact(1874)));
     }
 
     #[test]
@@ -95,8 +95,8 @@ mod tests {
         let mut tally = Tally::default();
         frames(&mut tally, &[cell(110, 1875)], CONFIRM);
         frames(&mut tally, &[cell(111, 597)], CONFIRM);
-        assert_eq!(tally.counts().get(&110), Some(&1875));
-        assert_eq!(tally.counts().get(&111), Some(&597));
+        assert_eq!(tally.counts().get(&110), Some(&Count::Exact(1875)));
+        assert_eq!(tally.counts().get(&111), Some(&Count::Exact(597)));
     }
 
     #[test]
@@ -105,7 +105,7 @@ mod tests {
         let cells = [
             Cell {
                 id: None,
-                quantity: Some(3),
+                quantity: Some(Count::Exact(3)),
                 ignored: false,
             },
             Cell {
@@ -115,11 +115,24 @@ mod tests {
             },
             Cell {
                 id: Some(80660),
-                quantity: Some(1480),
+                quantity: Some(Count::Exact(1480)),
                 ignored: true,
             },
         ];
         frames(&mut tally, &cells, CONFIRM);
         assert!(tally.counts().is_empty());
+    }
+
+    #[test]
+    fn a_count_shown_in_thousands_replaces_an_exact_one() {
+        let mut tally = Tally::default();
+        frames(&mut tally, &[cell(110, 9999)], CONFIRM);
+        let rounded = Cell {
+            id: Some(110),
+            quantity: Some(Count::Thousands(10)),
+            ignored: false,
+        };
+        frames(&mut tally, &[rounded], CONFIRM);
+        assert_eq!(tally.counts().get(&110), Some(&Count::Thousands(10)));
     }
 }

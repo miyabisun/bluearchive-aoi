@@ -18,7 +18,7 @@ use image::RgbImage;
 use serde::{Deserialize, Serialize};
 
 use icon::IconMatcher;
-use quantity::Digits;
+use quantity::{Count, Digits};
 
 /// One fully visible cell of the item list, in reading order.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -26,7 +26,7 @@ pub struct Cell {
     /// SchaleDB item id, or `None` when the icon could not be told apart.
     pub id: Option<i64>,
     /// Count shown as "xN", or `None` when it could not be read.
-    pub quantity: Option<u32>,
+    pub quantity: Option<Count>,
     /// An item the user does not keep track of (see `tracked`): the cell is read
     /// for the list order but is not to be shown or exported.
     pub ignored: bool,
@@ -278,12 +278,12 @@ impl Recognizer {
 pub struct Row {
     pub id: i64,
     pub name: String,
-    pub count: u32,
+    pub count: Count,
 }
 
 /// The tracked counts as rows, in the default list order.
-fn rows(items: &[Item], counts: &HashMap<i64, u32>) -> Vec<Row> {
-    let mut found: Vec<(&Item, u32)> = items
+fn rows(items: &[Item], counts: &HashMap<i64, Count>) -> Vec<Row> {
+    let mut found: Vec<(&Item, Count)> = items
         .iter()
         .filter(|item| tracked(item))
         .filter_map(|item| counts.get(&item.id).map(|&count| (item, count)))
@@ -322,17 +322,19 @@ mod tests {
             item(90_000, "event ticket", "Consumable"),
             item(20, "unseen", "Material"),
         ];
-        let counts = HashMap::from([(10, 5), (80_660, 1480), (3, 7), (90_000, 2)]);
-        let names: Vec<(String, u32)> = rows(&items, &counts)
+        let counts = HashMap::from(
+            [(10, 5), (80_660, 1480), (3, 7), (90_000, 2)].map(|(id, n)| (id, Count::Exact(n))),
+        );
+        let names: Vec<(String, String)> = rows(&items, &counts)
             .into_iter()
-            .map(|r| (r.name, r.count))
+            .map(|r| (r.name, r.count.to_string()))
             .collect();
         assert_eq!(
             names,
             [
-                ("event ticket".to_owned(), 2),
-                ("secret stone".to_owned(), 7),
-                ("material".to_owned(), 5),
+                ("event ticket".to_owned(), "2".to_owned()),
+                ("secret stone".to_owned(), "7".to_owned()),
+                ("material".to_owned(), "5".to_owned()),
             ]
         );
     }

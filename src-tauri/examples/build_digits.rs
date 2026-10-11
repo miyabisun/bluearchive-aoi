@@ -1,14 +1,17 @@
-//! Writes `data/digits.json`: the average glyph of each digit, taken from the
-//! fixtures labeled `"role": "tune"`. Evaluation fixtures are never used here.
+//! Writes `data/digits.json`: the average glyph of each character of a count
+//! (the digits and "K"), taken from the fixtures labeled `"role": "tune"` in
+//! `labels.json` and `counts.json`. Evaluation fixtures are never used here.
 //! Run with `cargo run --example build_digits`.
 
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 
 use aoi::{grid, quantity};
 use serde::Deserialize;
 
+const CHARACTERS: &str = "0123456789K";
+
 #[derive(Deserialize)]
-struct Fixture {
+struct ItemFixture {
     image: String,
     role: String,
     cells: Vec<Label>,
@@ -19,46 +22,72 @@ struct Label {
     quantity: Option<u32>,
 }
 
+#[derive(Deserialize)]
+struct CountFixture {
+    image: String,
+    role: String,
+    counts: Vec<String>,
+}
+
 fn main() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let dir = root.join("tests/fixtures");
-    let fixtures: Vec<Fixture> =
-        serde_json::from_str(&std::fs::read_to_string(dir.join("labels.json")).unwrap()).unwrap();
+    let read = |name: &str| std::fs::read_to_string(dir.join(name)).unwrap();
+    let labels: Vec<ItemFixture> = serde_json::from_str(&read("labels.json")).unwrap();
+    let counts: Vec<CountFixture> = serde_json::from_str(&read("counts.json")).unwrap();
+    // Each tuning screenshot with the text of its counts, cell by cell.
+    let texts = labels
+        .into_iter()
+        .filter(|f| f.role == "tune")
+        .map(|f| {
+            let text = f.cells.iter().map(|c| c.quantity.map(|q| q.to_string()));
+            (f.image, text.collect::<Vec<_>>())
+        })
+        .chain(
+            counts
+                .into_iter()
+                .filter(|f| f.role == "tune")
+                .map(|f| (f.image, f.counts.into_iter().map(Some).collect())),
+        );
+
     let size = quantity::GLYPH.0 * quantity::GLYPH.1;
-    let mut sums = vec![vec![0.0f32; size]; 10];
-    let mut counts = [0u32; 10];
-    for fixture in fixtures.iter().filter(|f| f.role == "tune") {
-        let image = image::open(dir.join(&fixture.image)).unwrap().to_rgb8();
-        for (card, label) in grid::find_cards(&image).iter().zip(&fixture.cells) {
-            let (Some(q), Some(glyphs)) = (label.quantity, quantity::glyphs(&image, card)) else {
+    let mut sums: BTreeMap<char, (Vec<f32>, u32)> = CHARACTERS
+        .chars()
+        .map(|c| (c, (vec![0.0; size], 0)))
+        .collect();
+    for (name, cells) in texts {
+        let image = image::open(dir.join(&name)).unwrap().to_rgb8();
+        for (card, text) in grid::find_cards(&image).iter().zip(cells) {
+            let (Some(text), Some(glyphs)) = (text, quantity::glyphs(&image, card)) else {
                 continue;
             };
-            let digits: Vec<usize> = q
-                .to_string()
-                .bytes()
-                .map(|b| usize::from(b - b'0'))
-                .collect();
-            if digits.len() != glyphs.len() {
+            if text.chars().count() != glyphs.len() {
                 continue;
             }
-            for (d, g) in digits.into_iter().zip(glyphs) {
-                sums[d].iter_mut().zip(g).for_each(|(s, v)| *s += v);
-                counts[d] += 1;
+            for (c, g) in text.chars().zip(glyphs) {
+                let (sum, n) = sums.get_mut(&c).unwrap();
+                sum.iter_mut().zip(g).for_each(|(s, v)| *s += v);
+                *n += 1;
             }
         }
     }
-    let missing: Vec<usize> = (0..10).filter(|&d| counts[d] == 0).collect();
-    assert!(missing.is_empty(), "no samples for digits {missing:?}");
+    let missing: String = sums
+        .iter()
+        .filter(|(_, (_, n))| *n == 0)
+        .map(|(c, _)| *c)
+        .collect();
+    assert!(missing.is_empty(), "no samples for {missing:?}");
+    let samples: Vec<String> = sums.iter().map(|(c, (_, n))| format!("{c}:{n}")).collect();
     let glyphs = sums
         .into_iter()
-        .zip(counts)
-        .map(|(s, n)| {
-            s.into_iter()
-                .map(|v| (v / n as f32 * 1000.0).round() / 1000.0)
-                .collect()
+        .map(|(c, (sum, n))| {
+            let mean = sum
+                .into_iter()
+                .map(|v| (v / n as f32 * 1000.0).round() / 1000.0);
+            (c, mean.collect())
         })
         .collect();
     let json = serde_json::to_string(&quantity::Digits { glyphs }).unwrap();
     std::fs::write(root.join("data/digits.json"), json + "\n").unwrap();
-    println!("samples per digit: {counts:?}");
+    println!("samples: {}", samples.join(" "));
 }

@@ -23,3 +23,10 @@ export function statusView(status) {
       return { label: "ゲーム未検出", tone: "idle" };
   }
 }
+
+const exact = new Intl.NumberFormat("ja-JP");
+
+/** A count as the list shows it: exact below 10,000, in thousands ("51K") from there. */
+export function formatCount(count) {
+  return "thousands" in count ? `${count.thousands}K` : exact.format(count.exact);
+}

@@ -17,7 +17,7 @@ fn main() {
         println!(
             "{i:2} {:>8} x{:<6} {name}{ignored}",
             format!("{:?}", cell.id),
-            format!("{:?}", cell.quantity)
+            cell.quantity.map_or("?".to_owned(), |q| q.to_string())
         );
     }
 }

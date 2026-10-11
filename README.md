@@ -50,6 +50,11 @@ Other windows may cover the game; Aoi reads the game window itself, not the scre
 - A count is taken once the same number has been read in three frames in a row, so a
   single misread frame does not change it. When you use an item in the game, its count
   follows when the list is shown again.
+- Counts of 10,000 or more are shown as the game shows them, in thousands: 51K stands
+  for 50,500 to 51,499.
+- A count Aoi cannot read for sure is skipped in that frame rather than guessed. The
+  selected item's count, under its blinking frame, is read in the frames where the frame
+  is faint.
 - Items Aoi cannot tell apart for sure are left out rather than guessed. Items released
   after the bundled item data are left out until a release with newer data.
 - Event items, from the event points to the Valentine chocolates, are never listed. They

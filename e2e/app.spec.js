@@ -6,7 +6,7 @@ const rows = Array.from({ length: 120 }, (_, i) => ({
     i === 3
       ? "とても長い名前の期間限定でない普通のアイテム（ゲヘナ・トリニティ・ミレニアム共通）"
       : `アイテム${i}`,
-  count: i * 997,
+  count: i === 5 ? { thousands: 51 } : { exact: i * 997 },
 }));
 
 /** Opens the page showing `snapshot` as the watcher's. */
@@ -23,6 +23,7 @@ test("lists the tally in order and narrows it by name", async ({ page }) => {
   await expect(page.getByRole("status")).toHaveText("集計中 27 fps");
   await expect(page.locator("tbody tr")).toHaveCount(120);
   await expect(page.locator("tbody tr").nth(2)).toHaveText("アイテム21,994");
+  await expect(page.locator("tbody tr").nth(5).locator("td.count")).toHaveText("51K");
 
   await page.getByLabel("名前で検索").fill("ｱｲﾃﾑ11");
   await expect(page.locator("tbody td:first-child")).toHaveText([

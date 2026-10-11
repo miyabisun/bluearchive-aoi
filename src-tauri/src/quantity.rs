@@ -2,8 +2,11 @@
 //!
 //! The count is drawn in one flat ink colour with a white outline, so each
 //! character is a separate blob of ink. Blobs are scaled to a common height
-//! and compared with reference digits taken from labeled screenshots
+//! and compared with reference characters (the digits and the "K" of counts
+//! from 10,000) taken from labeled screenshots
 //! (`data/digits.json`, written by `cargo run --example build_digits`).
+
+use std::{collections::BTreeMap, fmt};
 
 use image::RgbImage;
 use serde::{Deserialize, Serialize};
@@ -23,6 +26,14 @@ const DIGIT_HEIGHT: (f32, f32) = (0.11, 0.2);
 const X_HEIGHT: (f32, f32) = (0.45, 0.85);
 /// Normalized glyph size: characters keep their width relative to their height.
 pub const GLYPH: (usize, usize) = (16, 20);
+/// Farthest a glyph may be from its reference (squared difference summed over
+/// the normalized glyph). Measured on 2026-10-11: read characters are within
+/// 35, a "K" without its reference is 73 or more from every digit.
+const MAX_DISTANCE: f32 = 50.0;
+/// The right-aligned count ends this close to the card's right edge (fraction
+/// of the card height; measured 0.10 to 0.15). Farther, its last character is
+/// missing, as under the blinking frame of the selected card (0.24).
+const END_GAP: f32 = 0.19;
 
 /// How much a pixel looks like ink, 0 (white) to 1 (ink), if it lies on the
 /// ink-to-white blend at all.
@@ -116,8 +127,13 @@ fn digit_blobs(image: &RgbImage, card: &Card) -> Option<Vec<Blob>> {
         let r = b.height() as f32 / h;
         r >= DIGIT_HEIGHT.0 && r <= DIGIT_HEIGHT.1
     };
-    // The count is right-aligned: start from the rightmost digit-sized blob.
+    // The count is right-aligned: start from the rightmost digit-sized blob,
+    // which must end where counts end.
     let last = all.iter().filter(|b| is_digit(b)).max_by_key(|b| b.right)?;
+    let right = card.left + card.width + card.shift_at(y0 as f32);
+    if (right - last.right as f32) / h > END_GAP {
+        return None;
+    }
     let line = |b: &Blob| b.bottom.abs_diff(last.bottom) <= 2;
     let mut digits: Vec<Blob> = vec![last.clone()];
     loop {
@@ -169,37 +185,97 @@ pub fn glyphs(image: &RgbImage, card: &Card) -> Option<Vec<Vec<f32>>> {
     )
 }
 
-/// Reference glyph for each digit.
+/// A count as the list shows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Count {
+    /// Below 10,000 the exact number ("x1383").
+    Exact(u32),
+    /// From 10,000 the thousands, rounded ("x51K" is 50,500 to 51,499).
+    Thousands(u32),
+}
+
+impl fmt::Display for Count {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Count::Exact(n) => write!(f, "{n}"),
+            Count::Thousands(n) => write!(f, "{n}K"),
+        }
+    }
+}
+
+/// The count spelled by the characters after the "x"; a "K" may only end it.
+fn parse(text: &str) -> Option<Count> {
+    match text.strip_suffix('K') {
+        Some(thousands) => thousands.parse().ok().map(Count::Thousands),
+        None => text.parse().ok().map(Count::Exact),
+    }
+}
+
+/// Reference glyph for each character of a count: the digits and "K".
 #[derive(Serialize, Deserialize)]
 pub struct Digits {
-    pub glyphs: Vec<Vec<f32>>,
+    pub glyphs: BTreeMap<char, Vec<f32>>,
 }
 
 impl Digits {
-    fn closest(&self, glyph: &[f32]) -> u32 {
+    /// The character the glyph shows, if it is close enough to one.
+    fn closest(&self, glyph: &[f32]) -> Option<char> {
         let dist = |r: &Vec<f32>| {
             r.iter()
                 .zip(glyph)
                 .map(|(a, b)| (a - b).powi(2))
                 .sum::<f32>()
         };
-        (0u32..)
-            .zip(&self.glyphs)
-            .min_by(|a, b| dist(a.1).total_cmp(&dist(b.1)))
-            .map(|(d, _)| d)
-            .unwrap()
+        self.glyphs
+            .iter()
+            .map(|(c, r)| (*c, dist(r)))
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .filter(|(_, d)| *d <= MAX_DISTANCE)
+            .map(|(c, _)| c)
     }
 
-    pub fn read(&self, image: &RgbImage, card: &Card) -> Option<u32> {
-        glyphs(image, card)?
+    pub fn read(&self, image: &RgbImage, card: &Card) -> Option<Count> {
+        let text: Option<String> = glyphs(image, card)?
             .iter()
-            .try_fold(0u32, |n, g| n.checked_mul(10)?.checked_add(self.closest(g)))
+            .map(|g| self.closest(g))
+            .collect();
+        parse(&text?)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn counts_parse_as_the_list_shows_them() {
+        assert_eq!(parse("1383"), Some(Count::Exact(1383)));
+        assert_eq!(parse("51K"), Some(Count::Thousands(51)));
+        assert_eq!(parse("5K1"), None);
+        assert_eq!(parse("K"), None);
+        assert_eq!(parse(""), None);
+        assert_eq!(Count::Exact(1383).to_string(), "1383");
+        assert_eq!(Count::Thousands(51).to_string(), "51K");
+    }
+
+    /// A character with no reference is unreadable, never the closest digit:
+    /// with "K" left out, "x51K" must not read as 518.
+    #[test]
+    fn a_character_without_a_reference_is_unreadable() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut digits: Digits =
+            serde_json::from_str(&std::fs::read_to_string(root.join("data/digits.json")).unwrap())
+                .unwrap();
+        digits.glyphs.remove(&'K');
+        let image = image::open(root.join("tests/fixtures/equipment-16x9-end.png"))
+            .unwrap()
+            .to_rgb8();
+        let cards = find_cards(&image);
+        let read: Vec<Option<Count>> = cards[16..].iter().map(|c| digits.read(&image, c)).collect();
+        assert_eq!(read, vec![None; 9]);
+        assert_eq!(digits.read(&image, &cards[11]), Some(Count::Exact(1444)));
+    }
     use crate::grid::find_cards;
     use std::path::Path;
 

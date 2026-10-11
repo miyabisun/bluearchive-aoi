@@ -9,6 +9,7 @@ use std::{
 
 use aoi::{
     Cell, Recognizer,
+    quantity::Count,
     tally::{CONFIRM, Tally},
 };
 use serde::Deserialize;
@@ -67,7 +68,7 @@ fn reads_every_fully_visible_cell() {
         let image = image::open(fixtures_dir().join(&fixture.image))
             .unwrap()
             .to_rgb8();
-        let read: Vec<(Option<i64>, Option<u32>, bool)> = recognizer
+        let read: Vec<(Option<i64>, Option<Count>, bool)> = recognizer
             .read(&image)
             .into_iter()
             .map(
@@ -87,7 +88,7 @@ fn reads_every_fully_visible_cell() {
             ));
         }
         for (i, (got, want)) in read.iter().zip(&fixture.cells).enumerate() {
-            let want = (want.id, want.quantity, want.ignored);
+            let want = (want.id, want.quantity.map(Count::Exact), want.ignored);
             if *got != want {
                 failures.push(format!(
                     "{} cell {i}: got {got:?}, want {want:?}",
@@ -138,7 +139,7 @@ fn a_run_of_frames_tallies_to_the_labels() {
         }
         for label in fixture.cells.iter().filter(|l| !l.ignored) {
             if let (Some(id), Some(quantity)) = (label.id, label.quantity) {
-                expected.insert(id, quantity);
+                expected.insert(id, Count::Exact(quantity));
             }
         }
     }

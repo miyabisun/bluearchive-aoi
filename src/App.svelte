@@ -1,14 +1,13 @@
 <script>
   import { onMount } from "svelte";
   import { follow } from "./lib/snapshot.js";
-  import { filterRows, statusView } from "./lib/view.js";
+  import { filterRows, formatCount, statusView } from "./lib/view.js";
 
   let snapshot = $state({ status: { state: "no_game" }, rows: [] });
   let query = $state("");
 
   const status = $derived(statusView(snapshot.status));
   const shown = $derived(filterRows(snapshot.rows, query));
-  const count = new Intl.NumberFormat("ja-JP");
 
   onMount(() => {
     follow((next) => (snapshot = next));
@@ -45,7 +44,7 @@
         </thead>
         <tbody>
           {#each shown as row (row.id)}
-            <tr><td>{row.name}</td><td class="count">{count.format(row.count)}</td></tr>
+            <tr><td>{row.name}</td><td class="count">{formatCount(row.count)}</td></tr>
           {/each}
         </tbody>
       </table>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterRows, statusView } from "./view.js";
+import { filterRows, formatCount, statusView } from "./view.js";
 
 const rows = [
   { id: 10, name: "初級戦術教育BD（ゲヘナ）", count: 12 },
@@ -35,5 +35,13 @@ describe("statusView", () => {
       label: "キャプチャ失敗",
       tone: "danger",
     });
+  });
+});
+
+describe("formatCount", () => {
+  it("shows exact counts with separators and rounded ones as the game does", () => {
+    expect(formatCount({ exact: 1383 })).toBe("1,383");
+    expect(formatCount({ exact: 7 })).toBe("7");
+    expect(formatCount({ thousands: 51 })).toBe("51K");
   });
 });
