@@ -111,13 +111,30 @@ impl Recognizer {
         let candidates: Vec<usize> = (0..self.icon_keys.len())
             .filter(|&i| Some(i) != missing)
             .collect();
-        let options: Vec<Option<Vec<ListKey>>> = cards
-            .iter()
-            .map(|card| {
-                let icon = self.matcher.identify(image, card, &candidates)?;
-                Some(self.icon_keys[icon].clone())
-            })
-            .collect();
+        // Cards are told apart independently, so they share out over the CPU's cores.
+        let threads = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        let per_thread = cards.len().div_ceil(threads).max(1);
+        let options: Vec<Option<Vec<ListKey>>> = std::thread::scope(|scope| {
+            let workers: Vec<_> = cards
+                .chunks(per_thread)
+                .map(|chunk| {
+                    let candidates = &candidates;
+                    scope.spawn(move || {
+                        chunk
+                            .iter()
+                            .map(|card| {
+                                let icon = self.matcher.identify(image, card, candidates)?;
+                                Some(self.icon_keys[icon].clone())
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+            workers
+                .into_iter()
+                .flat_map(|worker| worker.join().expect("a card worker panicked"))
+                .collect()
+        });
         order::resolve(&options)
             .into_iter()
             .zip(&cards)

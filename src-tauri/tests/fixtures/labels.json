@@ -366,5 +366,92 @@
         "quantity": 397
       }
     ]
+  },
+  {
+    "image": "items-16x9-gifts-tickets.png",
+    "role": "tune",
+    "note": "2026-10-11 capture, 2222x1250. A time-limited ticket badge (35日) spills into the gap above its row. The green 1/10 tickets are not in the SchaleDB snapshot (its two ticket icons are the blue ones), so they read as unknown. Labels by eye against SchaleDB icons.",
+    "cells": [
+      {
+        "id": 5104,
+        "quantity": 17
+      },
+      {
+        "id": 5105,
+        "quantity": 31
+      },
+      {
+        "id": 5106,
+        "quantity": 19
+      },
+      {
+        "id": 5107,
+        "quantity": 14
+      },
+      {
+        "id": 5108,
+        "quantity": 4
+      },
+      {
+        "id": 5109,
+        "quantity": 27
+      },
+      {
+        "id": 5110,
+        "quantity": 13
+      },
+      {
+        "id": 5111,
+        "quantity": 10
+      },
+      {
+        "id": 5112,
+        "quantity": 6
+      },
+      {
+        "id": 5997,
+        "quantity": 8
+      },
+      {
+        "id": null,
+        "quantity": 180
+      },
+      {
+        "id": null,
+        "quantity": 12
+      },
+      {
+        "id": 6998,
+        "quantity": 5
+      },
+      {
+        "id": 6999,
+        "quantity": 1
+      },
+      {
+        "id": 9998,
+        "quantity": 18
+      },
+      {
+        "id": 9999,
+        "quantity": 7
+      },
+      {
+        "id": 10000,
+        "quantity": 140
+      },
+      {
+        "id": 10001,
+        "quantity": 5
+      },
+      {
+        "id": 10002,
+        "quantity": 1
+      },
+      {
+        "id": 10004,
+        "quantity": 173
+      }
+    ]
   }
 ]

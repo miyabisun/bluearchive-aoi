@@ -35,6 +35,9 @@ const CLEAR: (f32, f32) = (0.8, 0.3);
 /// on the pixels where the two icons differ, at least `DETAIL.1` and a lead of
 /// `DETAIL.2` over the runner-up.
 const DETAIL: (f32, f32, f32) = (0.9, 0.9, 0.3);
+/// Most difference in average tint (`Template::tint`) for a match. Matches measure
+/// up to about 0.03; a green ticket against the blue one 0.05 and more.
+const MAX_TINT: f32 = 0.04;
 /// Two icons differ at a pixel when their channels differ by this much in sum.
 const DIFFERENT: f32 = 90.0;
 
@@ -70,6 +73,26 @@ impl Template {
 
     fn at(&self, x: u32, y: u32) -> Option<Rgb> {
         self.grid[(y * self.width + x) as usize]
+    }
+
+    /// How far the average hue of `image` under the icon is from the icon's own:
+    /// the summed difference of their chromaticities (each channel's share of the
+    /// brightness), 0 for the same tint.
+    fn tint(&self, image: &RgbImage, ox: u32, oy: u32) -> f32 {
+        let (mut t, mut p) = ([0.0f32; 3], [0.0f32; 3]);
+        for (x, y, rgb) in self.pixels() {
+            let px = image.get_pixel(ox + x, oy + y).0;
+            for c in 0..3 {
+                t[c] += rgb[c];
+                p[c] += f32::from(px[c]);
+            }
+        }
+        let share = |v: [f32; 3]| {
+            let sum = v.iter().sum::<f32>().max(1.0);
+            v.map(|c| c / sum)
+        };
+        let (t, p) = (share(t), share(p));
+        (0..3).map(|c| (t[c] - p[c]).abs()).sum()
     }
 
     /// Similarity with `image` placed at `(ox, oy)`.
@@ -150,23 +173,56 @@ impl IconMatcher {
         shortlist.sort_by(|a, b| b.1.total_cmp(&a.1));
         shortlist.truncate(SHORTLIST);
 
-        let fine = Self::sample(image, card, FINE_HEIGHT, SEARCH);
-        let mut ranked: Vec<(usize, f32, (u32, u32))> = shortlist
+        // Fine detail (a page of writing) suffers from a pixel's error in the measured
+        // card height, so the card is also sampled a pixel smaller and larger.
+        let samples: Vec<RgbImage> = [-1i32, 0, 1]
+            .iter()
+            .map(|&d| {
+                let card = Card {
+                    height: card.height.saturating_add_signed(d),
+                    ..*card
+                };
+                Self::sample(image, &card, FINE_HEIGHT, SEARCH)
+            })
+            .collect();
+        let mut ranked: Vec<(usize, f32, &RgbImage, (u32, u32))> = shortlist
             .into_iter()
             .map(|(i, _)| {
                 let t = &self.fine[i];
-                debug_assert_eq!(t.width + 2 * SEARCH, fine.width());
-                let (score, at) = (0..=2 * SEARCH)
-                    .flat_map(|oy| (0..=2 * SEARCH).map(move |ox| (ox, oy)))
-                    .map(|(ox, oy)| (t.score(&fine, ox, oy), (ox, oy)))
-                    .fold((f32::MIN, (0, 0)), |a, b| if b.0 > a.0 { b } else { a });
-                (i, score, at)
+                debug_assert_eq!(t.width + 2 * SEARCH, samples[1].width());
+                // The whole position search at the measured size, then the other sizes
+                // only around the best position.
+                let mut best = (f32::MIN, &samples[1], (0, 0));
+                for oy in 0..=2 * SEARCH {
+                    for ox in 0..=2 * SEARCH {
+                        let score = t.score(&samples[1], ox, oy);
+                        if score > best.0 {
+                            best = (score, &samples[1], (ox, oy));
+                        }
+                    }
+                }
+                let (bx, by) = best.2;
+                for fine in [&samples[0], &samples[2]] {
+                    for oy in by.saturating_sub(1)..=(by + 1).min(2 * SEARCH) {
+                        for ox in bx.saturating_sub(1)..=(bx + 1).min(2 * SEARCH) {
+                            let score = t.score(fine, ox, oy);
+                            if score > best.0 {
+                                best = (score, fine, (ox, oy));
+                            }
+                        }
+                    }
+                }
+                (i, best.0, best.1, best.2)
             })
             .collect();
         ranked.sort_by(|a, b| b.1.total_cmp(&a.1));
 
-        let &(best, score, (ox, oy)) = ranked.first()?;
-        let Some(&(runner_up, next, _)) = ranked.get(1) else {
+        let &(best, score, fine, (ox, oy)) = ranked.first()?;
+        // A recoloured twin (a green ticket for a blue one) matches in shape only.
+        if self.fine[best].tint(fine, ox, oy) > MAX_TINT {
+            return None;
+        }
+        let Some(&(runner_up, next, _, _)) = ranked.get(1) else {
             return (score >= CLEAR.0).then_some(best);
         };
         let lead = score - next;

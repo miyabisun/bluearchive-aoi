@@ -12,8 +12,10 @@ const BACKGROUND_TOLERANCE: u8 = 6;
 pub const SHEAR: f32 = 0.1875;
 /// A row is a gap when this share of the panel width is background.
 const GAP_ROW_SHARE: f32 = 0.85;
-/// Card rows shorter than the tallest by more than this are cut off.
+/// An edge row shorter than the card height by more than this is cut off.
 const CUT_OFF_SLACK: u32 = 3;
+/// Spans between gaps shorter than this are no row of cards.
+const MIN_ROW: u32 = 20;
 
 /// A card, measured at its vertical centre where the shear has no effect.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -103,18 +105,33 @@ pub fn find_cards(image: &RgbImage) -> Vec<Card> {
         })
         .collect();
     let gaps = spans(&gap_rows);
-    // Card rows lie between two gaps; the viewport edges count as gaps too.
-    let rows: Vec<(u32, u32)> = gaps.windows(2).map(|w| (w[0].1, w[1].0)).collect();
-    let Some(tallest) = rows.iter().map(|(a, b)| b - a).max() else {
+    // Card rows lie between two gaps; the viewport edges count as gaps too. A badge
+    // spilling into a gap splits it, leaving a sliver that is no row.
+    let rows: Vec<(u32, u32)> = gaps
+        .windows(2)
+        .map(|w| (w[0].1, w[1].0))
+        .filter(|(top, bottom)| bottom - top >= MIN_ROW)
+        .collect();
+    let [first, .., last] = rows.as_slice() else {
         return Vec::new();
     };
+    // Only the rows at the viewport's edges can be cut off. Inner rows are whole, but
+    // a badge can make one look a little taller or shorter, so their middle height is
+    // the card height.
+    let mut inner: Vec<u32> = rows[1..rows.len() - 1].iter().map(|(a, b)| b - a).collect();
+    inner.sort_unstable();
+    let height = inner
+        .get(inner.len() / 2)
+        .copied()
+        .unwrap_or_else(|| (last.1 - last.0).max(first.1 - first.0));
 
     let mut cards = Vec::new();
-    for (top, bottom) in rows {
-        let height = bottom - top;
-        if height + CUT_OFF_SLACK < tallest {
+    for (i, &(top, bottom)) in rows.iter().enumerate() {
+        let edge = i == 0 || i == rows.len() - 1;
+        if edge && bottom - top + CUT_OFF_SLACK < height {
             continue;
         }
+        let top = (top + bottom).saturating_sub(height) / 2;
         cards.extend(cards_in_row(image, top, height, panel_left, panel_right));
     }
     cards
