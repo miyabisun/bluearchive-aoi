@@ -17,4 +17,12 @@ $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" 
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
   -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName 'aoi-game-input' -Action $action -Principal $principal -Settings $settings -Force | Out-Null
+
+# Let the user's normal, unelevated session start the task.
+$sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$service = New-Object -ComObject Schedule.Service
+$service.Connect()
+$task = $service.GetFolder('\').GetTask('aoi-game-input')
+$dacl = $task.GetSecurityDescriptor(4)
+if ($dacl -notmatch [regex]::Escape($sid)) { $task.SetSecurityDescriptor($dacl + "(A;;GRGX;;;$sid)", 0) }
 "installed $script as the aoi-game-input task"
