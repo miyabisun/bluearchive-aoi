@@ -4,6 +4,8 @@ pub mod grid;
 pub mod icon;
 mod order;
 pub mod quantity;
+pub mod screen;
+pub mod tally;
 
 use std::path::Path;
 
@@ -68,6 +70,8 @@ pub struct Recognizer {
     icon_ignored: Vec<bool>,
     matcher: IconMatcher,
     digits: Digits,
+    /// The sort buttons in the default order (`data/sort-default.png`).
+    sort_template: RgbImage,
 }
 
 impl Recognizer {
@@ -131,11 +135,16 @@ impl Recognizer {
             .collect();
         let digits =
             std::fs::read_to_string(data.join("digits.json")).map_err(|e| e.to_string())?;
+        let sort = data.join("sort-default.png");
+        let sort_template = image::open(&sort)
+            .map_err(|e| format!("{}: {e}", sort.display()))?
+            .to_rgb8();
         Ok(Self {
             icon_keys,
             icon_ignored,
             matcher: IconMatcher::new(&images),
             digits: serde_json::from_str(&digits).map_err(|e| e.to_string())?,
+            sort_template,
             items,
         })
     }
@@ -146,12 +155,29 @@ impl Recognizer {
 
     /// Reads the fully visible cells in reading order.
     pub fn read(&self, image: &RgbImage) -> Vec<Cell> {
-        self.read_without(image, None)
+        self.read_cards(image, &grid::find_cards(image), None)
+    }
+
+    /// Reads the cells when the frame shows the item list sorted the default way,
+    /// ascending; any other screen or order gives `None`.
+    pub fn read_list(&self, image: &RgbImage) -> Option<Vec<Cell>> {
+        let (panel, cards) = grid::find(image)?;
+        screen::sorted_by_default(image, panel.card_height, &self.sort_template)
+            .then(|| self.read_cards(image, &cards, None))
     }
 
     /// Reads as if the snapshot lacked the items drawn with icon `missing`.
+    #[cfg(test)]
     fn read_without(&self, image: &RgbImage, missing: Option<usize>) -> Vec<Cell> {
-        let cards = grid::find_cards(image);
+        self.read_cards(image, &grid::find_cards(image), missing)
+    }
+
+    fn read_cards(
+        &self,
+        image: &RgbImage,
+        cards: &[grid::Card],
+        missing: Option<usize>,
+    ) -> Vec<Cell> {
         let badges: Vec<Option<u32>> = cards
             .iter()
             .map(|card| grid::badge_bottom(image, card))

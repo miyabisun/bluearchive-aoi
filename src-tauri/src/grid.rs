@@ -114,14 +114,22 @@ fn spans(flags: &[bool]) -> Vec<(u32, u32)> {
     out
 }
 
-/// Fully visible cards in reading order (rows top to bottom, left to right).
-pub fn find_cards(image: &RgbImage) -> Vec<Card> {
+/// The list panel: its background's horizontal extent, the top of its scrolling
+/// viewport and the height of a card.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Panel {
+    pub left: u32,
+    pub right: u32,
+    pub top: u32,
+    pub card_height: u32,
+}
+
+/// The panel and its card rows `(top, bottom)`, when the frame shows the list.
+fn layout(image: &RgbImage) -> Option<(Panel, Vec<(u32, u32)>)> {
     let runs: Vec<(u32, u32)> = (0..image.height()).map(|y| longest_run(image, y)).collect();
-    let Some(&(panel_left, panel_width)) = runs.iter().max_by_key(|r| r.1) else {
-        return Vec::new();
-    };
+    let &(panel_left, panel_width) = runs.iter().max_by_key(|r| r.1)?;
     if panel_width < image.width() / 4 {
-        return Vec::new();
+        return None;
     }
     let panel_right = panel_left + panel_width;
 
@@ -142,18 +150,40 @@ pub fn find_cards(image: &RgbImage) -> Vec<Card> {
         .filter(|(top, bottom)| bottom - top >= MIN_ROW)
         .collect();
     let [first, .., last] = rows.as_slice() else {
-        return Vec::new();
+        return None;
     };
     // Only the rows at the viewport's edges can be cut off. Inner rows are whole, but
     // a badge can make one look a little taller or shorter, so their middle height is
     // the card height.
     let mut inner: Vec<u32> = rows[1..rows.len() - 1].iter().map(|(a, b)| b - a).collect();
     inner.sort_unstable();
-    let height = inner
+    let card_height = inner
         .get(inner.len() / 2)
         .copied()
         .unwrap_or_else(|| (last.1 - last.0).max(first.1 - first.0));
+    let panel = Panel {
+        left: panel_left,
+        right: panel_right,
+        top: gaps[0].0,
+        card_height,
+    };
+    Some((panel, rows))
+}
 
+/// The list panel, when the frame shows one.
+pub fn find_panel(image: &RgbImage) -> Option<Panel> {
+    layout(image).map(|(panel, _)| panel)
+}
+
+/// Fully visible cards in reading order (rows top to bottom, left to right).
+pub fn find_cards(image: &RgbImage) -> Vec<Card> {
+    find(image).map(|(_, cards)| cards).unwrap_or_default()
+}
+
+/// The list panel and its fully visible cards, when the frame shows the list.
+pub fn find(image: &RgbImage) -> Option<(Panel, Vec<Card>)> {
+    let (panel, rows) = layout(image)?;
+    let height = panel.card_height;
     let mut cards = Vec::new();
     for (i, &(top, bottom)) in rows.iter().enumerate() {
         let edge = i == 0 || i == rows.len() - 1;
@@ -161,9 +191,9 @@ pub fn find_cards(image: &RgbImage) -> Vec<Card> {
             continue;
         }
         let top = (top + bottom).saturating_sub(height) / 2;
-        cards.extend(cards_in_row(image, top, height, panel_left, panel_right));
+        cards.extend(cards_in_row(image, top, height, panel.left, panel.right));
     }
-    cards
+    Some((panel, cards))
 }
 
 fn cards_in_row(

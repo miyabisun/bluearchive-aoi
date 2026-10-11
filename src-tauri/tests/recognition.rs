@@ -92,3 +92,23 @@ fn reads_every_fully_visible_cell() {
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
+
+#[test]
+fn other_screens_give_no_cells() {
+    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    for name in [
+        "other/home.png",
+        "other/momotalk.png",
+        "other/event-stages.png",
+    ] {
+        let image = image::open(fixtures_dir().join(name)).unwrap().to_rgb8();
+        assert!(recognizer.read_list(&image).is_none(), "{name}");
+    }
+    let list = image::open(fixtures_dir().join("items-16x9-secretstone.png"))
+        .unwrap()
+        .to_rgb8();
+    assert_eq!(
+        recognizer.read_list(&list).map(|cells| cells.len()),
+        Some(15)
+    );
+}
