@@ -279,5 +279,92 @@
         "quantity": 6
       }
     ]
+  },
+  {
+    "image": "items-16x9-coins-materials.png",
+    "role": "eval",
+    "note": "2026-10-11 capture after the consumables, 2222x1250: coins and materials share one ascending id order. Labels by eye.",
+    "cells": [
+      {
+        "id": 23,
+        "quantity": 2829
+      },
+      {
+        "id": 60,
+        "quantity": 823
+      },
+      {
+        "id": 61,
+        "quantity": 422
+      },
+      {
+        "id": 70,
+        "quantity": 155
+      },
+      {
+        "id": 71,
+        "quantity": 440
+      },
+      {
+        "id": 80,
+        "quantity": 930
+      },
+      {
+        "id": 81,
+        "quantity": 1006
+      },
+      {
+        "id": 82,
+        "quantity": 667
+      },
+      {
+        "id": 83,
+        "quantity": 146
+      },
+      {
+        "id": 100,
+        "quantity": 1669
+      },
+      {
+        "id": 101,
+        "quantity": 365
+      },
+      {
+        "id": 102,
+        "quantity": 338
+      },
+      {
+        "id": 103,
+        "quantity": 81
+      },
+      {
+        "id": 110,
+        "quantity": 2147
+      },
+      {
+        "id": 111,
+        "quantity": 1480
+      },
+      {
+        "id": 112,
+        "quantity": 400
+      },
+      {
+        "id": 113,
+        "quantity": 82
+      },
+      {
+        "id": 120,
+        "quantity": 1343
+      },
+      {
+        "id": 121,
+        "quantity": 727
+      },
+      {
+        "id": 122,
+        "quantity": 397
+      }
+    ]
   }
 ]
