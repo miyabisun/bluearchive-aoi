@@ -1,16 +1,21 @@
 //! Reads item kinds and counts from screenshots of the Blue Archive item list.
 
+pub mod app;
 pub mod grid;
 pub mod icon;
 mod order;
 pub mod quantity;
 pub mod screen;
 pub mod tally;
+pub mod watch;
+mod embedded {
+    include!(concat!(env!("OUT_DIR"), "/embedded.rs"));
+}
 
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use image::RgbImage;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use icon::IconMatcher;
 use quantity::Digits;
@@ -75,19 +80,33 @@ pub struct Recognizer {
 }
 
 impl Recognizer {
-    /// Loads the SchaleDB snapshot (`data/schaledb`) and the items it lacks
-    /// (`data/extra`, icons cut from screenshots) from `data`, the crate's
-    /// `data` directory.
+    /// Loads the files under `data` (the crate's `data` directory): the SchaleDB
+    /// snapshot (`schaledb`), the items it lacks (`extra`, icons cut from
+    /// screenshots), the digit references and the default sort buttons.
     pub fn load(data: &Path) -> Result<Self, String> {
-        let read = |dir: &Path| -> Result<Vec<Item>, String> {
-            let path = dir.join("items.json");
-            let json =
-                std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-            serde_json::from_str(&json).map_err(|e| format!("{}: {e}", path.display()))
+        Self::build(&|path| {
+            std::fs::read(data.join(path))
+                .map_err(|e| format!("{}: {e}", data.join(path).display()))
+        })
+    }
+
+    /// The same data, built into the program.
+    pub fn embedded() -> Result<Self, String> {
+        Self::build(&|path| {
+            embedded::FILES
+                .iter()
+                .find(|(name, _)| *name == path)
+                .map(|(_, bytes)| bytes.to_vec())
+                .ok_or_else(|| format!("{path} is not built in"))
+        })
+    }
+
+    fn build(read: &dyn Fn(&str) -> Result<Vec<u8>, String>) -> Result<Self, String> {
+        let items_in = |path: &str| -> Result<Vec<Item>, String> {
+            serde_json::from_slice(&read(path)?).map_err(|e| format!("{path}: {e}"))
         };
-        let (schaledb, extra) = (data.join("schaledb"), data.join("extra"));
-        let mut items = read(&schaledb)?;
-        let extras = read(&extra)?;
+        let mut items = items_in("schaledb/items.json")?;
+        let extras = items_in("extra/items.json")?;
         if let Some(both) = extras.iter().find(|e| items.iter().any(|i| i.id == e.id)) {
             return Err(format!(
                 "SchaleDB now has id {} ({}); remove it from data/extra",
@@ -99,17 +118,18 @@ impl Recognizer {
         let mut icons: Vec<&str> = items.iter().map(|i| i.icon.as_str()).collect();
         icons.sort_unstable();
         icons.dedup();
+        let picture = |path: &str| -> Result<image::DynamicImage, String> {
+            image::load_from_memory(&read(path)?).map_err(|e| format!("{path}: {e}"))
+        };
         let images = icons
             .iter()
             .map(|name| {
                 let path = if extra_icons.iter().any(|e| e == name) {
-                    extra.join("icons").join(format!("{name}.png"))
+                    format!("extra/icons/{name}.png")
                 } else {
-                    schaledb.join("icons").join(format!("{name}.webp"))
+                    format!("schaledb/icons/{name}.webp")
                 };
-                image::open(&path)
-                    .map(|i| i.to_rgba8())
-                    .map_err(|e| format!("{}: {e}", path.display()))
+                picture(&path).map(|i| i.to_rgba8())
             })
             .collect::<Result<Vec<_>, _>>()?;
         let icon_ignored = icons
@@ -133,24 +153,25 @@ impl Recognizer {
                 keys
             })
             .collect();
-        let digits =
-            std::fs::read_to_string(data.join("digits.json")).map_err(|e| e.to_string())?;
-        let sort = data.join("sort-default.png");
-        let sort_template = image::open(&sort)
-            .map_err(|e| format!("{}: {e}", sort.display()))?
-            .to_rgb8();
+        let digits = serde_json::from_slice(&read("digits.json")?)
+            .map_err(|e| format!("digits.json: {e}"))?;
         Ok(Self {
             icon_keys,
             icon_ignored,
             matcher: IconMatcher::new(&images),
-            digits: serde_json::from_str(&digits).map_err(|e| e.to_string())?,
-            sort_template,
+            digits,
+            sort_template: picture("sort-default.png")?.to_rgb8(),
             items,
         })
     }
 
     pub fn items(&self) -> &[Item] {
         &self.items
+    }
+
+    /// The tally's tracked counts, in the default list order.
+    pub fn rows(&self, tally: &tally::Tally) -> Vec<Row> {
+        rows(&self.items, tally.counts())
     }
 
     /// Reads the fully visible cells in reading order.
@@ -252,9 +273,69 @@ impl Recognizer {
     }
 }
 
+/// One line of the tally, for the window.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Row {
+    pub id: i64,
+    pub name: String,
+    pub count: u32,
+}
+
+/// The tracked counts as rows, in the default list order.
+fn rows(items: &[Item], counts: &HashMap<i64, u32>) -> Vec<Row> {
+    let mut found: Vec<(&Item, u32)> = items
+        .iter()
+        .filter(|item| tracked(item))
+        .filter_map(|item| counts.get(&item.id).map(|&count| (item, count)))
+        .collect();
+    found.sort_unstable_by_key(|(item, _)| list_key(item));
+    found
+        .into_iter()
+        .map(|(item, count)| Row {
+            id: item.id,
+            name: item.name.clone(),
+            count,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn item(id: i64, name: &str, category: &str) -> Item {
+        Item {
+            id,
+            name: name.into(),
+            icon: String::new(),
+            category: category.into(),
+            rarity: "N".into(),
+        }
+    }
+
+    #[test]
+    fn rows_follow_the_list_order_and_leave_out_untracked_items() {
+        let items = [
+            item(10, "material", "Material"),
+            item(80_660, "event point", "Material"),
+            item(3, "secret stone", "SecretStone"),
+            item(90_000, "event ticket", "Consumable"),
+            item(20, "unseen", "Material"),
+        ];
+        let counts = HashMap::from([(10, 5), (80_660, 1480), (3, 7), (90_000, 2)]);
+        let names: Vec<(String, u32)> = rows(&items, &counts)
+            .into_iter()
+            .map(|r| (r.name, r.count))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                ("event ticket".to_owned(), 2),
+                ("secret stone".to_owned(), 7),
+                ("material".to_owned(), 5),
+            ]
+        );
+    }
 
     #[derive(Deserialize)]
     struct Fixture {

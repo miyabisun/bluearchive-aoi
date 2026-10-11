@@ -1,0 +1,382 @@
+//! Watches Blue Archive: captures its window while it runs and reads the item
+//! list from the newest frame, dropping frames the reader could not keep up with.
+
+use std::{
+    sync::{
+        Arc, Condvar, Mutex, PoisonError,
+        atomic::{AtomicU32, Ordering},
+    },
+    thread,
+    time::{Duration, Instant},
+};
+
+use image::RgbImage;
+use serde::Serialize;
+use windows_capture::{
+    capture::{CaptureControl, Context, GraphicsCaptureApiHandler},
+    frame::Frame,
+    graphics_capture_api::InternalCaptureControl,
+    settings::{
+        ColorFormat, CursorCaptureSettings, DirtyRegionSettings, DrawBorderSettings,
+        MinimumUpdateIntervalSettings, SecondaryWindowSettings, Settings,
+    },
+    window::Window,
+};
+
+use crate::{Recognizer, Row, tally::Tally};
+
+const GAME: &str = "BlueArchive.exe";
+/// Frames are taken at most this often (30 a second).
+const FRAME_INTERVAL: Duration = Duration::from_millis(33);
+/// How often the game's window is looked for, and the frame rate measured.
+const LOOK_INTERVAL: Duration = Duration::from_secs(1);
+
+/// What the watcher is doing, for the window.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum Status {
+    /// Blue Archive is not running (or shows no window).
+    NoGame,
+    /// The game shows something other than the item list in its default order.
+    OtherScreen,
+    /// The item list is being read, `fps` frames a second; `dropped` frames
+    /// arrived while the reader was busy and were replaced by newer ones.
+    Reading { fps: f32, dropped: u32 },
+    /// The window cannot be captured.
+    Failed { message: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+enum Game {
+    #[default]
+    Absent,
+    Failed(String),
+    Captured,
+}
+
+/// What the two threads know, from which the status follows.
+#[derive(Debug, Clone, PartialEq, Default)]
+struct Seen {
+    game: Game,
+    /// The last frame read showed the item list in its default order.
+    on_list: bool,
+    fps: f32,
+    dropped: u32,
+}
+
+fn status(seen: &Seen) -> Status {
+    match &seen.game {
+        Game::Absent => Status::NoGame,
+        Game::Failed(message) => Status::Failed {
+            message: message.clone(),
+        },
+        Game::Captured if seen.on_list => Status::Reading {
+            fps: seen.fps,
+            dropped: seen.dropped,
+        },
+        Game::Captured => Status::OtherScreen,
+    }
+}
+
+type Report = dyn Fn(&Status, Option<Vec<Row>>) + Send + Sync;
+
+/// Keeps what is seen and reports the status whenever it changes.
+struct Board {
+    seen: Mutex<(Seen, Option<Status>)>,
+    report: Box<Report>,
+}
+
+impl Board {
+    fn update(&self, change: impl FnOnce(&mut Seen)) {
+        let mut guard = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
+        change(&mut guard.0);
+        let now = status(&guard.0);
+        if guard.1.as_ref() != Some(&now) {
+            (self.report)(&now, None);
+            guard.1 = Some(now);
+        }
+    }
+
+    fn rows(&self, rows: Vec<Row>) {
+        let guard = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
+        (self.report)(&status(&guard.0), Some(rows));
+    }
+}
+
+/// The newest frame, replaced by every new one until the reader takes it.
+#[derive(Default)]
+struct Latest {
+    frame: Mutex<Option<RgbImage>>,
+    ready: Condvar,
+    /// Frames replaced before the reader took them.
+    dropped: AtomicU32,
+}
+
+impl Latest {
+    fn put(&self, frame: RgbImage) {
+        let mut slot = self.frame.lock().unwrap_or_else(PoisonError::into_inner);
+        if slot.replace(frame).is_some() {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+        }
+        self.ready.notify_one();
+    }
+
+    fn take(&self) -> RgbImage {
+        let mut slot = self.frame.lock().unwrap_or_else(PoisonError::into_inner);
+        loop {
+            if let Some(frame) = slot.take() {
+                return frame;
+            }
+            slot = self
+                .ready
+                .wait(slot)
+                .unwrap_or_else(PoisonError::into_inner);
+        }
+    }
+}
+
+type CaptureError = Box<dyn std::error::Error + Send + Sync>;
+
+/// The height of a window's client area in physical pixels, as the capture's
+/// frames have it, whatever DPI awareness the process runs with.
+fn client_height(window: isize) -> Option<u32> {
+    use windows_sys::Win32::{
+        Foundation::RECT,
+        UI::{
+            HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext},
+            WindowsAndMessaging::GetClientRect,
+        },
+    };
+    let mut rect = RECT {
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+    };
+    // SAFETY: the rect outlives the call; the thread's awareness is restored.
+    let ok = unsafe {
+        let previous = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        let ok = GetClientRect(window as _, &raw mut rect);
+        SetThreadDpiAwarenessContext(previous);
+        ok
+    };
+    (ok != 0).then(|| (rect.bottom - rect.top) as u32)
+}
+
+struct Capture {
+    latest: Arc<Latest>,
+    /// The game's window handle.
+    window: isize,
+    last: Instant,
+}
+
+impl GraphicsCaptureApiHandler for Capture {
+    type Flags = (Arc<Latest>, isize);
+    type Error = CaptureError;
+
+    fn new(ctx: Context<Self::Flags>) -> Result<Self, Self::Error> {
+        let (latest, window) = ctx.flags;
+        Ok(Self {
+            latest,
+            window,
+            last: Instant::now(),
+        })
+    }
+
+    fn on_frame_arrived(
+        &mut self,
+        frame: &mut Frame,
+        _control: InternalCaptureControl,
+    ) -> Result<(), Self::Error> {
+        // Windows before 24H2 ignores the minimum update interval.
+        if self.last.elapsed() < FRAME_INTERVAL {
+            return Ok(());
+        }
+        self.last = Instant::now();
+        // The frame holds the title bar above the client area. windows-capture's own
+        // `buffer_without_title_bar` miscounts it in a DPI-aware process (the app).
+        let mut buffer = frame.buffer()?;
+        let (width, height) = (buffer.width(), buffer.height());
+        let client = client_height(self.window).map_or(height, |h| h.min(height));
+        let top = (height - client) as usize * width as usize * 4;
+        let rgb: Vec<u8> = buffer.as_nopadding_buffer()?[top..]
+            .chunks_exact(4)
+            .flat_map(|p| [p[0], p[1], p[2]])
+            .collect();
+        if let Some(image) = RgbImage::from_raw(width, client, rgb) {
+            self.latest.put(image);
+        }
+        Ok(())
+    }
+}
+
+/// Whether a process's exe path is the game's.
+fn is_game(path: &str) -> bool {
+    path.rsplit('\\')
+        .next()
+        .is_some_and(|name| name.eq_ignore_ascii_case(GAME))
+}
+
+/// The path of a process's exe. The game runs as administrator, which denies
+/// `Window::process_name`; the limited query is allowed.
+fn process_path(pid: u32) -> Option<String> {
+    use windows_sys::Win32::{
+        Foundation::CloseHandle,
+        System::Threading::{
+            OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+            QueryFullProcessImageNameW,
+        },
+    };
+    let mut buffer = [0u16; 1024];
+    let mut len = buffer.len() as u32;
+    // SAFETY: the handle is checked and closed; the buffer outlives the call and
+    // `len` holds its size.
+    let ok = unsafe {
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if process.is_null() {
+            return None;
+        }
+        let ok = QueryFullProcessImageNameW(
+            process,
+            PROCESS_NAME_WIN32,
+            buffer.as_mut_ptr(),
+            &raw mut len,
+        );
+        CloseHandle(process);
+        ok
+    };
+    (ok != 0).then(|| String::from_utf16_lossy(&buffer[..len as usize]))
+}
+
+fn game_window() -> Option<Window> {
+    Window::enumerate().ok()?.into_iter().find(|window| {
+        window
+            .process_id()
+            .ok()
+            .and_then(process_path)
+            .is_some_and(|path| is_game(&path))
+            && window.title().is_ok_and(|title| !title.is_empty())
+    })
+}
+
+fn capture(
+    window: Window,
+    latest: Arc<Latest>,
+) -> Result<CaptureControl<Capture, CaptureError>, String> {
+    let settings = Settings::new(
+        window,
+        CursorCaptureSettings::WithoutCursor,
+        DrawBorderSettings::WithoutBorder,
+        SecondaryWindowSettings::Default,
+        MinimumUpdateIntervalSettings::Custom(FRAME_INTERVAL),
+        DirtyRegionSettings::Default,
+        ColorFormat::Rgba8,
+        (latest, window.as_raw_hwnd() as isize),
+    );
+    Capture::start_free_threaded(settings).map_err(|err| err.to_string())
+}
+
+/// Start watching; `report` hears every change of status, and every change of
+/// the tally with the rows to show.
+pub fn start(
+    recognizer: Arc<Recognizer>,
+    report: impl Fn(&Status, Option<Vec<Row>>) + Send + Sync + 'static,
+) {
+    let board = Arc::new(Board {
+        seen: Mutex::new((Seen::default(), None)),
+        report: Box::new(report),
+    });
+    let latest = Arc::new(Latest::default());
+    let frames = Arc::new(AtomicU32::new(0));
+
+    // The reader: the newest frame into the tally.
+    {
+        let (board, latest, frames) = (board.clone(), latest.clone(), frames.clone());
+        thread::spawn(move || {
+            let mut tally = Tally::default();
+            loop {
+                let cells = recognizer.read_list(&latest.take());
+                frames.fetch_add(1, Ordering::Relaxed);
+                board.update(|seen| seen.on_list = cells.is_some());
+                if cells.is_some_and(|cells| tally.observe(&cells)) {
+                    board.rows(recognizer.rows(&tally));
+                }
+            }
+        });
+    }
+
+    // The watcher: the game's window into a capture, and the frame rate.
+    thread::spawn(move || {
+        let mut session: Option<(Window, CaptureControl<Capture, CaptureError>)> = None;
+        let mut since = Instant::now();
+        board.update(|_| {});
+        loop {
+            thread::sleep(LOOK_INTERVAL);
+            if session
+                .as_ref()
+                .is_some_and(|(window, control)| !window.is_valid() || control.is_finished())
+            {
+                if let Some((_, control)) = session.take() {
+                    let _ = control.stop();
+                }
+                board.update(|seen| *seen = Seen::default());
+            }
+            if session.is_none()
+                && let Some(window) = game_window()
+            {
+                match capture(window, latest.clone()) {
+                    Ok(control) => {
+                        session = Some((window, control));
+                        latest.dropped.store(0, Ordering::Relaxed);
+                        board.update(|seen| seen.game = Game::Captured);
+                    }
+                    Err(message) => board.update(|seen| seen.game = Game::Failed(message)),
+                }
+            }
+            let fps = frames.swap(0, Ordering::Relaxed) as f32 / since.elapsed().as_secs_f32();
+            since = Instant::now();
+            board.update(|seen| {
+                seen.fps = (fps * 10.0).round() / 10.0;
+                seen.dropped = latest.dropped.load(Ordering::Relaxed);
+            });
+        }
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Game, Seen, Status, is_game, status};
+
+    #[test]
+    fn the_game_is_known_by_its_exe_name() {
+        assert!(is_game(r"D:\Games\BlueArchive\BlueArchive.exe"));
+        assert!(is_game(r"C:\Nexon\bluearchive.EXE"));
+        assert!(!is_game(r"C:\Tools\BlueArchive.exe.bak"));
+        assert!(!is_game(r"C:\Tools\NotBlueArchive.exe"));
+    }
+
+    #[test]
+    fn the_status_follows_the_game_and_the_screen() {
+        let seen = |game, on_list| Seen {
+            game,
+            on_list,
+            fps: 28.5,
+            dropped: 4,
+        };
+        assert_eq!(status(&seen(Game::Absent, true)), Status::NoGame);
+        assert_eq!(
+            status(&seen(Game::Failed("denied".into()), false)),
+            Status::Failed {
+                message: "denied".into()
+            }
+        );
+        assert_eq!(status(&seen(Game::Captured, false)), Status::OtherScreen);
+        assert_eq!(
+            status(&seen(Game::Captured, true)),
+            Status::Reading {
+                fps: 28.5,
+                dropped: 4
+            }
+        );
+    }
+}

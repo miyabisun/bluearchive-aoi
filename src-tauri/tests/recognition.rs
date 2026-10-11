@@ -2,9 +2,15 @@
 //! Labels list the fully visible cells in reading order; cut-off cells are
 //! not listed and must not be reported.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
-use aoi::{Cell, Recognizer};
+use aoi::{
+    Cell, Recognizer,
+    tally::{CONFIRM, Tally},
+};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -111,4 +117,30 @@ fn other_screens_give_no_cells() {
         recognizer.read_list(&list).map(|cells| cells.len()),
         Some(15)
     );
+}
+
+/// The labeled screenshots shown one after another, each for a few frames, with
+/// other screens between them, tally to exactly the labeled counts.
+#[test]
+fn a_run_of_frames_tallies_to_the_labels() {
+    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let open = |name: &str| image::open(fixtures_dir().join(name)).unwrap().to_rgb8();
+    let mut tally = Tally::default();
+    let mut expected = HashMap::new();
+    for fixture in fixtures() {
+        for name in [fixture.image.as_str(), "other/home.png"] {
+            let image = open(name);
+            for _ in 0..CONFIRM {
+                if let Some(cells) = recognizer.read_list(&image) {
+                    tally.observe(&cells);
+                }
+            }
+        }
+        for label in fixture.cells.iter().filter(|l| !l.ignored) {
+            if let (Some(id), Some(quantity)) = (label.id, label.quantity) {
+                expected.insert(id, quantity);
+            }
+        }
+    }
+    assert_eq!(tally.counts(), &expected);
 }
