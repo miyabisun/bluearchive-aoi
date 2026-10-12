@@ -7,9 +7,9 @@
 //! ("ホシノ" is not "ホシノ(臨戦)"), nor a shorter name for a longer one ("ハル" is
 //! not "コハル").
 
-/// Characters the OCR mixes up, each mapped to one of its group (the
-/// half-voiced "パ" read as "バ" among them), and small kana to large ones;
-/// applied to the read text and to every name alike.
+/// Characters the OCR mixes up, each mapped to one of its group, small kana
+/// to large ones, and voiced kana to plain ones (the OCR loses the marks, or
+/// reads them as a "、"); applied to the read text and to every name alike.
 const FOLD: &[(char, char)] = &[
     ('工', 'エ'),
     ('力', 'カ'),
@@ -26,20 +26,47 @@ const FOLD: &[(char, char)] = &[
     ('ュ', 'ユ'),
     ('ョ', 'ヨ'),
     ('ッ', 'ツ'),
-    ('パ', 'バ'),
-    ('ピ', 'ビ'),
-    ('プ', 'ブ'),
-    ('ペ', 'ベ'),
-    ('ポ', 'ボ'),
+    ('ガ', 'カ'),
+    ('ギ', 'キ'),
+    ('グ', 'ク'),
+    ('ゲ', 'ケ'),
+    ('ゴ', 'コ'),
+    ('ザ', 'サ'),
+    ('ジ', 'シ'),
+    ('ズ', 'ス'),
+    ('ゼ', 'セ'),
+    ('ゾ', 'ソ'),
+    ('ダ', 'タ'),
+    ('ヂ', 'チ'),
+    ('ヅ', 'ツ'),
+    ('デ', 'テ'),
+    ('ド', 'ト'),
+    ('バ', 'ハ'),
+    ('パ', 'ハ'),
+    ('ビ', 'ヒ'),
+    ('ピ', 'ヒ'),
+    // "フ" goes with "ラ", and so do its voiced forms.
+    ('ブ', 'ラ'),
+    ('プ', 'ラ'),
+    ('ベ', 'ヘ'),
+    ('ペ', 'ヘ'),
+    ('ボ', 'ホ'),
+    ('ポ', 'ホ'),
+    ('ヴ', 'ウ'),
     ('（', '('),
     ('）', ')'),
     ('＊', '*'),
 ];
 
-/// The text without spaces, with look-alike characters folded together.
+/// Marks the OCR puts between characters, and the "/" `crate::ocr` joins its
+/// lines with (the bond's number often reads as a line of its own, and a
+/// variant's costume can too); no name holds one.
+const MARKS: &[char] = &['、', '。', '・', '/'];
+
+/// The text without spaces and marks, with look-alike characters folded together.
 pub fn fold(text: &str) -> String {
     text.chars()
-        .filter(|c| !c.is_whitespace())
+        .filter(|c| !c.is_whitespace() && !MARKS.contains(c))
         .map(|c| {
             FOLD.iter()
                 .find(|(from, _)| *from == c)
@@ -100,6 +127,13 @@ mod tests {
             "カヨコ",
             "トモエ",
             "シロコ＊テラー",
+            "ツムギ",
+            "シズコ",
+            "ミモリ",
+            "アル",
+            "アル（ドレス）",
+            "ヨシミ",
+            "ヨシミ（バンド）",
         ]
         .iter()
         .enumerate()
@@ -120,6 +154,24 @@ mod tests {
         assert_eq!(named(") カ ョ コ"), Some("カヨコ".into()));
         assert_eq!(named("ト モ 工"), Some("トモエ".into()));
         assert_eq!(named("シロコ*テフー"), Some("シロコ＊テラー".into()));
+    }
+
+    #[test]
+    fn a_name_is_found_without_its_voicing_marks() {
+        assert_eq!(named("? ツ ム キ"), Some("ツムギ".into()));
+        assert_eq!(named("シ ス 、 コ"), Some("シズコ".into()));
+        assert_eq!(named("ア ル ( ト レ ス )"), Some("アル（ドレス）".into()));
+    }
+
+    #[test]
+    fn a_name_is_found_across_the_lines_of_the_ocr() {
+        assert_eq!(named("25/ミ モ リ"), Some("ミモリ".into()));
+        assert_eq!(
+            named("ヨ シ ミ/( バ ン ド )"),
+            Some("ヨシミ（バンド）".into())
+        );
+        assert_eq!(named("シ ュ リ/☆ 食 を 食 を"), None);
+        assert_eq!(named("20/☆ を 食 を"), None);
     }
 
     #[test]

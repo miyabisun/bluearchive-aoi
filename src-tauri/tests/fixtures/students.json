@@ -27,5 +27,6 @@
 {"image": "students/wakamo.png", "role": "tune", "id": 10033, "level": 90, "rarity": 5, "bond": 30, "skills": [5, 9, 9, 9], "weapon": {"level": 30, "stars": 1}, "equipment": [[10, 70], [10, 70], [10, 70]], "gear": 2, "ability": [0, 0, 0]},
 {"image": "students/eimi-swimsuit.png", "role": "tune", "id": 20032, "level": 87, "rarity": 4, "bond": 19, "skills": [5, 7, 4, 8], "weapon": null, "equipment": [[4, 40], [9, 65], [8, 60]], "gear": 0, "ability": [0, 0, 0]},
 {"image": "students/tsurugi.png", "role": "tune", "id": 10013, "level": 90, "rarity": 5, "bond": 26, "skills": [5, 10, 10, 10], "weapon": {"level": 60, "stars": 4}, "equipment": [[10, 70], [10, 70], [10, 70]], "gear": 2, "ability": [0, 25, 0]},
-{"image": "students/kaho.png", "role": "tune", "id": 10065, "level": 70, "rarity": 3, "bond": 20, "skills": [1, 1, 1, 1], "weapon": null, "equipment": [[1, 1], [1, 1], [1, 1]], "gear": 2, "ability": [0, 0, 0]}
+{"image": "students/kaho.png", "role": "tune", "id": 10065, "level": 70, "rarity": 3, "bond": 20, "skills": [1, 1, 1, 1], "weapon": null, "equipment": [[1, 1], [1, 1], [1, 1]], "gear": 2, "ability": [0, 0, 0]},
+{"image": "students/mika.png", "role": "eval", "id": 10059, "level": 90, "rarity": 5, "bond": 43, "skills": [5, 10, 10, 10], "weapon": {"level": 50, "stars": 3}, "equipment": [[10, 70], [10, 70], [10, 70]], "gear": 0, "ability": [25, 25, 0]}
 ]

@@ -173,30 +173,54 @@ impl Latest {
 
 type CaptureError = Box<dyn std::error::Error + Send + Sync>;
 
-/// The height of a window's client area in physical pixels, as the capture's
-/// frames have it, whatever DPI awareness the process runs with.
-fn client_height(window: isize) -> Option<u32> {
+/// Where a window's client area lies in the capture's frames, in physical
+/// pixels whatever DPI awareness the process runs with: left, top, width,
+/// height. A frame holds the window's visible frame (DWM's extended frame
+/// bounds): the title bar above the client area and a border around it.
+fn client_area(window: isize) -> Option<(u32, u32, u32, u32)> {
     use windows_sys::Win32::{
-        Foundation::RECT,
+        Foundation::{POINT, RECT},
+        Graphics::{
+            Dwm::{DWMWA_EXTENDED_FRAME_BOUNDS, DwmGetWindowAttribute},
+            Gdi::ClientToScreen,
+        },
         UI::{
             HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext},
             WindowsAndMessaging::GetClientRect,
         },
     };
-    let mut rect = RECT {
+    let empty = RECT {
         left: 0,
         top: 0,
         right: 0,
         bottom: 0,
     };
-    // SAFETY: the rect outlives the call; the thread's awareness is restored.
+    let (mut client, mut frame, mut origin) = (empty, empty, POINT { x: 0, y: 0 });
+    // SAFETY: the rects and the point outlive the calls; the thread's
+    // awareness is restored.
     let ok = unsafe {
         let previous = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-        let ok = GetClientRect(window as _, &raw mut rect);
+        let ok = GetClientRect(window as _, &raw mut client) != 0
+            && ClientToScreen(window as _, &raw mut origin) != 0
+            && DwmGetWindowAttribute(
+                window as _,
+                DWMWA_EXTENDED_FRAME_BOUNDS as u32,
+                (&raw mut frame).cast(),
+                size_of::<RECT>() as u32,
+            ) == 0;
         SetThreadDpiAwarenessContext(previous);
         ok
     };
-    (ok != 0).then(|| (rect.bottom - rect.top) as u32)
+    let offset = |a: i32, b: i32| u32::try_from(a - b).ok();
+    if !ok {
+        return None;
+    }
+    Some((
+        offset(origin.x, frame.left)?,
+        offset(origin.y, frame.top)?,
+        offset(client.right, client.left)?,
+        offset(client.bottom, client.top)?,
+    ))
 }
 
 struct Capture {
@@ -229,17 +253,25 @@ impl GraphicsCaptureApiHandler for Capture {
             return Ok(());
         }
         self.last = Instant::now();
-        // The frame holds the title bar above the client area. windows-capture's own
-        // `buffer_without_title_bar` miscounts it in a DPI-aware process (the app).
+        // The frame holds the title bar and a border around the client area.
+        // windows-capture's own `buffer_without_title_bar` miscounts the bar in
+        // a DPI-aware process (the app) and keeps the border, which moves every
+        // area read by a pixel.
         let mut buffer = frame.buffer()?;
         let (width, height) = (buffer.width(), buffer.height());
-        let client = client_height(self.window).map_or(height, |h| h.min(height));
-        let top = (height - client) as usize * width as usize * 4;
-        let rgb: Vec<u8> = buffer.as_nopadding_buffer()?[top..]
-            .chunks_exact(4)
-            .flat_map(|p| [p[0], p[1], p[2]])
+        let (left, top, w, h) = client_area(self.window)
+            .filter(|&(l, t, w, h)| l + w <= width && t + h <= height)
+            .unwrap_or((0, 0, width, height));
+        let pixels = buffer.as_nopadding_buffer()?;
+        let rgb: Vec<u8> = (top..top + h)
+            .flat_map(|y| {
+                let row = (y * width + left) as usize * 4;
+                pixels[row..row + w as usize * 4]
+                    .chunks_exact(4)
+                    .flat_map(|p| [p[0], p[1], p[2]])
+            })
             .collect();
-        if let Some(image) = RgbImage::from_raw(width, client, rgb) {
+        if let Some(image) = RgbImage::from_raw(w, h, rgb) {
             self.latest.put(image);
         }
         Ok(())

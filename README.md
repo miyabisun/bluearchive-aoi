@@ -106,6 +106,8 @@ git config core.hooksPath .githooks   # run verify before pushing main or a tag
 ```
 
 Recognition is tested against labeled screenshots in `src-tauri/tests/fixtures`.
+A student screenshot is added there with only the areas Aoi reads kept, a tenth of its
+size: `cargo run --release --example mask_fixture -- <screenshot.png> <fixture.png>`.
 To measure against the running game, run `cargo run --release --example watch -- 60` in
 `src-tauri`. It watches for 60 seconds and prints the frame rate and dropped frames.
 

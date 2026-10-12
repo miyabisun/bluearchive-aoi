@@ -38,6 +38,12 @@ pub const GLYPH: (usize, usize) = (12, 16);
 /// 4.4 of their own references (95%, at most 15.8), and no nearer than 15.0 to
 /// another character's (a tier's "8" to "3").
 const MAX_DISTANCE: f32 = 17.0;
+/// The nearest character must be at most this share of the distance to the
+/// next nearest one, or the character is unknown. Measured on 2026-10-12: a
+/// character read right has the share at most 0.52 (0.30 on the screens the
+/// references come from); a bond's "3" few references were taken for came at
+/// 1.19, nearer to "8".
+const LEAD: f32 = 0.6;
 
 /// A rectangle of the screen in pixels: left, top, right, bottom.
 pub type Rect = (u32, u32, u32, u32);
@@ -116,22 +122,65 @@ fn blobs(image: &RgbImage, rect: Rect, ink: Ink, thin_away: bool) -> (Vec<Blob>,
     (found, on)
 }
 
+/// The pixels off the ink that the edge of the area reaches (4-connected)
+/// without crossing the ink. The ink is widened by a pixel first, closing the
+/// gaps a pale ring has.
+fn outside(ink: &[bool], width: usize, height: usize) -> Vec<bool> {
+    let on: Vec<bool> = (0..ink.len())
+        .map(|i| {
+            let (x, y) = (i % width, i / width);
+            (y.saturating_sub(1)..=(y + 1).min(height - 1)).any(|ny| {
+                (x.saturating_sub(1)..=(x + 1).min(width - 1)).any(|nx| ink[ny * width + nx])
+            })
+        })
+        .collect();
+    let edge = |i: usize| {
+        let (x, y) = (i % width, i / width);
+        x == 0 || y == 0 || x + 1 == width || y + 1 == height
+    };
+    let mut reached: Vec<bool> = (0..on.len()).map(|i| edge(i) && !on[i]).collect();
+    let mut stack: Vec<usize> = (0..on.len()).filter(|&i| reached[i]).collect();
+    while let Some(i) = stack.pop() {
+        let (x, y) = (i % width, i / width);
+        let near = [
+            (x > 0).then(|| i - 1),
+            (x + 1 < width).then(|| i + 1),
+            (y > 0).then(|| i - width),
+            (y + 1 < height).then(|| i + width),
+        ];
+        for j in near.into_iter().flatten() {
+            if !on[j] && !reached[j] {
+                reached[j] = true;
+                stack.push(j);
+            }
+        }
+    }
+    reached
+}
+
 /// The characters of `style` in `rect`, left to right, normalized.
 pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
     let (ink, framed) = (style.ink, style.framed);
-    let width = (rect.2 - rect.0) as usize;
+    let (width, height) = ((rect.2 - rect.0) as usize, (rect.3 - rect.1) as usize);
     let (mut blobs, on) = blobs(image, rect, ink, framed);
     if style.clear_top {
         blobs.retain(|b| b.top > 0);
     }
     if framed {
-        // Only what lies within the ring (the widest blob before wearing off)
-        // belongs to the badge; a picture beside it does not.
-        let (unworn, _) = self::blobs(image, rect, ink, false);
-        let Some(ring) = unworn.iter().max_by_key(|b| b.right - b.left) else {
-            return Vec::new();
-        };
-        blobs.retain(|b| b.left >= ring.left && b.right <= ring.right);
+        // Only what the ring encloses belongs to the badge: a picture beside
+        // it, even touching the ring, lies where the outside reaches. The
+        // outside is looked for two pixels around each character (the gap to
+        // the ring is wider).
+        let (_, unworn) = self::blobs(image, rect, ink, false);
+        let outside = outside(&unworn, width, height);
+        let reached = |x: u32, y: u32| outside[y as usize * width + x as usize];
+        blobs.retain(|b| {
+            let (left, top) = (b.left.saturating_sub(2), b.top.saturating_sub(2));
+            let right = (b.right + 2).min(width as u32 - 1);
+            let bottom = (b.bottom + 2).min(height as u32 - 1);
+            (left..=right).all(|x| !reached(x, top) && !reached(x, bottom))
+                && (top..=bottom).all(|y| !reached(left, y) && !reached(right, y))
+        });
     }
     blobs.retain(|b| (b.right - b.left + 1) as f32 <= (b.bottom - b.top + 1) as f32 * style.widest);
     let tallest = blobs
@@ -175,9 +224,27 @@ pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
         .collect()
 }
 
-/// How far apart two normalized characters are.
+/// How far apart two normalized characters are, the second moved up to a
+/// pixel either way to meet the first: a character cut a pixel off from its
+/// references (a thin "3" one column right) still meets them.
 pub fn distance(a: &[f32], b: &[f32]) -> f32 {
-    a.iter().zip(b).map(|(a, b)| (a - b).powi(2)).sum()
+    let (w, h) = (GLYPH.0 as i32, GLYPH.1 as i32);
+    let at = |x: i32, y: i32| {
+        if (0..w).contains(&x) && (0..h).contains(&y) {
+            b[(y * w + x) as usize]
+        } else {
+            0.0
+        }
+    };
+    (-1..=1)
+        .flat_map(|dy| (-1..=1).map(move |dx| (dx, dy)))
+        .map(|(dx, dy)| {
+            (0..h)
+                .flat_map(|y| (0..w).map(move |x| (x, y)))
+                .map(|(x, y)| (a[(y * w + x) as usize] - at(x + dx, y + dy)).powi(2))
+                .sum::<f32>()
+        })
+        .fold(f32::INFINITY, f32::min)
 }
 
 /// Reference characters of each text style; a character drawn in more than
@@ -187,17 +254,24 @@ pub fn distance(a: &[f32], b: &[f32]) -> f32 {
 pub struct Fonts(pub BTreeMap<String, BTreeMap<char, Vec<Vec<f32>>>>);
 
 impl Fonts {
-    /// The text the `shapes` spell in `style`, if every one is close to a reference.
+    /// The text the `shapes` spell in `style`, if every one is close to a
+    /// reference and clearly nearer to it than to any other character.
     pub fn read(&self, style: &str, shapes: &[Vec<f32>]) -> Option<String> {
         let font = self.0.get(style)?;
         shapes
             .iter()
             .map(|shape| {
-                font.iter()
-                    .flat_map(|(c, refs)| refs.iter().map(move |r| (*c, distance(r, shape))))
-                    .min_by(|a, b| a.1.total_cmp(&b.1))
-                    .filter(|(_, d)| *d <= MAX_DISTANCE)
-                    .map(|(c, _)| c)
+                let mut nearest: Vec<(char, f32)> = font
+                    .iter()
+                    .map(|(c, refs)| {
+                        let d = refs.iter().map(|r| distance(r, shape));
+                        (*c, d.fold(f32::INFINITY, f32::min))
+                    })
+                    .collect();
+                nearest.sort_by(|a, b| a.1.total_cmp(&b.1));
+                let (c, d) = *nearest.first()?;
+                let next = nearest.get(1).map_or(f32::INFINITY, |n| n.1);
+                (d <= MAX_DISTANCE && d <= LEAD * next).then_some(c)
             })
             .collect()
     }

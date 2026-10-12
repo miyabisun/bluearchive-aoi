@@ -106,12 +106,36 @@ const EQUIPMENT_LEVEL: [Area; 3] = [
     right((0.690, 0.606), (0.774, 0.797)),
     right((0.558, 0.474), (0.774, 0.797)),
 ];
+/// The tier badges at the bottom left of the pieces, whole with a few pixels
+/// to spare (measured on 2026-10-12: the gear's badge spans 0.444 to 0.406
+/// from the right, 0.854 to 0.879 down); a badge cut at its edge reads no
+/// longer once the capture moves a pixel.
 const EQUIPMENT_TIER: [Area; 3] = [
-    right((0.830, 0.770), (0.853, 0.883)),
-    right((0.698, 0.638), (0.853, 0.883)),
-    right((0.566, 0.506), (0.853, 0.883)),
+    right((0.834, 0.770), (0.851, 0.883)),
+    right((0.705, 0.638), (0.851, 0.883)),
+    right((0.576, 0.506), (0.851, 0.883)),
 ];
-const GEAR_TIER: Area = right((0.434, 0.374), (0.853, 0.883));
+/// The favorite item's badge, "T1" or "T2"; its picture, blue in places,
+/// stands right of and above it.
+const GEAR_TIER: Area = right((0.447, 0.402), (0.851, 0.883));
+
+/// Every area the screen is read in.
+pub fn areas() -> Vec<Area> {
+    let mut all = vec![
+        NAME,
+        BOND,
+        RARITY,
+        LEVEL,
+        WEAPON_LEVEL,
+        WEAPON_STARS,
+        GEAR_TIER,
+    ];
+    all.extend(ABILITY);
+    all.extend(SKILLS);
+    all.extend(EQUIPMENT_LEVEL);
+    all.extend(EQUIPMENT_TIER);
+    all
+}
 
 /// The pixel rectangle of `area` in `image`.
 pub fn rect(image: &RgbImage, area: Area) -> Option<Rect> {
@@ -148,6 +172,21 @@ const GOLD: Ink = |c| c[0] > 200 && c[1] > 150 && c[2] < 120;
 const STAR: Ink = |c| c[0] > 220 && c[1] > 150 && c[2] < 100;
 /// The unique weapon's stars.
 const WEAPON_STAR: Ink = |c| c[2] > 220 && c[1] > 180 && c[0] < 180;
+/// The white letters of the name.
+const NAME_INK: Ink = |c| c.iter().all(|&v| v > 200);
+
+/// The picture of `NAME` for the OCR with its white letters alone, black on
+/// white: without the heart and the stars around them the OCR reads short
+/// names ("ミカ") it misses in the picture as it is.
+pub fn name_letters(name: &RgbImage) -> RgbImage {
+    RgbImage::from_fn(name.width(), name.height(), |x, y| {
+        if NAME_INK(name.get_pixel(x, y).0) {
+            image::Rgb([0, 0, 0])
+        } else {
+            image::Rgb([255, 255, 255])
+        }
+    })
+}
 
 const fn style(
     ink: Ink,

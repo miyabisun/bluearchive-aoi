@@ -195,10 +195,13 @@ impl Recognizer {
         }
         let (x0, y0, x1, y1) = student::rect(image, student::NAME)?;
         let name = image::imageops::crop_imm(image, x0, y0, x1 - x0, y1 - y0).to_image();
-        let id = ocr
-            .read(&name)
-            .ok()
-            .and_then(|text| student::name::find(&text, &self.students));
+        // The letters alone read surest; a few names read only as they are.
+        let id = [student::name_letters(&name), name]
+            .iter()
+            .find_map(|picture| {
+                let text = ocr.read(picture).ok()?;
+                student::name::find(&text, &self.students)
+            });
         Some((id, student::read(image, &self.fonts)))
     }
 
