@@ -73,8 +73,17 @@ impl Catalog {
                 keys
             })
             .collect();
+        // An icon's rarity, where all its items have the same.
+        let rarity = icons
+            .iter()
+            .map(|name| {
+                let mut of = entries.iter().filter(|e| e.icon == *name).map(|e| e.rarity);
+                let first = of.next().flatten();
+                of.all(|r| r == first).then_some(first).flatten()
+            })
+            .collect();
         Ok(Self {
-            matcher: IconMatcher::new(&images, rules.mask),
+            matcher: IconMatcher::new(&images, rarity, rules.mask),
             icon_keys,
             icon_ignored,
             entries,
@@ -243,6 +252,7 @@ mod tests {
             icon: String::new(),
             category: category.into(),
             tier,
+            rarity: None,
         }
     }
 

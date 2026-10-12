@@ -93,6 +93,9 @@ pub struct Item {
     /// Equipment tier (1 to 10); 0 for items and for equipment without one.
     #[serde(default)]
     pub tier: u8,
+    /// None for the items SchaleDB lacks.
+    #[serde(default)]
+    pub rarity: Option<icon::Rarity>,
 }
 
 /// What a frame shows that can be read.

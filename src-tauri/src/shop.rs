@@ -137,7 +137,7 @@ impl Goods {
             .map(|name| picture(name))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            matcher: IconMatcher::new(&pictures, SLOT_MASK),
+            matcher: IconMatcher::new(&pictures, vec![None; pictures.len()], SLOT_MASK),
             drawn: icons
                 .iter()
                 .map(|name| {
@@ -762,6 +762,7 @@ mod tests {
             icon: String::new(),
             category: "Material".into(),
             tier: 0,
+            rarity: None,
         }
     }
 

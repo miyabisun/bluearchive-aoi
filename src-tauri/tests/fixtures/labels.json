@@ -853,5 +853,93 @@
         "quantity": "18K"
       }
     ]
+  },
+  {
+    "image": "items-16x9-tech-notes.png",
+    "list": "items",
+    "role": "eval",
+    "note": "2026-10-13 capture, 2222x1250, the item detail panel painted black. The first and second tiers of each school's tech notes differ only in colour.",
+    "cells": [
+      {
+        "id": 4031,
+        "quantity": "133"
+      },
+      {
+        "id": 4032,
+        "quantity": "76"
+      },
+      {
+        "id": 4033,
+        "quantity": "5"
+      },
+      {
+        "id": 4040,
+        "quantity": "1008"
+      },
+      {
+        "id": 4041,
+        "quantity": "643"
+      },
+      {
+        "id": 4042,
+        "quantity": "394"
+      },
+      {
+        "id": 4043,
+        "quantity": "175"
+      },
+      {
+        "id": 4050,
+        "quantity": "901"
+      },
+      {
+        "id": 4051,
+        "quantity": "97"
+      },
+      {
+        "id": 4052,
+        "quantity": "112"
+      },
+      {
+        "id": 4053,
+        "quantity": "66"
+      },
+      {
+        "id": 4060,
+        "quantity": "1174"
+      },
+      {
+        "id": 4061,
+        "quantity": "392"
+      },
+      {
+        "id": 4062,
+        "quantity": "226"
+      },
+      {
+        "id": 4063,
+        "quantity": "111"
+      },
+      {
+        "id": 4070,
+        "quantity": "1042"
+      },
+      {
+        "id": 4071,
+        "quantity": "740"
+      },
+      {
+        "id": 4072,
+        "quantity": "398"
+      },
+      {
+        "id": 4073,
+        "quantity": "187"
+      },
+      {
+        "id": 4080,
+        "quantity": "1126"
+      }
+    ]
   }
 ]

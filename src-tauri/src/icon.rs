@@ -7,6 +7,7 @@
 //! shortlist is compared at full template size with a small position search.
 
 use image::{RgbImage, RgbaImage, imageops::FilterType};
+use serde::Deserialize;
 
 use crate::grid::Card;
 
@@ -29,6 +30,40 @@ pub struct Mask {
     pub left: f32,
     pub top: f32,
 }
+/// How rare an item is (SchaleDB's `rarity`), which the game shows in the
+/// colour of the card behind its icon: grey, blue, gold, purple.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub enum Rarity {
+    N,
+    R,
+    SR,
+    SSR,
+}
+
+/// The chromaticity (each channel's share of the brightness) of the card
+/// behind the icon for each rarity: the means over the fixtures on 2026-10-13
+/// (110 N, 25 R, 28 SR and 38 SSR cards, each within 0.03 of its own).
+const BACKGROUNDS: [(Rarity, Rgb); 4] = [
+    (Rarity::N, [0.321, 0.335, 0.344]),
+    (Rarity::R, [0.300, 0.334, 0.366]),
+    (Rarity::SR, [0.375, 0.345, 0.280]),
+    (Rarity::SSR, [0.327, 0.300, 0.373]),
+];
+
+/// A background names a rarity when it is at most this share of the distance
+/// to the next nearest.
+const BACKGROUND_LEAD: f32 = 0.6;
+
+impl Rarity {
+    /// The rarity whose card colour `chroma` clearly is.
+    pub fn of_background(chroma: Rgb) -> Option<Self> {
+        let far = |c: Rgb| (0..3).map(|i| (c[i] - chroma[i]).abs()).sum::<f32>();
+        let mut by: Vec<(f32, Self)> = BACKGROUNDS.iter().map(|&(r, c)| (far(c), r)).collect();
+        by.sort_by(|a, b| a.0.total_cmp(&b.0));
+        (by[0].0 <= BACKGROUND_LEAD * by[1].0).then_some(by[0].1)
+    }
+}
+
 /// A match is accepted when it is this close and leads the runner-up by `CLOSE.1`,
 const CLOSE: (f32, f32) = (0.93, 0.05);
 /// or, down to `CLEAR.0`, by a lead that grows on the line from `CLOSE` to
@@ -53,28 +88,75 @@ const MAX_LEVEL: f32 = 0.07;
 /// Two icons differ at a pixel when their channels differ by this much in sum.
 const DIFFERENT: f32 = 90.0;
 
-type Rgb = [f32; 3];
+pub type Rgb = [f32; 3];
+
+/// A candidate icon as compared: its index, its score, and the sample and the
+/// position it scored at.
+type Ranked<'a> = (usize, f32, &'a RgbImage, (u32, u32));
+
+/// How far from the icon's drawing a pixel of the card behind it is taken, in
+/// template pixels (the drawing's edge blurs, and the match may be a pixel off).
+const BACKGROUND_ROOM: i64 = 2;
 
 struct Template {
     width: u32,
     /// Colour of each pixel taking part in the comparison, row by row.
     grid: Vec<Option<Rgb>>,
+    /// Where the card shows behind the icon, `BACKGROUND_ROOM` from the drawing.
+    clear: Vec<bool>,
 }
 
 impl Template {
     fn new(icon: &RgbaImage, height: u32, mask: Mask) -> Self {
         let width = scaled_width(height);
         let small = image::imageops::resize(icon, width, height, FilterType::Triangle);
+        let covered = |x: u32, y: u32| {
+            x as f32 >= mask.left * width as f32 && y as f32 >= mask.top * height as f32
+        };
         let grid = small
             .enumerate_pixels()
             .map(|(x, y, p)| {
-                let covered =
-                    x as f32 >= mask.left * width as f32 && y as f32 >= mask.top * height as f32;
-                (p.0[3] >= OPAQUE && !covered)
+                (p.0[3] >= OPAQUE && !covered(x, y))
                     .then(|| [f32::from(p.0[0]), f32::from(p.0[1]), f32::from(p.0[2])])
             })
             .collect();
-        Self { width, grid }
+        let bare = |x: i64, y: i64| {
+            let inside = (0..i64::from(width)).contains(&x) && (0..i64::from(height)).contains(&y);
+            inside && {
+                let (x, y) = (x as u32, y as u32);
+                small.get_pixel(x, y).0[3] == 0 && !covered(x, y)
+            }
+        };
+        let room = -BACKGROUND_ROOM..=BACKGROUND_ROOM;
+        let clear = small
+            .enumerate_pixels()
+            .map(|(x, y, _)| {
+                let (x, y) = (i64::from(x), i64::from(y));
+                room.clone()
+                    .all(|dy| room.clone().all(|dx| bare(x + dx, y + dy)))
+            })
+            .collect();
+        Self { width, grid, clear }
+    }
+
+    /// The chromaticity of the card behind the icon placed at `(ox, oy)`, from
+    /// template row `from` down; none where too little of it shows.
+    fn background(&self, image: &RgbImage, ox: u32, oy: u32, from: u32) -> Option<Rgb> {
+        let (mut sum, mut n) = ([0.0f32; 3], 0u32);
+        for (i, _) in self
+            .clear
+            .iter()
+            .enumerate()
+            .skip((from * self.width) as usize)
+            .filter(|(_, c)| **c)
+        {
+            let (x, y) = (i as u32 % self.width, i as u32 / self.width);
+            let px = image.get_pixel(ox + x, oy + y).0;
+            (0..3).for_each(|c| sum[c] += f32::from(px[c]));
+            n += 1;
+        }
+        let total: f32 = sum.iter().sum();
+        (n >= 20 && total > 0.0).then(|| sum.map(|c| c / total))
     }
 
     /// The pixels taking part, from row `from` down (rows above it are hidden).
@@ -166,12 +248,16 @@ fn scaled_width(height: u32) -> u32 {
 pub struct IconMatcher {
     coarse: Vec<Template>,
     fine: Vec<Template>,
+    /// The rarity of each icon's items, where they agree.
+    rarity: Vec<Option<Rarity>>,
 }
 
 impl IconMatcher {
-    /// Templates of `icons`, leaving out the canvas part under `mask`.
-    pub fn new(icons: &[RgbaImage], mask: Mask) -> Self {
+    /// Templates of `icons` and their `rarity`, leaving out the canvas part
+    /// under `mask`.
+    pub fn new(icons: &[RgbaImage], rarity: Vec<Option<Rarity>>, mask: Mask) -> Self {
         Self {
+            rarity,
             coarse: icons
                 .iter()
                 .map(|i| Template::new(i, COARSE_HEIGHT, mask))
@@ -254,7 +340,7 @@ impl IconMatcher {
                 Self::sample(image, &card, FINE_HEIGHT, SEARCH)
             })
             .collect();
-        let mut ranked: Vec<(usize, f32, &RgbImage, (u32, u32))> = shortlist
+        let mut ranked: Vec<Ranked> = shortlist
             .into_iter()
             .map(|(i, _)| {
                 let t = &self.fine[i];
@@ -318,6 +404,9 @@ impl IconMatcher {
         if score < DETAIL.0 || lead >= CLOSE.1 {
             return Err(tied());
         }
+        if let Some(found) = self.by_background(&ranked, from) {
+            return Ok(found);
+        }
         // Compare both icons where they differ, at the winner's position.
         let (a, b) = (&self.fine[best], &self.fine[runner_up]);
         let differing: Vec<(Rgb, Rgb, [u8; 3])> = a
@@ -334,6 +423,45 @@ impl IconMatcher {
             Ok(best)
         } else {
             Err(tied())
+        }
+    }
+
+    /// Twins drawn alike for two rarities (the grey and the blue grade of a
+    /// school's tech note share its logo) are told by the card behind them,
+    /// which has the colour of its rarity; then the drawing tells the kind
+    /// among the icons of that rarity (`ranked` best first).
+    fn by_background(&self, ranked: &[Ranked], from: u32) -> Option<usize> {
+        let (&(best, _, fine, (ox, oy)), &(runner_up, ..)) = (ranked.first()?, ranked.get(1)?);
+        if self.rarity[best] == self.rarity[runner_up] {
+            return None;
+        }
+        let rarity = Rarity::of_background(self.fine[best].background(fine, ox, oy, from)?)?;
+        let mut alike = ranked.iter().filter(|r| self.rarity[r.0] == Some(rarity));
+        let &(first, score, ..) = alike.next()?;
+        let lead = alike.next().map_or(f32::INFINITY, |r| score - r.1);
+        (score >= CLEAR.0 && lead >= needed_lead(score)).then_some(first)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_background_names_the_rarity_of_its_colour() {
+        // Measured on the fixtures (2026-10-13), each rarity's extremes.
+        let cases = [
+            ([0.313, 0.334, 0.350], Some(Rarity::N)),
+            ([0.340, 0.338, 0.322], Some(Rarity::N)),
+            ([0.304, 0.334, 0.362], Some(Rarity::R)),
+            ([0.297, 0.333, 0.369], Some(Rarity::R)),
+            ([0.369, 0.343, 0.288], Some(Rarity::SR)),
+            ([0.331, 0.292, 0.377], Some(Rarity::SSR)),
+            // Halfway between grey and blue, a background names neither.
+            ([0.3105, 0.3345, 0.355], None),
+        ];
+        for (chroma, rarity) in cases {
+            assert_eq!(Rarity::of_background(chroma), rarity, "{chroma:?}");
         }
     }
 }
