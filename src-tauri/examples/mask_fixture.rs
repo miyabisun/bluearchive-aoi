@@ -4,14 +4,15 @@
 //! screenshot. Refuses when what is kept reads otherwise than the screenshot.
 //! `cargo run --release --example mask_fixture -- <screenshot.png> <fixture.png>`
 //! With `level` after them it keeps the name plate's level alone, for a level
-//! sample taken on any tab (`tests/fixtures/levels.json`).
+//! sample taken on any tab (`tests/fixtures/levels.json`); with `credit`, the
+//! top bar's credits alone (`tests/fixtures/credits.json`).
 
 use std::path::Path;
 
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 
 use aoi::{
-    Recognizer,
+    Recognizer, credit,
     screen::{self, Region},
     student::{self, Area, glyph::Fonts},
 };
@@ -24,17 +25,17 @@ const SCREEN_ROOM: f32 = 0.5;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let (from, to, level_only) = match &args[..] {
-        [from, to] => (from, to, false),
-        [from, to, level] if level == "level" => (from, to, true),
-        _ => panic!("usage: mask_fixture <screenshot.png> <fixture.png> [level]"),
+    let (from, to, only) = match &args[..] {
+        [from, to] => (from, to, None),
+        [from, to, only] if only == "level" || only == "credit" => (from, to, Some(only.as_str())),
+        _ => panic!("usage: mask_fixture <screenshot.png> <fixture.png> [level|credit]"),
     };
     let image = image::open(from).unwrap().to_rgb8();
     let (w, h) = (image.width() as f32, image.height() as f32);
-    let areas = if level_only {
-        vec![student::LEVEL]
-    } else {
-        student::areas()
+    let areas = match only {
+        Some("level") => vec![student::LEVEL],
+        Some(_) => vec![credit::NUMBER, credit::ICON],
+        None => student::areas(),
     };
     let mut kept: Vec<(f32, f32, f32, f32)> = areas
         .into_iter()
@@ -53,7 +54,7 @@ fn main() {
         })
         .collect();
     let unit = screen::STUDENT_UNIT * h;
-    let screens: &[Region] = if level_only {
+    let screens: &[Region] = if only.is_some() {
         &[]
     } else {
         &[screen::TITLE, screen::STUDENT_TAB]
@@ -79,7 +80,7 @@ fn main() {
         }
     });
     let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
-    if level_only {
+    if only == Some("level") {
         let fonts: Fonts =
             serde_json::from_slice(&std::fs::read(data.join("student-fonts.json")).unwrap())
                 .unwrap();
@@ -91,6 +92,14 @@ fn main() {
         return save(&masked, to);
     }
     let recognizer = Recognizer::load(&data).unwrap();
+    if only == Some("credit") {
+        let (whole, part) = (
+            recognizer.read_credits(&image),
+            recognizer.read_credits(&masked),
+        );
+        assert_eq!(whole, part, "{from} reads otherwise once masked");
+        return save(&masked, to);
+    }
     let (whole, part) = (
         recognizer.read_student(&image),
         recognizer.read_student(&masked),

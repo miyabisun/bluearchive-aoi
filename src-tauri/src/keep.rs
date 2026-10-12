@@ -10,18 +10,23 @@ use crate::{quantity::Count, student::Training};
 
 /// When each list was last read (local time, "2026-10-12 15:30:00").
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ReadAt {
     pub items: Option<String>,
     pub equipment: Option<String>,
     pub students: Option<String>,
+    pub credits: Option<String>,
 }
 
-/// Everything read, by id.
+/// Everything read, by id. What an older version did not keep comes back as
+/// nothing.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Kept {
     pub items: BTreeMap<i64, Count>,
     pub equipment: BTreeMap<i64, Count>,
     pub students: BTreeMap<i64, Training>,
+    pub credits: Option<u64>,
     pub read_at: ReadAt,
 }
 
@@ -90,10 +95,12 @@ mod tests {
                     ability: [Some(25), Some(25), Some(0)],
                 },
             )]),
+            credits: Some(244_213_276),
             read_at: ReadAt {
                 items: Some("2026-10-12 15:30:00".to_owned()),
                 equipment: None,
                 students: Some("2026-10-12 16:00:00".to_owned()),
+                credits: None,
             },
         }
     }
@@ -120,6 +127,18 @@ mod tests {
         both.students.insert(2, unread);
         save(&path, &both).unwrap();
         assert_eq!(load(&path).unwrap(), both);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn what_an_older_version_kept_still_comes_back() {
+        let dir = folder("older");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("state.json");
+        std::fs::write(&path, r#"{"items":{"1":{"exact":5}},"equipment":{},"students":{},"read_at":{"items":"2026-10-12 15:30:00","equipment":null,"students":null}}"#).unwrap();
+        let kept = load(&path).unwrap();
+        assert_eq!(kept.items.get(&1), Some(&Count::Exact(5)));
+        assert_eq!(kept.credits, None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

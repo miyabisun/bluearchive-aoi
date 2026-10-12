@@ -38,6 +38,7 @@
     items: [],
     equipment: [],
     students: [],
+    credits: /** @type {number | null} */ (null),
     /** Why what was read could not be kept or brought back. */
     keep_error: /** @type {string | null} */ (null),
   });
@@ -114,6 +115,12 @@
       <p class="error" role="alert">書き出せませんでした: {exported.error}</p>
     {:else if exported}
       <p class="exported" aria-live="polite">書き出しました: {exported.path}</p>
+    {/if}
+
+    {#if view.tab === "items" && snapshot.credits != null}
+      <p class="credits">
+        クレジット <span class="amount">{formatCount({ exact: snapshot.credits })}</span>
+      </p>
     {/if}
 
     {#if rows.length === 0}
@@ -245,6 +252,14 @@
     &:disabled
       color: var(--c-muted)
       cursor: default
+
+  .credits
+    margin: 0 0 var(--sp-3)
+    font-size: var(--fs-sm)
+    color: var(--c-muted)
+    .amount
+      color: var(--c-on-surface)
+      font-variant-numeric: tabular-nums
 
   .exported
     margin: 0 0 var(--sp-4)

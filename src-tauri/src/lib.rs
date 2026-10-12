@@ -8,6 +8,7 @@
 
 pub mod app;
 pub mod catalog;
+pub mod credit;
 pub mod equipment;
 pub mod export;
 pub mod grid;
@@ -201,6 +202,18 @@ impl Recognizer {
         }
         self.read_student(image)
             .map(|(id, training)| Frame::Student(id, training))
+    }
+
+    /// The credits the top bar shows; `None` where there is no bar, or its
+    /// number reads as no such number.
+    pub fn read_credits(&self, image: &RgbImage) -> Option<u64> {
+        let ocr = self.ocr.as_ref()?;
+        if !credit::bar_shows(image) {
+            return None;
+        }
+        let (x0, y0, x1, y1) = student::rect(image, credit::NUMBER)?;
+        let number = image::imageops::crop_imm(image, x0, y0, x1 - x0, y1 - y0).to_image();
+        credit::parse(&ocr.read(&number).ok()?)
     }
 
     /// Reads the student screen: all of its 基本情報 tab, and the name plate

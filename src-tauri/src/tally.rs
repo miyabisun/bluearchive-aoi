@@ -14,8 +14,9 @@ pub const CONFIRM: u8 = 3;
 #[derive(Default)]
 pub struct Tally {
     counts: HashMap<i64, Count>,
-    /// The latest value read for each item and in how many frames in a row.
-    streaks: HashMap<i64, (Count, u8)>,
+    /// The latest value read for each item (`None`: lacking from the list) and
+    /// in how many frames in a row.
+    streaks: HashMap<i64, (Option<Count>, u8)>,
 }
 
 impl Tally {
@@ -28,21 +29,28 @@ impl Tally {
         }
     }
 
-    /// Take one frame's cells; returns whether a count changed.
-    pub fn observe(&mut self, cells: &[Cell]) -> bool {
+    /// Take one frame's cells, and the items the frame shows the list lacks
+    /// (`gone`); returns whether a count changed. An item lacking in `CONFIRM`
+    /// frames in a row is dropped: the game lists no item it has none of.
+    pub fn observe(&mut self, cells: &[Cell], gone: &[i64]) -> bool {
+        let shown = cells
+            .iter()
+            .filter(|c| !c.ignored)
+            .filter_map(|c| Some((c.id?, Some(c.quantity?))));
+        let lacking = gone.iter().map(|&id| (id, None));
         let mut changed = false;
-        for cell in cells.iter().filter(|c| !c.ignored) {
-            let (Some(id), Some(quantity)) = (cell.id, cell.quantity) else {
-                continue;
-            };
-            let streak = self.streaks.entry(id).or_insert((quantity, 0));
-            if streak.0 == quantity {
+        for (id, read) in shown.chain(lacking) {
+            let streak = self.streaks.entry(id).or_insert((read, 0));
+            if streak.0 == read {
                 streak.1 = streak.1.saturating_add(1);
             } else {
-                *streak = (quantity, 1);
+                *streak = (read, 1);
             }
-            if streak.1 >= CONFIRM && self.counts.get(&id) != Some(&quantity) {
-                self.counts.insert(id, quantity);
+            if streak.1 >= CONFIRM && self.counts.get(&id).copied() != read {
+                match read {
+                    Some(count) => self.counts.insert(id, count),
+                    None => self.counts.remove(&id),
+                };
                 changed = true;
             }
         }
@@ -71,7 +79,7 @@ mod tests {
     }
 
     fn frames(tally: &mut Tally, cells: &[Cell], n: u8) -> Vec<bool> {
-        (0..n).map(|_| tally.observe(cells)).collect()
+        (0..n).map(|_| tally.observe(cells, &[])).collect()
     }
 
     #[test]
@@ -82,6 +90,26 @@ mod tests {
         frames(&mut tally, &[cell(110, 1900)], CONFIRM);
         assert_eq!(tally.counts().get(&110), Some(&Count::Exact(1900)));
         assert_eq!(tally.counts().get(&120), Some(&Count::Exact(3)));
+    }
+
+    #[test]
+    fn an_item_gone_from_the_list_is_dropped_after_agreeing_frames() {
+        let kept = HashMap::from([(110, Count::Exact(5)), (120, Count::Exact(3))]);
+        let mut tally = Tally::seeded(kept);
+        assert!(!tally.observe(&[], &[110]));
+        let changes: Vec<bool> = (1..CONFIRM).map(|_| tally.observe(&[], &[110])).collect();
+        assert_eq!(changes.last(), Some(&true));
+        assert_eq!(tally.counts().get(&110), None);
+        assert_eq!(tally.counts().get(&120), Some(&Count::Exact(3)));
+    }
+
+    #[test]
+    fn an_item_missed_in_one_frame_stays() {
+        let mut tally = Tally::seeded(HashMap::from([(110, Count::Exact(5))]));
+        tally.observe(&[], &[110]);
+        frames(&mut tally, &[cell(110, 5)], 1);
+        tally.observe(&[], &[110]);
+        assert_eq!(tally.counts().get(&110), Some(&Count::Exact(5)));
     }
 
     #[test]
@@ -97,7 +125,7 @@ mod tests {
     fn one_misread_frame_changes_nothing() {
         let mut tally = Tally::default();
         frames(&mut tally, &[cell(110, 1875)], CONFIRM);
-        assert!(!tally.observe(&[cell(110, 187)]));
+        assert!(!tally.observe(&[cell(110, 187)], &[]));
         frames(&mut tally, &[cell(110, 1875)], 1);
         assert_eq!(tally.counts().get(&110), Some(&Count::Exact(1875)));
     }

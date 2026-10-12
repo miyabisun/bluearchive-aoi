@@ -91,6 +91,11 @@ impl Catalog {
         rows(&self.entries, &self.rules, counts)
     }
 
+    /// The entries the list shown in `cells` lacks (see `gaps`).
+    pub fn gaps(&self, cells: &[Cell]) -> Vec<i64> {
+        gaps(&self.entries, &self.rules, cells)
+    }
+
     /// The index of the icon `id` is drawn with.
     #[cfg(test)]
     pub(crate) fn icon_of(&self, id: i64) -> Option<usize> {
@@ -200,6 +205,25 @@ fn rows(entries: &[Item], rules: &Rules, counts: &HashMap<i64, Count>) -> Vec<Ro
         .collect()
 }
 
+/// The entries a list in its default order lacks: those whose place lies
+/// between two cells shown side by side, both told apart. An item used up
+/// leaves the list, and this is how its going is seen.
+pub fn gaps(entries: &[Item], rules: &Rules, cells: &[Cell]) -> Vec<i64> {
+    let key = |id: i64| entries.iter().find(|e| e.id == id).map(rules.key);
+    let mut gone: Vec<(ListKey, i64)> = cells
+        .windows(2)
+        .filter_map(|pair| Some((key(pair[0].id?)?, key(pair[1].id?)?)))
+        .flat_map(|(after, before)| {
+            entries
+                .iter()
+                .map(|e| ((rules.key)(e), e.id))
+                .filter(move |(k, _)| after < *k && *k < before)
+        })
+        .collect();
+    gone.sort_unstable();
+    gone.into_iter().map(|(_, id)| id).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,6 +274,38 @@ mod tests {
             ),
             ["event ticket 2", "secret stone 7", "material 5"]
         );
+    }
+
+    fn cell(id: Option<i64>) -> Cell {
+        Cell {
+            id,
+            quantity: Some(Count::Exact(1)),
+            ignored: false,
+        }
+    }
+
+    #[test]
+    fn what_lies_between_two_cells_side_by_side_is_gone() {
+        let entries = [
+            entry(10, "a", "Material", 0),
+            entry(11, "b", "Material", 0),
+            entry(12, "c", "Material", 0),
+            entry(13, "d", "Material", 0),
+            entry(14, "e", "Material", 0),
+        ];
+        let cells = [cell(Some(10)), cell(Some(13)), cell(Some(14))];
+        assert_eq!(gaps(&entries, &items::RULES, &cells), [11, 12]);
+    }
+
+    #[test]
+    fn a_cell_not_told_apart_between_tells_nothing() {
+        let entries = [
+            entry(10, "a", "Material", 0),
+            entry(11, "b", "Material", 0),
+            entry(12, "c", "Material", 0),
+        ];
+        let cells = [cell(Some(10)), cell(None), cell(Some(12))];
+        assert_eq!(gaps(&entries, &items::RULES, &cells), Vec::<i64>::new());
     }
 
     #[test]

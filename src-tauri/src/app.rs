@@ -22,6 +22,7 @@ pub struct Snapshot {
     items: Vec<Row>,
     equipment: Vec<Row>,
     students: Vec<StudentRow>,
+    credits: Option<u64>,
     read_at: ReadAt,
     /// Why what was read could not be kept or brought back, while it lasts.
     keep_error: Option<String>,
@@ -50,6 +51,7 @@ impl Snapshot {
             items: rows(List::Items, &kept.items),
             equipment: rows(List::Equipment, &kept.equipment),
             students: watch::student_rows(recognizer, &kept.students),
+            credits: kept.credits,
             read_at: kept.read_at.clone(),
             keep_error,
         }
@@ -62,6 +64,7 @@ impl Snapshot {
             items: counts(&self.items),
             equipment: counts(&self.equipment),
             students: self.students.iter().map(|s| (s.id, s.training)).collect(),
+            credits: self.credits,
             read_at: self.read_at.clone(),
         }
     }
@@ -71,6 +74,7 @@ impl Snapshot {
         export::yaml(
             stamp,
             &self.read_at,
+            self.credits,
             &self.students,
             &self.items,
             &self.equipment,
@@ -162,6 +166,10 @@ pub fn run(context: tauri::Context) {
                         Update::Students(rows) => {
                             snapshot.students = rows;
                             snapshot.read_at.students = read;
+                        }
+                        Update::Credits(credits) => {
+                            snapshot.credits = Some(credits);
+                            snapshot.read_at.credits = read;
                         }
                     }
                     snapshot.keep_error = keep_in(&places, &snapshot)

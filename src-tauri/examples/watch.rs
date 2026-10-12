@@ -26,6 +26,9 @@ fn main() {
                     let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
                     println!("{at:6.1}s students {}: {}", rows.len(), names.join(" "));
                 }
+                Some(aoi::watch::Update::Credits(credits)) => {
+                    println!("{at:6.1}s credits {credits}");
+                }
                 None => println!("{at:6.1}s {}", serde_json::to_string(status).unwrap()),
             }
         },

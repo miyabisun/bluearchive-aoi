@@ -28,7 +28,7 @@ use crate::{
     Frame as Shown, List, Recognizer, Row,
     keep::Kept,
     student::{Training, roster::Roster},
-    tally::Tally,
+    tally::{CONFIRM, Tally},
 };
 
 const GAME: &str = "BlueArchive.exe";
@@ -78,6 +78,7 @@ pub struct StudentRow {
 pub enum Update {
     List(List, Vec<Row>),
     Students(Vec<StudentRow>),
+    Credits(u64),
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -345,6 +346,37 @@ fn capture(
     Capture::start_free_threaded(settings).map_err(|err| err.to_string())
 }
 
+/// Frames between two readings of the credits (about two a second).
+const CREDITS_EVERY: u32 = 15;
+
+/// The credits read, taken once `CONFIRM` readings in a row agree.
+struct Credits {
+    known: Option<u64>,
+    streak: Option<(u64, u8)>,
+}
+
+impl Credits {
+    /// Take one reading; the credits when they are taken and differ from the
+    /// known ones.
+    fn observe(&mut self, read: Option<u64>) -> Option<u64> {
+        let read = read?;
+        let count = match &mut self.streak {
+            Some((value, count)) if *value == read => {
+                *count = count.saturating_add(1);
+                *count
+            }
+            _ => {
+                self.streak = Some((read, 1));
+                1
+            }
+        };
+        (count == CONFIRM && self.known != Some(read)).then(|| {
+            self.known = Some(read);
+            read
+        })
+    }
+}
+
 /// The students `known`, in id order, with their names.
 pub fn student_rows(recognizer: &Recognizer, known: &BTreeMap<i64, Training>) -> Vec<StudentRow> {
     known
@@ -388,9 +420,19 @@ pub fn start(
                 ),
             ]);
             let mut roster = Roster::seeded(kept.students);
+            let mut credits = Credits {
+                known: kept.credits,
+                streak: None,
+            };
             loop {
-                let read = recognizer.read_frame(&latest.take());
-                frames.fetch_add(1, Ordering::Relaxed);
+                let shot = latest.take();
+                let read = recognizer.read_frame(&shot);
+                // The OCR is slow next to the rest; the credits change seldom.
+                if frames.fetch_add(1, Ordering::Relaxed) % CREDITS_EVERY == 0
+                    && let Some(changed) = credits.observe(recognizer.read_credits(&shot))
+                {
+                    board.changed(Update::Credits(changed));
+                }
                 board.update(|seen| {
                     seen.on_list = read.as_ref().map(|frame| match frame {
                         Shown::List(List::Items, _) => Screen::Items,
@@ -401,7 +443,8 @@ pub fn start(
                 match read {
                     Some(Shown::List(list, cells)) => {
                         let tally = tallies.entry(list).or_default();
-                        if tally.observe(&cells) {
+                        let gone = recognizer.catalog(list).gaps(&cells);
+                        if tally.observe(&cells, &gone) {
                             board.changed(Update::List(list, recognizer.rows(list, tally)));
                         }
                     }
@@ -456,6 +499,22 @@ pub fn start(
 #[cfg(test)]
 mod tests {
     use super::{Game, Screen, Seen, Status, is_game, status};
+
+    #[test]
+    fn the_credits_are_taken_once_readings_agree_and_change() {
+        let mut credits = super::Credits {
+            known: Some(100),
+            streak: None,
+        };
+        let reads = [Some(250), None, Some(250), Some(250), Some(250), Some(250)];
+        let taken: Vec<Option<u64>> = reads.into_iter().map(|r| credits.observe(r)).collect();
+        assert_eq!(taken, [None, None, None, Some(250), None, None]);
+        let again: Vec<Option<u64>> = [Some(300), Some(250), Some(250), Some(250)]
+            .into_iter()
+            .map(|r| credits.observe(r))
+            .collect();
+        assert_eq!(again, [None, None, None, None]);
+    }
 
     #[test]
     fn the_game_is_known_by_its_exe_name() {

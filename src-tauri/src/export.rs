@@ -8,21 +8,26 @@ use crate::{Row, keep::ReadAt, watch::StudentRow};
 pub fn yaml(
     stamp: &str,
     read_at: &ReadAt,
+    credits: Option<u64>,
     students: &[StudentRow],
     items: &[Row],
     equipment: &[Row],
 ) -> String {
     let when = |at: &Option<String>| at.as_deref().unwrap_or("なし").to_owned();
     let mut out = format!(
-        "# Aoi の読み取り結果 {stamp}\n# 最終読み取り: アイテム {} / 装備 {} / 生徒 {}\n",
+        "# Aoi の読み取り結果 {stamp}\n# 最終読み取り: アイテム {} / 装備 {} / 生徒 {} / クレジット {}\n",
         when(&read_at.items),
         when(&read_at.equipment),
-        when(&read_at.students)
+        when(&read_at.students),
+        when(&read_at.credits)
     );
     out += "# null は読めなかった欄。weapon: locked は固有武器が未解放、gear: 0 は愛用品なし。\n";
     out += "# skills は EX・ノーマル・パッシブ・サブ、ability は HP・攻撃力・治癒力の能力解放。\n";
     out += "# count の K は千単位（51K は 50,500〜51,499）。\n";
     out += "# id: null の生徒は SchaleDB に未登録（名前だけで照合）。\n";
+    out += "credits: ";
+    out += &credits.map_or("null".to_owned(), |c| c.to_string());
+    out += "\n";
     out += &list("students", students, |s| {
         let t = &s.training;
         let weapon = match t.weapon {
@@ -148,6 +153,7 @@ mod tests {
         let text = yaml(
             "2026-10-12 15:30:00",
             &ReadAt::default(),
+            None,
             &[mika()],
             &items,
             &equipment,
@@ -160,7 +166,8 @@ mod tests {
             .collect();
         assert_eq!(
             body,
-            r#"students:
+            r#"credits: null
+students:
   - id: 10059
     name: "ミカ"
     level: 90
@@ -200,7 +207,7 @@ equipment:
             ability: [Some(0), None, Some(0)],
             ..student.training
         };
-        let text = yaml("", &ReadAt::default(), &[student.clone()], &[], &[]);
+        let text = yaml("", &ReadAt::default(), None, &[student.clone()], &[], &[]);
         for line in [
             "    level: null",
             "    bond: null",
@@ -213,7 +220,7 @@ equipment:
             assert!(text.lines().any(|l| l == line), "{line}\n{text}");
         }
         student.training.weapon = None;
-        let text = yaml("", &ReadAt::default(), &[student], &[], &[]);
+        let text = yaml("", &ReadAt::default(), None, &[student], &[], &[]);
         assert!(text.lines().any(|l| l == "    weapon: null"), "{text}");
     }
 
@@ -222,7 +229,7 @@ equipment:
         let mut student = mika();
         student.id = -1;
         student.name = "ツムギ".to_owned();
-        let text = yaml("", &ReadAt::default(), &[student], &[], &[]);
+        let text = yaml("", &ReadAt::default(), None, &[student], &[], &[]);
         assert!(text.lines().any(|l| l == "  - id: null"), "{text}");
         assert!(text.lines().any(|l| l == r#"    name: "ツムギ""#), "{text}");
     }
@@ -233,16 +240,24 @@ equipment:
             items: Some("2026-10-12 15:30:00".to_owned()),
             equipment: None,
             students: Some("2026-10-12 16:00:00".to_owned()),
+            credits: None,
         };
-        let text = yaml("2026-10-12 16:05:00", &read_at, &[], &[], &[]);
-        let line =
-            "# 最終読み取り: アイテム 2026-10-12 15:30:00 / 装備 なし / 生徒 2026-10-12 16:00:00";
+        let text = yaml("2026-10-12 16:05:00", &read_at, None, &[], &[], &[]);
+        let line = "# 最終読み取り: アイテム 2026-10-12 15:30:00 / 装備 なし / 生徒 2026-10-12 16:00:00 / クレジット なし";
         assert!(text.lines().any(|l| l == line), "{text}");
     }
 
     #[test]
+    fn writes_the_credits_or_null() {
+        let text = yaml("", &ReadAt::default(), Some(244_213_276), &[], &[], &[]);
+        assert!(text.lines().any(|l| l == "credits: 244213276"), "{text}");
+        let text = yaml("", &ReadAt::default(), None, &[], &[], &[]);
+        assert!(text.lines().any(|l| l == "credits: null"), "{text}");
+    }
+
+    #[test]
     fn writes_empty_lists_as_such() {
-        let text = yaml("", &ReadAt::default(), &[], &[], &[]);
+        let text = yaml("", &ReadAt::default(), None, &[], &[], &[]);
         for line in ["students: []", "items: []", "equipment: []"] {
             assert!(text.lines().any(|l| l == line), "{line}\n{text}");
         }
@@ -251,7 +266,7 @@ equipment:
     #[test]
     fn quotes_names_the_yaml_would_misread() {
         let items = [row(7, "Lv: \"MAX\" #1", None, Count::Exact(1))];
-        let text = yaml("", &ReadAt::default(), &[], &items, &[]);
+        let text = yaml("", &ReadAt::default(), None, &[], &items, &[]);
         assert!(
             text.lines().any(|l| l == r#"    name: "Lv: \"MAX\" #1""#),
             "{text}"

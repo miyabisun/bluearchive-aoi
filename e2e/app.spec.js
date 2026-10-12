@@ -318,3 +318,11 @@ test("tells why what was read could not be kept", async ({ page }) => {
     "読み取り結果を保存できませんでした: アクセスが拒否されました。",
   );
 });
+
+test("shows the credits on the item tab once they are read", async ({ page }) => {
+  await open(page, { status: reading("items"), items, equipment, credits: 244213276 });
+  await expect(page.getByText("クレジット 244,213,276")).toBeVisible();
+
+  await open(page, { status: reading("items"), items, equipment, credits: null });
+  await expect(page.getByText(/^クレジット/)).toHaveCount(0);
+});
