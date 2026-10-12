@@ -6,9 +6,22 @@
     filterRows,
     followTab,
     formatCount,
+    sortStudents,
     statusView,
     studentCells,
   } from "./lib/view.js";
+
+  /** The student table's columns after the name, each sorting by its key. */
+  const STUDENT_COLUMNS = [
+    { key: "level", label: "Lv", num: true },
+    { key: "rarity", label: "★" },
+    { key: "weapon", label: "固有武器" },
+    { key: "skills", label: "スキル" },
+    { key: "equipment", label: "装備" },
+    { key: "gear", label: "愛用品" },
+    { key: "ability", label: "能力解放" },
+    { key: "bond", label: "絆", num: true },
+  ];
 
   /** What each tab tells before anything of its list is read. */
   const EMPTY = {
@@ -28,12 +41,17 @@
   });
   let view = $state({ tab: "items", lastRead: null });
   let query = $state("");
+  /** The student column the table is ordered by. */
+  let sortBy = $state("level");
   /** The last export: `{ path }` or `{ error }`. */
   let exported = $state(null);
 
   const status = $derived(statusView(snapshot.status));
   const rows = $derived(snapshot[view.tab]);
-  const shown = $derived(filterRows(rows, query));
+  const shown = $derived.by(() => {
+    const found = filterRows(rows, query);
+    return view.tab === "students" ? sortStudents(found, sortBy) : found;
+  });
   const heading = $derived(LISTS.find((l) => l.id === view.tab).name);
   const nothingRead = $derived(LISTS.every((l) => (snapshot[l.id] ?? []).length === 0));
 
@@ -103,14 +121,18 @@
             <thead>
               <tr>
                 <th scope="col">生徒</th>
-                <th scope="col" class="num">Lv</th>
-                <th scope="col">★</th>
-                <th scope="col">固有武器</th>
-                <th scope="col">スキル</th>
-                <th scope="col">装備</th>
-                <th scope="col">愛用品</th>
-                <th scope="col">能力解放</th>
-                <th scope="col" class="num">絆</th>
+                {#each STUDENT_COLUMNS as column (column.key)}
+                  <th
+                    scope="col"
+                    class:num={column.num}
+                    aria-sort={sortBy === column.key ? "descending" : undefined}
+                  >
+                    <button type="button" class="sort" onclick={() => (sortBy = column.key)}
+                      >{column.label}</button
+                    >{#if sortBy === column.key}<span class="sorted" aria-hidden="true">▼</span
+                      >{/if}
+                  </th>
+                {/each}
               </tr>
             </thead>
             <tbody>
@@ -329,6 +351,19 @@
     th, td
       padding: var(--sp-2)
       white-space: nowrap
+    .sort
+      padding: 0
+      border: 0
+      background: none
+      color: inherit
+      font: inherit
+      cursor: pointer
+    th[aria-sort] .sort
+      color: var(--c-on-surface)
+      font-weight: 600
+    .sorted
+      margin-left: 2px
+      font-size: var(--fs-caption)
     td:first-child
       white-space: normal
       min-width: 8em

@@ -54,6 +54,10 @@ student appears under the 生徒 tab with their training:
 
 A field Aoi cannot read for sure shows ?.
 
+Students are listed highest level first, then by rarity, then by bond. Click a column's
+heading to list them by that column instead, highest first (skills, ability release and
+the equipment's tiers by their total); ties keep the default order, and ? comes last.
+
 Aoi switches to the tab of what the game starts showing; a tab you pick stays until the
 game shows another list or the student screen.
 

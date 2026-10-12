@@ -243,3 +243,52 @@ test("keeps the student headings over their columns when scrolled sideways", asy
   expect(Math.abs(heading.x - cell.x)).toBeLessThan(1);
   await expect(page.locator("thead th").last()).toBeInViewport();
 });
+
+/** A student with a 5MMM T10 training and `overrides`. */
+const trained = (id, name, overrides) => ({
+  id,
+  name,
+  training: {
+    level: 90,
+    rarity: 5,
+    bond: 20,
+    skills: [5, 10, 10, 10],
+    weapon: { level: 60, stars: 4 },
+    equipment: [
+      { tier: 10, level: 70 },
+      { tier: 10, level: 70 },
+      { tier: 10, level: 70 },
+    ],
+    gear: 0,
+    ability: [0, 0, 0],
+    ...overrides,
+  },
+});
+
+test("orders students by level, rarity and bond, or by the column chosen", async ({ page }) => {
+  const roster = [
+    trained(1, "アル", { level: 80, bond: 50 }),
+    trained(2, "ミカ", { bond: 43, weapon: { level: 30, stars: 1 } }),
+    trained(3, "ヒナ", { rarity: 4, bond: 50 }),
+    trained(4, "ホシノ", { bond: 34 }),
+  ];
+  await open(page, { status: reading("students"), items, equipment, students: roster });
+  const names = page.locator("tbody td:first-child");
+  await expect(names).toHaveText(["ミカ", "ホシノ", "ヒナ", "アル"]);
+  await expect(page.locator("th", { hasText: "Lv" })).toHaveAttribute("aria-sort", "descending");
+
+  await page.getByRole("button", { name: "固有武器" }).click();
+  await expect(names).toHaveText(["ホシノ", "ヒナ", "アル", "ミカ"]);
+  await expect(page.locator("th", { hasText: "固有武器" })).toHaveAttribute(
+    "aria-sort",
+    "descending",
+  );
+  await expect(page.locator("th", { hasText: "Lv" })).not.toHaveAttribute(
+    "aria-sort",
+    "descending",
+  );
+
+  await page.getByRole("button", { name: "絆" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(names).toHaveText(["ヒナ", "アル", "ミカ", "ホシノ"]);
+});

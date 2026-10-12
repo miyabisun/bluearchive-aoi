@@ -76,3 +76,49 @@ export function studentCells(t) {
     bond: show(t.bond),
   };
 }
+
+const sum = (values) => (values.every(known) ? values.reduce((a, b) => a + b, 0) : null);
+
+/**
+ * What each column of the student table orders by: a number, or numbers
+ * compared in turn; `null` for what could not be read.
+ */
+const STUDENT_KEYS = {
+  level: (t) => t.level,
+  rarity: (t) => t.rarity,
+  // A locked weapon comes after every unlocked one, and before an unread one.
+  weapon: (t) =>
+    t.weapon === undefined ? null : t.weapon === null ? [0, 0] : [t.weapon.stars, t.weapon.level],
+  skills: (t) => sum(t.skills),
+  equipment: (t) =>
+    t.equipment.every(known)
+      ? [sum(t.equipment.map((e) => e.tier)), sum(t.equipment.map((e) => e.level))]
+      : null,
+  gear: (t) => t.gear,
+  ability: (t) => sum(t.ability),
+  bond: (t) => t.bond,
+};
+
+/** Highest first, what could not be read last. */
+function descending(a, b) {
+  if (!known(a) || !known(b)) return Number(!known(a)) - Number(!known(b));
+  const [x, y] = [[a].flat(), [b].flat()];
+  const at = x.findIndex((v, i) => v !== y[i]);
+  return at < 0 ? 0 : y[at] - x[at];
+}
+
+/**
+ * The students ordered by `column` (a key of the training), highest first;
+ * ties, and the default order, go by level, then rarity, then bond.
+ */
+export function sortStudents(rows, column = "level") {
+  const order = [column, "level", "rarity", "bond"];
+  return [...rows].sort(
+    (a, b) =>
+      order.reduce(
+        (found, key) =>
+          found || descending(STUDENT_KEYS[key](a.training), STUDENT_KEYS[key](b.training)),
+        0,
+      ) || a.id - b.id,
+  );
+}
