@@ -1,6 +1,6 @@
 //! The shop screen: which shop the menu has chosen and, card by card, what it
-//! offers, the coin it is paid with, how many more times it can be bought and
-//! its price, read by the OCR.
+//! offers, the coin it is paid with and how many more times it can be bought,
+//! read by the OCR. What each costs is the shops' terms (`price`).
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -8,10 +8,11 @@ use image::{Rgb, RgbImage, RgbaImage, imageops};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Item, credit,
+    Item,
     grid::Card,
     icon::{IconMatcher, Mask},
     ocr::Ocr,
+    price::{Price, Prices},
     student::Area,
     tally::CONFIRM,
 };
@@ -42,16 +43,13 @@ const VIEW: Span = (0.172, 0.84);
 const BAR_WIDTH: f32 = 0.16;
 /// The card's name, from the bar's top.
 const NAME: Span = (-0.215, -0.145);
-/// The price under the bar, from its bottom; its digits and its coin from the
-/// bar's left and right ends.
+/// The price under the bar, from its bottom, and its coin's icon from the bar's
+/// left end.
 const PRICE: Span = (0.012, 0.048);
-const DIGITS: Span = (0.085, -0.045);
 const COIN: Span = (0.02, 0.065);
-/// The shops that take two coins (the others one, shown alone at the right);
-/// a card's coin is told by its icon's colour.
-pub const TWO_COINS: [&str; 2] = ["総力戦", "大決戦"];
 /// The shop's coins over the cards: the centres of their icons from the right
-/// edge, left one first.
+/// edge, left one first (a shop with one coin shows only the right one). In a
+/// shop with two, a card's coin is told by its icon's colour.
 const COINS: [f32; 2] = [0.829, 0.552];
 const COINS_ROW: f32 = 0.12;
 const COIN_SIZE: f32 = 0.04;
@@ -76,14 +74,12 @@ const LIGHT: u8 = 160;
 type Span = (f32, f32);
 
 /// An offer as read: the item, which of the shop's coins pays for it (0 the
-/// left or only one, 1 the right), how many more times it can be bought and
-/// its price (`None`: not read).
+/// left or only one, 1 the right) and how many more times it can be bought.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Offer {
     pub id: i64,
     pub coin: u8,
     pub left: u32,
-    pub price: Option<u32>,
 }
 
 /// What a frame of the shop screen shows.
@@ -157,8 +153,9 @@ impl Goods {
     }
 
     /// Reads the shop screen: the chosen shop, when it is one kept, and the
-    /// offers of the cards shown whole. Any other screen gives `None`.
-    pub fn read(&self, image: &RgbImage, ocr: &Ocr) -> Option<Seen> {
+    /// offers of the cards shown whole; `prices` tell how many coins it takes.
+    /// Any other screen gives `None`.
+    pub fn read(&self, image: &RgbImage, ocr: &Ocr, prices: &Prices) -> Option<Seen> {
         let h = image.height() as f32;
         let (top, bottom) = menu_entry(image)?;
         let bars = bars(image);
@@ -175,7 +172,7 @@ impl Goods {
                 let menu = normalize(&ocr.read(&upright(&entry, lean)).ok()?);
                 SHOPS.into_iter().find(|s| normalize(s) == menu)
             })?;
-        let coins = if TWO_COINS.contains(&shop) {
+        let coins = if prices.coins(shop).len() > 1 {
             coin_colours(image)
         } else {
             Vec::new()
@@ -191,24 +188,12 @@ impl Goods {
     /// is told and the times it can still be bought read.
     fn offer(&self, image: &RgbImage, ocr: &Ocr, bar: &Bar, coins: &[[f32; 3]]) -> Option<Offer> {
         let h = image.height() as f32;
-        let (left, name_top, right, price_bottom) = card_area(image, bar)?;
+        let (left, name_top, right, _) = card_area(image, bar)?;
         let (top, bottom) = (bar.top as f32, bar.bottom as f32);
         let name = crop(image, left, name_top, right, top + NAME.1 * h)?;
         let count = crop(image, left, top - 2.0, right, bottom + 3.0)?;
-        let digits = crop(
-            image,
-            left + DIGITS.0 * h,
-            bottom + PRICE.0 * h,
-            right + DIGITS.1 * h,
-            price_bottom,
-        )?;
-        // Read together, the price's few digits read where alone they do not.
         let text = ocr
-            .read(&stack(&[
-                letters(&name, false),
-                letters(&count, true),
-                letters(&digits, true),
-            ]))
+            .read(&stack(&[letters(&name, false), letters(&count, true)]))
             .ok()?;
         let lines: Vec<&str> = text.split('/').collect();
         let at = lines.iter().position(|l| parse_left(l).is_some())?;
@@ -229,10 +214,6 @@ impl Goods {
                 nearest(&mean(image, coin_at.0, coin_at.1, COIN.1 - COIN.0)?, coins)?
             },
             left: parse_left(lines[at])?,
-            price: lines
-                .get(at + 1)
-                .and_then(|l| credit::parse(l))
-                .and_then(|p| u32::try_from(p).ok()),
         })
     }
 
@@ -536,7 +517,7 @@ pub struct Shelf {
 }
 
 /// Keeps the offers of every shop seen. An offer is taken once the same times
-/// left have been read in `CONFIRM` frames in a row, with the price last read.
+/// left have been read in `CONFIRM` frames in a row.
 #[derive(Default)]
 pub struct Shelves {
     shelves: BTreeMap<String, Shelf>,
@@ -580,16 +561,10 @@ impl Shelves {
                 .offers
                 .iter()
                 .position(|o| o.id == offer.id && o.coin == offer.coin);
-            let taken = Offer {
-                price: offer
-                    .price
-                    .or_else(|| known.and_then(|i| stock.offers[i].price)),
-                ..*offer
-            };
             match known {
-                Some(i) if stock.offers[i] == taken => continue,
-                Some(i) => stock.offers[i] = taken,
-                None => stock.offers.push(taken),
+                Some(i) if stock.offers[i] == *offer => continue,
+                Some(i) => stock.offers[i] = *offer,
+                None => stock.offers.push(*offer),
             }
             now.clone_into(&mut stock.read_at);
             changed = true;
@@ -603,25 +578,33 @@ impl Shelves {
     }
 }
 
-/// A shop's shelf as the window and the export show it, its items named:
-/// whether its offers reset as the month changes, and how many coins it takes.
+/// A shop's shelf as the window and the export show it: its coins by name
+/// (left first), whether its offers reset as the month changes, and its goods
+/// in id order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ShopRow {
     pub name: String,
     pub read_at: String,
     pub resets: bool,
-    pub coins: u8,
-    pub offers: Vec<OfferRow>,
+    pub coins: Vec<String>,
+    pub goods: Vec<GoodRow>,
 }
 
-/// An offer with its item's name.
+/// A good of a shop, named, with what each coin buys of it (`None`: that
+/// coin does not).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct OfferRow {
+pub struct GoodRow {
     pub id: i64,
     pub name: String,
-    pub coin: u8,
+    pub offers: Vec<Option<OfferRow>>,
+}
+
+/// How many more times a coin buys a good, and on what terms (`None`: none
+/// in the shops' terms).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct OfferRow {
     pub left: u32,
-    pub price: Option<u32>,
+    pub price: Option<Price>,
 }
 
 impl ShopRow {
@@ -630,17 +613,37 @@ impl ShopRow {
         Shelf {
             read_at: self.read_at.clone(),
             offers: self
-                .offers
+                .goods
                 .iter()
-                .map(|o| Offer {
-                    id: o.id,
-                    coin: o.coin,
-                    left: o.left,
-                    price: o.price,
+                .flat_map(|g| {
+                    g.offers.iter().zip(0..).filter_map(|(o, coin)| {
+                        o.map(|o| Offer {
+                            id: g.id,
+                            coin,
+                            left: o.left,
+                        })
+                    })
                 })
                 .collect(),
         }
     }
+}
+
+/// The goods on `offers`, in id order, each with the offer of every coin; there
+/// are `coins` coins or as many as the offers name.
+pub fn goods(offers: &[Offer], coins: usize) -> Vec<(i64, Vec<Option<Offer>>)> {
+    let width = offers
+        .iter()
+        .map(|o| usize::from(o.coin) + 1)
+        .max()
+        .unwrap_or(0)
+        .max(coins);
+    let mut by_id: BTreeMap<i64, Vec<Option<Offer>>> = BTreeMap::new();
+    for offer in offers {
+        by_id.entry(offer.id).or_insert_with(|| vec![None; width])[usize::from(offer.coin)] =
+            Some(*offer);
+    }
+    by_id.into_iter().collect()
 }
 
 /// The year and month of a local time ("2026-10").
@@ -788,19 +791,14 @@ mod tests {
         }
     }
 
-    fn offer(id: i64, coin: u8, left: u32, price: Option<u32>) -> Offer {
-        Offer {
-            id,
-            coin,
-            left,
-            price,
-        }
+    fn offer(id: i64, coin: u8, left: u32) -> Offer {
+        Offer { id, coin, left }
     }
 
     #[test]
     fn an_offer_is_taken_once_frames_agree() {
         let mut shelves = Shelves::default();
-        let book = offer(1, 1, 40, Some(10));
+        let book = offer(1, 1, 40);
         for _ in 1..CONFIRM {
             assert!(!shelves.observe(&seen("総力戦", &[book]), NOW));
         }
@@ -808,8 +806,8 @@ mod tests {
         assert_eq!(shelves.shelves()["総力戦"].offers, [book]);
         assert_eq!(shelves.shelves()["総力戦"].read_at, NOW);
         // A misread frame changes nothing; the same coin's twin is its own offer.
-        assert!(!shelves.observe(&seen("総力戦", &[offer(1, 1, 4, Some(10))]), NOW));
-        let twin = offer(1, 0, 5, Some(10));
+        assert!(!shelves.observe(&seen("総力戦", &[offer(1, 1, 4)]), NOW));
+        let twin = offer(1, 0, 5);
         for _ in 0..CONFIRM {
             shelves.observe(&seen("総力戦", &[book, twin]), NOW);
         }
@@ -817,17 +815,22 @@ mod tests {
     }
 
     #[test]
-    fn an_unread_price_keeps_the_one_read_before() {
-        let mut shelves = Shelves::default();
-        for _ in 0..CONFIRM {
-            shelves.observe(&seen("大決戦", &[offer(1, 0, 40, Some(10))]), NOW);
-        }
-        for _ in 0..CONFIRM {
-            shelves.observe(&seen("大決戦", &[offer(1, 0, 39, None)]), NOW);
-        }
+    fn goods_go_in_id_order_with_an_offer_for_each_coin() {
+        let offers = [offer(4000, 1, 40), offer(3000, 0, 12), offer(4000, 0, 16)];
         assert_eq!(
-            shelves.shelves()["大決戦"].offers,
-            [offer(1, 0, 39, Some(10))]
+            goods(&offers, 2),
+            [
+                (3000, vec![Some(offer(3000, 0, 12)), None]),
+                (
+                    4000,
+                    vec![Some(offer(4000, 0, 16)), Some(offer(4000, 1, 40))]
+                ),
+            ]
+        );
+        // A shop without terms has as many coins as its offers name.
+        assert_eq!(
+            goods(&[offer(1, 0, 5)], 0),
+            [(1, vec![Some(offer(1, 0, 5))])]
         );
     }
 
@@ -840,23 +843,23 @@ mod tests {
         let mut shelves = Shelves::seeded(BTreeMap::from([
             (
                 "総力戦".to_owned(),
-                last_month(vec![offer(1, 0, 0, Some(10)), offer(2, 0, 0, None)]),
+                last_month(vec![offer(1, 0, 0), offer(2, 0, 0)]),
             ),
             (
                 "カケラ(文字)".to_owned(),
-                last_month(vec![offer(3, 0, 0, Some(5)), offer(4, 0, 1, None)]),
+                last_month(vec![offer(3, 0, 0), offer(4, 0, 1)]),
             ),
         ]));
         for _ in 0..CONFIRM {
-            shelves.observe(&seen("総力戦", &[offer(1, 0, 0, Some(10))]), NOW);
-            shelves.observe(&seen("カケラ(文字)", &[offer(3, 0, 0, Some(5))]), NOW);
+            shelves.observe(&seen("総力戦", &[offer(1, 0, 0)]), NOW);
+            shelves.observe(&seen("カケラ(文字)", &[offer(3, 0, 0)]), NOW);
         }
         let shelf = |shop: &str| shelves.shelves()[shop].clone();
-        assert_eq!(shelf("総力戦").offers, [offer(1, 0, 0, Some(10))]);
+        assert_eq!(shelf("総力戦").offers, [offer(1, 0, 0)]);
         assert_eq!(shelf("総力戦").read_at, NOW);
         assert_eq!(
             shelf("カケラ(文字)").offers,
-            [offer(3, 0, 0, Some(5)), offer(4, 0, 1, None)]
+            [offer(3, 0, 0), offer(4, 0, 1)]
         );
     }
 

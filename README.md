@@ -66,12 +66,27 @@ heading to list them by that column instead, highest first (skills, ability rele
 the equipment's tiers by their total); ties keep the default order, and ? comes last.
 
 For the shops, open ショップ, choose 総力戦, 大決戦, カケラ(文字), 合同火力演習, 指名手配 or
-熟達証書, and scroll its goods to the bottom, where those bought up go. Each shop appears
-under the ショップ tab with how many more times each of its goods can be bought (買い切り
-once bought up) and its price. 総力戦 and 大決戦 take two coins; their prices tell which,
-左 or 右, as the coins stand at the top of the shop. All but カケラ(文字) reset as the
-month changes: a shop read in an earlier month is marked 前の月の値 until it is read
-again. 通常アイテム, 青輝石, カケラ(その他) and 戦術対抗戦 are not read.
+熟達証書, and scroll its goods to the bottom, where those bought up go. Each shop is listed
+under the ショップ tab, closed until you open it (a search opens them all). Its goods go
+in id order, a column for each of its coins, named as the shop names them (総力戦 takes
+総力戦レアコイン, the purple, and 総力戦コイン, the yellow; 大決戦 大決戦レアコイン, the
+blue, and 大決戦コイン, the silver): how many more times that coin buys the good (買い切り
+once bought up, — where it does not), and on what terms, `50枚で5個` for five for 50
+coins. The terms are the shops' own, written in `src-tauri/data/shops.yaml` from the
+[Blue Archive wiki](https://bluearchive.wiki/wiki/Shop); a good they do not cover shows ?.
+All but カケラ(文字) reset as the month changes: a shop read in an earlier month is marked
+前の月の値 until it is read again. 通常アイテム, 青輝石, カケラ(その他) and 戦術対抗戦 are
+not read.
+
+To plan training, tick 育成 beside the students to train under the 生徒 tab. The 育成 tab
+lists them with their targets, Lv90, skills 5/10/10/10 and equipment T10/10/10 to start
+with; click a target and change it with ↑ and ↓ (the value read stands over it). Below
+come what the targets take, all together, against what is held: credits, the exp of
+activity reports and of enhancement orbs, then skill materials and blueprints, each
+足りる or 不足 by how much (約 where a count is in thousands). A student SchaleDB does not
+list yet, or a value not read, is named as what could not be counted. The exp within a
+level is not read, so a student partway to the next level takes a little less than shown;
+equipment is counted levelled to the top of each tier before it is made into the next.
 
 Aoi switches to the tab of what the game starts showing; a tab you pick stays until the
 game shows another list or the student screen.
@@ -119,7 +134,8 @@ Other windows may cover the game; Aoi reads the game window itself, not the scre
 
 Whenever something read changes, Aoi writes everything read so far (students, items,
 equipment and shops) to `Documents\Aoi\aoi.yaml`, headed by when each list was last read, and keeps
-it for its next run: a list read again replaces what it showed, entry by entry. Hand the
+it for its next run with the students marked for training and their targets: a list read
+again replaces what it showed, entry by entry. Hand the
 file to an agent or a tool to check what Aoi read or to plan with it. **書き出す**, at the
 right of the tabs, writes the same as `Documents\Aoi\aoi-<date>-<time>.yaml`, to keep how
 things stood at that moment:
@@ -150,11 +166,13 @@ shops:
   - name: "総力戦"
     read_at: "2026-10-12 22:10:00"
     offers:
-      - id: 9000
+      - id: 9999
         name: "秘伝ノート"
-        coin: 1  # the coins at the top of the shop from the left, 0 in a shop with one
+        coin: "総力戦コイン"
         left: 0  # how many more times it can be bought
-        price: 500  # null until read
+        price: 500  # the shop's terms, null where they are unknown
+        amount: 1  # how many come with a purchase
+        limit: 3  # how many purchases a month allows
 ```
 
 `null` marks a field Aoi could not read, apart from what the student lacks. A student
@@ -166,7 +184,11 @@ Names and icons of items and equipment, and student names, come from a snapshot 
 [SchaleDB](https://schaledb.com) built into the exe. A few items and students SchaleDB
 lacks, and a few icons the game draws unlike SchaleDB, are added in
 `src-tauri/data/extra`, cut from the game; a student added there is told by name alone
-until SchaleDB lists them. `tools/schaledb/update.ps1` refreshes the snapshot.
+until SchaleDB lists them. The training plan counts with the students' skill materials
+and the equipment recipes from the same snapshot, and with the level tables of the game
+(`growth.json`, from [electricgoat/ba-data](https://github.com/electricgoat/ba-data)) and
+the skill credits the archived SchaleDB site listed. `tools/schaledb/update.ps1` refreshes
+the snapshot and the tables.
 
 ## Development
 

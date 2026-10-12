@@ -32,7 +32,7 @@ fn main() {
                 Some(aoi::watch::Update::Shops(shops)) => {
                     let sizes: Vec<String> = shops
                         .iter()
-                        .map(|s| format!("{} {}", s.name, s.offers.len()))
+                        .map(|s| format!("{} {}", s.name, s.goods.len()))
                         .collect();
                     println!("{at:6.1}s shops {}", sizes.join(" / "));
                 }

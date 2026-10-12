@@ -110,6 +110,8 @@ test("the tabs and the search field take focus from the keyboard", async ({ page
   await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "生徒" })).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("tab", { name: "育成" })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "ショップ" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "書き出す" })).toBeFocused();
@@ -158,6 +160,7 @@ test("shows the students read from the student screen", async ({ page }) => {
   await expect(page.getByRole("status")).toHaveText("生徒を集計中 27 fps");
   await expect(page.getByRole("tab", { name: "生徒" })).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("tbody tr").first().locator("td")).toHaveText([
+    "",
     "ホシノ",
     "90",
     "★5",
@@ -169,6 +172,7 @@ test("shows the students read from the student screen", async ({ page }) => {
     "34",
   ]);
   await expect(page.locator("tbody tr").nth(1).locator("td")).toHaveText([
+    "",
     "アカネ（バニーガール）",
     "?",
     "★3",
@@ -275,7 +279,7 @@ test("orders students by level, rarity and bond, or by the column chosen", async
     trained(4, "ホシノ", { bond: 34 }),
   ];
   await open(page, { status: reading("students"), items, equipment, students: roster });
-  const names = page.locator("tbody td:first-child");
+  const names = page.locator("tbody td:nth-child(2)");
   await expect(names).toHaveText(["ミカ", "ホシノ", "ヒナ", "アル"]);
   await expect(page.locator("th", { hasText: "Lv" })).toHaveAttribute("aria-sort", "descending");
 
@@ -334,42 +338,56 @@ const shops = [
     name: "総力戦",
     read_at: "2026-09-30 22:00:00",
     resets: true,
-    coins: 2,
-    offers: [
-      { id: 1, name: "初級戦術教育BD（百鬼夜行）", coin: 1, left: 40, price: 10 },
-      { id: 2, name: "秘伝ノート", coin: 0, left: 0, price: 500 },
-      { id: 2, name: "秘伝ノート", coin: 1, left: 1, price: null },
+    coins: ["総力戦レアコイン", "総力戦コイン"],
+    goods: [
+      {
+        id: 3000,
+        name: "初級戦術教育BD（百鬼夜行）",
+        offers: [
+          { left: 12, price: { price: 10, amount: 1, limit: 12 } },
+          { left: 40, price: { price: 10, amount: 1, limit: 40 } },
+        ],
+      },
+      {
+        id: 10019,
+        name: "アズサの神名文字",
+        offers: [{ left: 0, price: { price: 50, amount: 5, limit: 10 } }, null],
+      },
     ],
   },
   {
     name: "指名手配",
     read_at: "2999-01-01 08:30:00",
     resets: true,
-    coins: 1,
-    offers: [{ id: 3, name: "エーテルの粉", coin: 0, left: 25, price: 24 }],
+    coins: ["指名手配コイン"],
+    goods: [{ id: 160, name: "エーテルの粉", offers: [{ left: 25, price: null }] }],
   },
 ];
 
-test("shows each shop's offers when the game shows a shop", async ({ page }) => {
+test("shows each shop's goods, shop by shop, when the game shows a shop", async ({ page }) => {
   await open(page, { status: reading("shops"), items, equipment, shops });
   await expect(page.getByRole("status")).toHaveText("ショップを集計中 27 fps");
   await expect(page.getByRole("tab", { name: "ショップ" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
-  await expect(page.locator("h2")).toHaveText([
+  await expect(page.locator("summary")).toHaveText([
     "総力戦09/30 22:00前の月の値",
     "指名手配01/01 08:30",
   ]);
-  await expect(page.locator("section").first().locator("tbody tr")).toHaveText([
-    "初級戦術教育BD（百鬼夜行）40右 10",
-    "秘伝ノート買い切り左 500",
-    "秘伝ノート1右 ?",
+  // Each shop opens and closes; closed, its goods are out of sight.
+  const first = page.locator("details").first();
+  await expect(first.locator("tbody")).toBeHidden();
+  await page.locator("summary").first().click();
+  await expect(first.locator("thead th")).toHaveText(["品", "総力戦レアコイン", "総力戦コイン"]);
+  await expect(first.locator("tbody tr")).toHaveText([
+    "初級戦術教育BD（百鬼夜行）12回10枚40回10枚",
+    "アズサの神名文字買い切り50枚で5個—",
   ]);
-  await expect(page.locator("section").nth(1).locator("tbody tr")).toHaveText(["エーテルの粉2524"]);
 
   await page.getByLabel("名前で検索").fill("エーテル");
-  await expect(page.locator("h2")).toHaveText(["指名手配01/01 08:30"]);
+  await expect(page.locator("summary")).toHaveText(["指名手配01/01 08:30"]);
+  await expect(page.locator("details tbody tr")).toHaveText(["エーテルの粉25回?"]);
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
@@ -377,4 +395,55 @@ test("guides to the shop before any is read", async ({ page }) => {
   await open(page, { status: { state: "other_screen" }, items, equipment, shops: [] });
   await page.getByRole("tab", { name: "ショップ" }).click();
   await expect(page.locator("[data-state=empty]")).toContainText("ショップで総力戦");
+});
+
+test("marks a student for training from the student tab", async ({ page }) => {
+  await open(page, { status: reading("students"), items, equipment, students, targets: [] });
+  await page.getByLabel("ホシノを育成対象にする").check();
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ id: 10005, target: {} }]);
+});
+
+const target = { level: 90, skills: [5, 10, 10, 10], equipment: [10, 10, 10] };
+
+test("shows the targets and what they take against what is held", async ({ page }) => {
+  await open(page, {
+    status: { state: "other_screen" },
+    items,
+    equipment,
+    students,
+    targets: [{ id: 20019, target }],
+    plan: [
+      { kind: "credits", id: 0, name: "", need: 1500000, have: { exact: 244654006 } },
+      { kind: "report_exp", id: 0, name: "", need: 60000, have: { about: 51000 } },
+      { kind: "item", id: 4030, name: "初級技術ノート（ゲヘナ）", need: 30, have: { exact: 12 } },
+    ],
+    plan_unknown: [
+      { id: 20019, name: "アカネ（バニーガール）", part: "level" },
+      { id: 20019, name: "アカネ（バニーガール）", part: { equipment: 1 } },
+    ],
+  });
+  await page.getByRole("tab", { name: "育成" }).click();
+  const row = page.locator("table.targets tbody tr");
+  await expect(row.locator("td").first()).toHaveText("アカネ（バニーガール）");
+  await expect(row.locator(".now")).toHaveText(["?→", "2→", "3→", "3→", "6→", "4→", "?→", "3→"]);
+  await expect(page.getByText("アカネ（バニーガール）: Lv・装備2 は数えられません")).toBeVisible();
+  await expect(page.locator("table.plan tbody tr")).toHaveText([
+    "クレジット1,500,000244,654,006足りる",
+    "レポート（経験値）60,000約51,000不足 約9,000",
+    "初級技術ノート（ゲヘナ）3012不足 18",
+  ]);
+
+  // A target changes from the keyboard, within its range.
+  const ex = page.getByLabel("アカネ（バニーガール）のEXの目標");
+  await ex.focus();
+  await page.keyboard.press("ArrowDown");
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([
+    { id: 20019, target: { ...target, skills: [4, 10, 10, 10] } },
+  ]);
+});
+
+test("guides to the student tab before any student is marked", async ({ page }) => {
+  await open(page, { status: { state: "other_screen" }, items, equipment, students, targets: [] });
+  await page.getByRole("tab", { name: "育成" }).click();
+  await expect(page.locator("[data-state=empty]")).toContainText("生徒タブで「育成」");
 });

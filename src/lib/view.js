@@ -15,6 +15,7 @@ export const LISTS = [
   { id: "items", name: "アイテム" },
   { id: "equipment", name: "装備" },
   { id: "students", name: "生徒" },
+  { id: "plan", name: "育成" },
   { id: "shops", name: "ショップ" },
 ];
 
@@ -133,21 +134,76 @@ export function shopStale(shop, now = new Date()) {
 }
 
 /**
- * An offer as table cells: the times it can still be bought ("買い切り" at
- * none), and its price, "?" unread, after "左" or "右" for the coin of a shop
- * that takes two (`coins`).
+ * What each of a shop's coins buys of a good, as table cells: the times left
+ * ("買い切り" at none, "—" where the coin does not buy it) and the terms, the
+ * price and how many come with a purchase ("?" without terms).
  */
-export function offerCells(offer, coins) {
-  const price = known(offer.price) ? exact.format(offer.price) : "?";
+export function goodCells(good) {
+  return good.offers.map((offer) => {
+    if (!offer) return { left: "—", terms: "", sold: false };
+    const t = offer.price;
+    const terms = !t
+      ? "?"
+      : `${exact.format(t.price)}枚` + (t.amount > 1 ? `で${exact.format(t.amount)}個` : "");
+    return {
+      left: offer.left === 0 ? "買い切り" : `${offer.left}回`,
+      terms,
+      sold: offer.left === 0,
+    };
+  });
+}
+
+/** Each shop with its goods narrowed by `query` (see `filterRows`); shops left with none go. */
+export function filterShops(shops, query) {
+  return shops
+    .map((shop) => ({ ...shop, goods: filterRows(shop.goods, query) }))
+    .filter((shop) => shop.goods.length > 0);
+}
+
+/** The lines of the plan that count no item, by kind. */
+const PLAN_KINDS = {
+  credits: "クレジット",
+  report_exp: "レポート（経験値）",
+  orb_exp: "強化珠（経験値）",
+};
+
+/**
+ * A line of the plan as table cells: what is needed, what is held ("約" where
+ * a count is in thousands, "?" unknown) and how far short it falls.
+ */
+export function needCells(row) {
+  const about = row.have && "about" in row.have;
+  const have = row.have ? (row.have.exact ?? row.have.about) : null;
+  const mark = about ? "約" : "";
+  const enough = have !== null && have >= row.need;
   return {
-    left: offer.left === 0 ? "買い切り" : String(offer.left),
-    price: coins > 1 ? `${offer.coin === 0 ? "左" : "右"} ${price}` : price,
+    name: PLAN_KINDS[row.kind] ?? row.name,
+    need: exact.format(row.need),
+    have: have === null ? "?" : mark + exact.format(have),
+    short: have === null ? "?" : enough ? "足りる" : `不足 ${mark}${exact.format(row.need - have)}`,
+    enough,
   };
 }
 
-/** Each shop with its offers narrowed by `query` (see `filterRows`); shops left with none go. */
-export function filterShops(shops, query) {
-  return shops
-    .map((shop) => ({ ...shop, offers: filterRows(shop.offers, query) }))
-    .filter((shop) => shop.offers.length > 0);
+/** The columns of a target: the level, the four skills and the three equipment slots. */
+const PART_NAMES = {
+  level: "Lv",
+  skill: ["EX", "N", "P", "S"],
+  equipment: ["装備1", "装備2", "装備3"],
+};
+
+const partName = (part) =>
+  typeof part === "string"
+    ? PART_NAMES[part]
+    : Object.entries(part).map(([kind, i]) => PART_NAMES[kind][i])[0];
+
+/** The parts of the targets that could not be counted, one line per student. */
+export function unknownText(rows) {
+  const byStudent = new Map();
+  for (const row of rows) {
+    const parts = byStudent.get(row.id) ?? { name: row.name, parts: [] };
+    parts.parts.push(partName(row.part));
+    byStudent.set(row.id, parts);
+  }
+  return [...byStudent.values()].map(({ name, parts }) => `${name}: ${parts.join("・")}`);
 }

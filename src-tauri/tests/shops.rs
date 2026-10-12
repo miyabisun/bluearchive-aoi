@@ -1,10 +1,17 @@
 //! The shop screen against screenshots labeled by eye
 //! (`tests/fixtures/shops.json`, masked to what is read). Labels list the
-//! cards shown whole: from the name to the price.
+//! cards shown whole: from the name to the price, which the shops' terms
+//! (`data/shops.yaml`) must give.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
-use aoi::{List, Recognizer, shop::Offer};
+use aoi::{
+    List, Recognizer,
+    shop::{Offer, Shelf},
+};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -26,8 +33,8 @@ fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
 }
 
-/// Every offer read is a labeled one with its labeled values (a price may be
-/// unread, never wrong), and most labeled offers read in a single frame.
+/// Every offer read is a labeled one with its labeled values, and most labeled
+/// offers read in a single frame.
 #[test]
 fn every_offer_read_is_right() {
     let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
@@ -51,7 +58,6 @@ fn every_offer_read_is_right() {
                     .id,
                 coin: l.coin,
                 left: l.left,
-                price: Some(l.price),
             })
             .collect();
         labeled += labels.len();
@@ -63,12 +69,7 @@ fn every_offer_read_is_right() {
             wrong.push(format!("{}: read as {}", fixture.image, seen.shop));
         }
         for offer in &seen.offers {
-            let right = labels.iter().any(|l| {
-                l.id == offer.id
-                    && l.coin == offer.coin
-                    && l.left == offer.left
-                    && offer.price.is_none_or(|p| Some(p) == l.price)
-            });
+            let right = labels.contains(offer);
             if right {
                 read += 1;
             } else {
@@ -81,4 +82,39 @@ fn every_offer_read_is_right() {
         read * 4 >= labeled * 3,
         "{read} of {labeled} labeled offers read"
     );
+}
+
+/// The shops' terms give each labeled offer the price its card shows.
+#[test]
+fn the_terms_price_every_labeled_offer_as_its_card() {
+    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let items = recognizer.catalog(List::Items).entries();
+    let fixtures: Vec<Fixture> =
+        serde_json::from_str(&std::fs::read_to_string(fixtures_dir().join("shops.json")).unwrap())
+            .unwrap();
+    let mut wrong = Vec::new();
+    for fixture in fixtures {
+        for label in &fixture.offers {
+            let id = items.iter().find(|i| i.name == label.name).unwrap().id;
+            let shelf = Shelf {
+                read_at: String::new(),
+                offers: vec![Offer {
+                    id,
+                    coin: label.coin,
+                    left: label.left,
+                }],
+            };
+            let rows = recognizer.shop_rows(&BTreeMap::from([(fixture.shop.clone(), shelf)]));
+            let price = rows[0].goods[0].offers[usize::from(label.coin)]
+                .and_then(|o| o.price)
+                .map(|p| p.price);
+            if price != Some(label.price) {
+                wrong.push(format!(
+                    "{} {}: {price:?} for {}",
+                    fixture.shop, label.name, label.price
+                ));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
 }

@@ -1,18 +1,49 @@
 <script>
   import { onMount } from "svelte";
-  import { exportAll, follow } from "./lib/snapshot.js";
+  import { exportAll, follow, setTarget } from "./lib/snapshot.js";
   import {
     LISTS,
     filterRows,
     filterShops,
     followTab,
     formatCount,
-    offerCells,
+    needCells,
+    goodCells,
     shopStale,
     sortStudents,
     statusView,
     studentCells,
+    unknownText,
   } from "./lib/view.js";
+
+  /** The columns of a target: where each reads and changes, and its highest value. */
+  const TARGET_COLUMNS = [
+    { label: "Lv", max: 90, at: ["level"] },
+    { label: "EX", max: 5, at: ["skills", 0] },
+    { label: "N", max: 10, at: ["skills", 1] },
+    { label: "P", max: 10, at: ["skills", 2] },
+    { label: "S", max: 10, at: ["skills", 3] },
+    { label: "装備1", max: 10, at: ["equipment", 0] },
+    { label: "装備2", max: 10, at: ["equipment", 1] },
+    { label: "装備3", max: 10, at: ["equipment", 2] },
+  ];
+
+  /** A column's value in a target or in a student's training (an equipment slot's tier; "?" unread). */
+  const valueAt = (from, /** @type {(string | number)[]} */ at) => {
+    const [key, i] = at;
+    const value = i === undefined ? from[key] : from[key][i];
+    return value?.tier ?? value ?? "?";
+  };
+
+  /** Sets a target's column to `value`, kept within the column's range. */
+  function retarget(row, column, value) {
+    const [key, i] = column.at;
+    const n = Math.min(Math.max(Math.round(Number(value)) || 1, 1), column.max);
+    const target = structuredClone($state.snapshot(row.target));
+    if (i === undefined) target[key] = n;
+    else target[key][i] = n;
+    setTarget(row.id, target);
+  }
 
   /** The student table's columns after the name, each sorting by its key. */
   const STUDENT_COLUMNS = [
@@ -34,6 +65,7 @@
       "ブルーアーカイブの装備一覧を「デフォルト」の昇順で開いてスクロールすると、見えた装備の個数がここに並びます。",
     students:
       "ブルーアーカイブの生徒詳細画面（基本情報）を開いて「＞」で送ると、見えた生徒の育成状況がここに並びます。",
+    plan: "生徒タブで「育成」に印を付けた生徒の目標と、そこまでに要る素材の過不足がここに並びます。",
     shops:
       "ブルーアーカイブのショップで総力戦・大決戦・カケラ(文字)・合同火力演習・指名手配・熟達証書を開いて下まで送ると、品ごとにあと何回買えるかがここに並びます。",
   };
@@ -44,6 +76,9 @@
     equipment: [],
     students: [],
     shops: [],
+    targets: [],
+    plan: [],
+    plan_unknown: [],
     credits: /** @type {number | null} */ (null),
     /** Why what was read could not be kept or brought back. */
     keep_error: /** @type {string | null} */ (null),
@@ -66,6 +101,14 @@
   /** How many students were read, to compare with how many the game holds. */
   const studentCount = $derived((snapshot.students ?? []).length);
   const nothingRead = $derived(LISTS.every((l) => (snapshot[l.id] ?? []).length === 0));
+  /** The students marked for training, with their names and training as read. */
+  const targeted = $derived(new Set((snapshot.targets ?? []).map((t) => t.id)));
+  const targetRows = $derived(
+    (snapshot.targets ?? []).map((t) => {
+      const student = (snapshot.students ?? []).find((s) => s.id === t.id);
+      return { ...t, name: student?.name ?? "", training: student?.training };
+    }),
+  );
 
   async function save() {
     try {
@@ -130,7 +173,73 @@
       </p>
     {/if}
 
-    {#if rows.length === 0}
+    {#if view.tab === "plan"}
+      {#if targetRows.length === 0}
+        <p class="empty" data-state="empty">{EMPTY.plan}</p>
+      {:else}
+        <div class="table-scroll">
+          <table class="students targets">
+            <thead>
+              <tr>
+                <th scope="col">生徒</th>
+                {#each TARGET_COLUMNS as column (column.label)}
+                  <th scope="col">{column.label}</th>
+                {/each}
+              </tr>
+            </thead>
+            <tbody>
+              {#each targetRows as row (row.id)}
+                <tr>
+                  <td class="name">{row.name}</td>
+                  {#each TARGET_COLUMNS as column (column.label)}
+                    <td>
+                      <span class="now"
+                        >{row.training ? valueAt(row.training, column.at) : "?"}→</span
+                      ><input
+                        type="number"
+                        min="1"
+                        max={column.max}
+                        value={valueAt(row.target, column.at)}
+                        aria-label="{row.name}の{column.label}の目標"
+                        onchange={(event) => retarget(row, column, event.currentTarget.value)}
+                      />
+                    </td>
+                  {/each}
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+          {#each unknownText(snapshot.plan_unknown ?? []) as line (line)}
+            <p class="unknown">{line} は数えられません</p>
+          {/each}
+          {#if (snapshot.plan ?? []).length === 0}
+            <p class="empty" data-state="reached">目標までに要る素材はありません</p>
+          {:else}
+            <table class="plan" data-state="success">
+              <thead>
+                <tr>
+                  <th scope="col">要るもの</th>
+                  <th scope="col" class="fit">必要</th>
+                  <th scope="col" class="fit">所持</th>
+                  <th scope="col" class="fit">過不足</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each snapshot.plan as line (`${line.kind}-${line.id}`)}
+                  {@const cells = needCells(line)}
+                  <tr>
+                    <td>{cells.name}</td>
+                    <td class="fit">{cells.need}</td>
+                    <td class="fit">{cells.have}</td>
+                    <td class="fit" class:short={!cells.enough}>{cells.short}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {/if}
+        </div>
+      {/if}
+    {:else if rows.length === 0}
       <p class="empty" data-state="empty">{EMPTY[view.tab]}</p>
     {:else}
       <label class="search">
@@ -142,31 +251,38 @@
       {:else if view.tab === "shops"}
         <div class="table-scroll">
           {#each shown as shop (shop.name)}
-            <section class="shop">
-              <h2>
-                {shop.name}<span class="read-at">{shop.read_at.slice(5, 16).replace("-", "/")}</span
-                >{#if shopStale(shop)}<span class="stale">前の月の値</span>{/if}
-              </h2>
+            <!-- Closed until opened, or while a search narrows the goods. -->
+            <details class="shop" open={query.trim() !== ""}>
+              <summary>
+                <h2>
+                  {shop.name}<span class="read-at"
+                    >{shop.read_at.slice(5, 16).replace("-", "/")}</span
+                  >{#if shopStale(shop)}<span class="stale">前の月の値</span>{/if}
+                </h2>
+              </summary>
               <table data-state="success">
                 <thead>
                   <tr>
                     <th scope="col">品</th>
-                    <th scope="col" class="fit">残り</th>
-                    <th scope="col" class="fit">価格</th>
+                    {#each shop.coins as coin (coin)}
+                      <th scope="col" class="fit">{coin}</th>
+                    {/each}
                   </tr>
                 </thead>
                 <tbody>
-                  {#each shop.offers as offer (`${offer.id}-${offer.coin}`)}
-                    {@const cells = offerCells(offer, shop.coins)}
+                  {#each shop.goods as good (good.id)}
                     <tr>
-                      <td>{offer.name}</td>
-                      <td class="fit" class:sold={offer.left === 0}>{cells.left}</td>
-                      <td class="fit">{cells.price}</td>
+                      <td>{good.name}</td>
+                      {#each goodCells(good) as cell, i (i)}
+                        <td class="fit" class:sold={cell.sold}
+                          >{cell.left}<span class="terms">{cell.terms}</span></td
+                        >
+                      {/each}
                     </tr>
                   {/each}
                 </tbody>
               </table>
-            </section>
+            </details>
           {/each}
         </div>
       {:else if view.tab === "students"}
@@ -174,6 +290,7 @@
           <table data-state="success" class="students">
             <thead>
               <tr>
+                <th scope="col" class="mark">育成</th>
                 <th scope="col">生徒</th>
                 {#each STUDENT_COLUMNS as column (column.key)}
                   <th
@@ -193,7 +310,15 @@
               {#each shown as row (row.id)}
                 {@const cells = studentCells(row.training)}
                 <tr>
-                  <td>{row.name}</td>
+                  <td class="mark">
+                    <input
+                      type="checkbox"
+                      checked={targeted.has(row.id)}
+                      aria-label="{row.name}を育成対象にする"
+                      onchange={() => setTarget(row.id, targeted.has(row.id) ? null : {})}
+                    />
+                  </td>
+                  <td class="name">{row.name}</td>
                   <td class="num">{cells.level}</td>
                   <td>{cells.rarity}</td>
                   <td>{cells.weapon}</td>
@@ -437,7 +562,7 @@
     .sorted
       margin-left: 2px
       font-size: var(--fs-caption)
-    td:first-child
+    td.name
       white-space: normal
       min-width: 8em
 
@@ -448,16 +573,28 @@
   .code
     font-variant-numeric: tabular-nums
 
-  .shop + .shop
-    margin-top: var(--sp-5)
+  .shop
+    border-bottom: 1px solid var(--c-border)
+    &[open]
+      padding-bottom: var(--sp-4)
+    summary
+      padding: var(--sp-2) 0
+      cursor: pointer
+    table
+      margin-top: var(--sp-1)
 
   h2
-    display: flex
+    display: inline-flex
     align-items: baseline
     gap: var(--sp-2)
-    margin: 0 0 var(--sp-1)
+    margin: 0
     font-size: var(--fs-md)
     font-weight: 600
+
+  .terms
+    display: block
+    color: var(--c-muted)
+    font-size: var(--fs-caption)
 
   .read-at
     color: var(--c-muted)
@@ -470,6 +607,45 @@
 
   .sold
     color: var(--c-muted)
+
+  .mark
+    width: 1%
+    text-align: center
+
+  // The current value over the target's field, so eight targets fit 720px.
+  .targets
+    margin-bottom: var(--sp-4)
+    td:not(.name)
+      padding: var(--sp-1)
+    .now
+      display: block
+      color: var(--c-muted)
+      font-size: var(--fs-caption)
+      font-variant-numeric: tabular-nums
+    input
+      width: 3em
+      padding: 2px var(--sp-1)
+      border: 1px solid var(--c-border)
+      border-radius: var(--radius-sm)
+      background: var(--c-surface)
+      color: inherit
+      font: inherit
+      font-variant-numeric: tabular-nums
+      &:focus
+        border-color: var(--c-accent)
+
+  // Narrower than its numbers, the table scrolls sideways rather than squeeze the names.
+  .plan :is(th, td):first-child
+    min-width: 8em
+
+  .unknown
+    margin: 0 0 var(--sp-2)
+    color: var(--c-muted)
+    font-size: var(--fs-sm)
+
+  .short
+    color: var(--c-on-surface)
+    font-weight: 600
 
   // As narrow as their contents, leaving the names the room.
   .fit

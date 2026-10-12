@@ -1,0 +1,113 @@
+# ショップの品の価格（コインの枚数）・1 回に買える個数・回数の上限。
+# ブルアカ Wiki（https://bluearchive.wiki/wiki/Shop、2026-10-12 参照）と、2026-10-12 の
+# user の指定（神名文字）から。品揃えと回数は毎月戻る（カケラ(文字) を除く）。
+#
+# coins: 画面上部に並ぶコインを左から（1 種の店は 1 つ）。
+# goods: 上から順に、品に当てはまる最初のもの。
+#   item: 品名（SchaleDB の名前）か、種類（神名文字・戦術教育BD・技術ノート・オーパーツ）
+#   tier: 種類の等級（初級 1 … 最上級 4。オーパーツも 1〜4）
+#   students: 神名文字の生徒の区分（配布・限定・フェス限定）
+#   coin: 払うコイン（coins の名前。1 種の店は省く）
+#   amount: 1 回に買える個数（省略は 1）、limit: 回数の上限
+
+総力戦:
+  coins: [総力戦レアコイン, 総力戦コイン]
+  goods:
+    - { item: 神名文字, coin: 総力戦コイン, price: 50, amount: 5, limit: 20 }
+    - { item: 神名文字, coin: 総力戦レアコイン, price: 50, amount: 5, limit: 10 }
+    - { item: 秘伝ノート, coin: 総力戦コイン, price: 500, limit: 3 }
+    - { item: 秘伝ノート, coin: 総力戦レアコイン, price: 500, limit: 1 }
+    - { item: 戦術教育BD, tier: 1, coin: 総力戦コイン, price: 10, limit: 40 }
+    - { item: 戦術教育BD, tier: 1, coin: 総力戦レアコイン, price: 10, limit: 12 }
+    - { item: 戦術教育BD, tier: 2, coin: 総力戦コイン, price: 20, limit: 30 }
+    - { item: 戦術教育BD, tier: 2, coin: 総力戦レアコイン, price: 20, limit: 10 }
+    - { item: 戦術教育BD, tier: 3, coin: 総力戦コイン, price: 50, limit: 25 }
+    - { item: 戦術教育BD, tier: 3, coin: 総力戦レアコイン, price: 50, limit: 8 }
+    - { item: 戦術教育BD, tier: 4, coin: 総力戦コイン, price: 100, limit: 6 }
+    - { item: 戦術教育BD, tier: 4, coin: 総力戦レアコイン, price: 100, limit: 2 }
+    - { item: 技術ノート, tier: 1, coin: 総力戦コイン, price: 3, limit: 50 }
+    - { item: 技術ノート, tier: 1, coin: 総力戦レアコイン, price: 3, limit: 16 }
+    - { item: 技術ノート, tier: 2, coin: 総力戦コイン, price: 5, limit: 40 }
+    - { item: 技術ノート, tier: 2, coin: 総力戦レアコイン, price: 5, limit: 12 }
+    - { item: 技術ノート, tier: 3, coin: 総力戦コイン, price: 10, limit: 30 }
+    - { item: 技術ノート, tier: 3, coin: 総力戦レアコイン, price: 10, limit: 10 }
+    - { item: 技術ノート, tier: 4, coin: 総力戦コイン, price: 25, limit: 20 }
+    - { item: 技術ノート, tier: 4, coin: 総力戦レアコイン, price: 25, limit: 6 }
+    - { item: ブースターチケット, coin: 総力戦コイン, price: 10, limit: 5 }
+
+大決戦:
+  coins: [大決戦レアコイン, 大決戦コイン]
+  goods:
+    - { item: 神名文字, coin: 大決戦コイン, price: 50, amount: 5, limit: 20 }
+    - { item: 神名文字, coin: 大決戦レアコイン, price: 50, amount: 5, limit: 10 }
+    - { item: 秘伝ノート, coin: 大決戦コイン, price: 500, limit: 3 }
+    - { item: 秘伝ノート, coin: 大決戦レアコイン, price: 500, limit: 1 }
+    - { item: 戦術教育BD, tier: 1, coin: 大決戦コイン, price: 10, limit: 40 }
+    - { item: 戦術教育BD, tier: 1, coin: 大決戦レアコイン, price: 10, limit: 12 }
+    - { item: 戦術教育BD, tier: 2, coin: 大決戦コイン, price: 20, limit: 30 }
+    - { item: 戦術教育BD, tier: 2, coin: 大決戦レアコイン, price: 20, limit: 10 }
+    - { item: 戦術教育BD, tier: 3, coin: 大決戦コイン, price: 50, limit: 25 }
+    - { item: 戦術教育BD, tier: 3, coin: 大決戦レアコイン, price: 50, limit: 8 }
+    - { item: 戦術教育BD, tier: 4, coin: 大決戦コイン, price: 100, limit: 6 }
+    - { item: 戦術教育BD, tier: 4, coin: 大決戦レアコイン, price: 100, limit: 2 }
+    - { item: 技術ノート, tier: 1, coin: 大決戦コイン, price: 3, limit: 50 }
+    - { item: 技術ノート, tier: 1, coin: 大決戦レアコイン, price: 3, limit: 16 }
+    - { item: 技術ノート, tier: 2, coin: 大決戦コイン, price: 5, limit: 40 }
+    - { item: 技術ノート, tier: 2, coin: 大決戦レアコイン, price: 5, limit: 12 }
+    - { item: 技術ノート, tier: 3, coin: 大決戦コイン, price: 10, limit: 30 }
+    - { item: 技術ノート, tier: 3, coin: 大決戦レアコイン, price: 10, limit: 10 }
+    - { item: 技術ノート, tier: 4, coin: 大決戦コイン, price: 25, limit: 20 }
+    - { item: 技術ノート, tier: 4, coin: 大決戦レアコイン, price: 25, limit: 6 }
+
+合同火力演習:
+  coins: [合同火力演習コイン]
+  goods:
+    - { item: 神名文字, price: 50, amount: 5, limit: 10 }
+    - { item: 秘伝ノート, price: 500, limit: 2 }
+    - { item: 最上級レポート, price: 82, limit: 20 }
+    - { item: 初級テイラーストーン, price: 1, amount: 2, limit: 60 }
+    - { item: 中級テイラーストーン, price: 3, limit: 75 }
+    - { item: 上級テイラーストーン, price: 8, limit: 50 }
+    - { item: 最上級テイラーストーン, price: 16, limit: 25 }
+    - { item: オーパーツ, tier: 1, price: 2, amount: 2, limit: 20 }
+    - { item: オーパーツ, tier: 2, price: 9, amount: 2, limit: 15 }
+    - { item: オーパーツ, tier: 3, price: 12, limit: 20 }
+    - { item: オーパーツ, tier: 4, price: 25, limit: 10 }
+
+指名手配:
+  coins: [指名手配コイン]
+  goods:
+    - { item: 神名文字, price: 50, amount: 5, limit: 16 }
+    - { item: 戦術教育BD, tier: 1, price: 80, limit: 15 }
+    - { item: 戦術教育BD, tier: 2, price: 160, limit: 8 }
+    - { item: 戦術教育BD, tier: 3, price: 400, limit: 4 }
+    - { item: 戦術教育BD, tier: 4, price: 800, limit: 2 }
+    - { item: 技術ノート, tier: 1, price: 24, limit: 20 }
+    - { item: 技術ノート, tier: 2, price: 40, limit: 10 }
+    - { item: 技術ノート, tier: 3, price: 80, limit: 7 }
+    - { item: 技術ノート, tier: 4, price: 200, limit: 4 }
+    - { item: オーパーツ, tier: 1, price: 24, limit: 25 }
+    - { item: オーパーツ, tier: 2, price: 40, limit: 15 }
+    - { item: オーパーツ, tier: 3, price: 80, limit: 8 }
+    - { item: オーパーツ, tier: 4, price: 200, limit: 5 }
+
+熟達証書:
+  coins: [熟達証書]
+  goods:
+    - { item: 神名文字, students: 配布, price: 1800, amount: 5, limit: 6 }
+    - { item: 神名文字, students: 限定, price: 1800, amount: 5, limit: 2 }
+    - { item: 神名文字, students: フェス限定, price: 2400, amount: 5, limit: 2 }
+    - { item: 神名のカケラ, price: 600, amount: 5, limit: 5 }
+    - { item: 最上級レポート, price: 1500, amount: 10, limit: 4 }
+    - { item: T2装備設計図選択ボックス, price: 300, amount: 15, limit: 100 }
+    - { item: T3装備設計図選択ボックス, price: 480, amount: 20, limit: 100 }
+    - { item: T4装備設計図選択ボックス, price: 840, amount: 30, limit: 100 }
+    - { item: T5装備設計図選択ボックス, price: 1260, amount: 35, limit: 100 }
+    - { item: T6装備設計図選択ボックス, price: 1600, amount: 40, limit: 100 }
+    - { item: T7装備設計図選択ボックス, price: 2000, amount: 45, limit: 100 }
+    - { item: T8装備設計図選択ボックス, price: 2400, amount: 50, limit: 100 }
+    - { item: T9装備設計図選択ボックス, price: 2800, amount: 55, limit: 100 }
+
+カケラ(文字):
+  coins: [神名のカケラ]
+  goods: []

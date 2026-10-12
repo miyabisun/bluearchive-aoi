@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, path::Path};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{quantity::Count, shop::Shelf, student::Training};
+use crate::{plan::Target, quantity::Count, shop::Shelf, student::Training};
 
 /// When each list was last read (local time, "2026-10-12 15:30:00").
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,6 +29,8 @@ pub struct Kept {
     pub credits: Option<u64>,
     /// The shops' shelves by shop.
     pub shops: BTreeMap<String, Shelf>,
+    /// The students marked for training, by id, and their targets.
+    pub targets: BTreeMap<i64, Target>,
     pub read_at: ReadAt,
 }
 
@@ -114,10 +116,10 @@ mod tests {
                         id: 9000,
                         coin: 1,
                         left: 0,
-                        price: None,
                     }],
                 },
             )]),
+            targets: BTreeMap::from([(10059, Target::default())]),
             read_at: ReadAt {
                 items: Some("2026-10-12 15:30:00".to_owned()),
                 equipment: None,

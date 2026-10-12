@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   filterRows,
   filterShops,
-  offerCells,
+  needCells,
+  unknownText,
+  goodCells,
   shopStale,
   followTab,
   formatCount,
@@ -216,14 +218,15 @@ describe("sortStudents", () => {
 });
 
 describe("shops", () => {
-  const shop = (name, readAt, resets, offers) => ({
+  const shop = (name, readAt, resets, goods) => ({
     name,
     read_at: readAt,
     resets,
-    coins: 1,
-    offers,
+    coins: ["総力戦レアコイン", "総力戦コイン"],
+    goods,
   });
-  const offer = (id, name, left, price, coin = 0) => ({ id, name, coin, left, price });
+  const good = (id, name, offers) => ({ id, name, offers });
+  const terms = (price, amount, limit) => ({ price, amount, limit });
 
   it("tells a shop that resets read in an earlier month", () => {
     const now = new Date(2026, 10, 1, 9, 0);
@@ -232,27 +235,80 @@ describe("shops", () => {
     expect(shopStale(shop("カケラ(文字)", "2026-09-01 08:00:00", false, []), now)).toBe(false);
   });
 
-  it("writes an offer bought up, an unread price and the coin of a shop with two", () => {
-    expect(offerCells(offer(1, "秘伝ノート", 0, 500, 1), 2)).toEqual({
-      left: "買い切り",
-      price: "右 500",
-    });
-    expect(offerCells(offer(1, "初級戦術教育BD（百鬼夜行）", 40, null), 2)).toEqual({
-      left: "40",
-      price: "左 ?",
-    });
-    expect(offerCells(offer(1, "エーテルの粉", 25, 1800), 1)).toEqual({
-      left: "25",
-      price: "1,800",
-    });
+  it("writes what each coin buys: the times left, the price and how many come", () => {
+    expect(
+      goodCells(
+        good(10019, "アズサの神名文字", [
+          { left: 0, price: terms(50, 5, 10) },
+          { left: 20, price: terms(50, 5, 20) },
+        ]),
+      ),
+    ).toEqual([
+      { left: "買い切り", terms: "50枚で5個", sold: true },
+      { left: "20回", terms: "50枚で5個", sold: false },
+    ]);
+    expect(
+      goodCells(
+        good(3000, "初級戦術教育BD（百鬼夜行）", [null, { left: 40, price: terms(1800, 1, 6) }]),
+      ),
+    ).toEqual([
+      { left: "—", terms: "", sold: false },
+      { left: "40回", terms: "1,800枚", sold: false },
+    ]);
+    expect(goodCells(good(1, "?", [{ left: 3, price: null }]))).toEqual([
+      { left: "3回", terms: "?", sold: false },
+    ]);
   });
 
-  it("narrows each shop's offers by name and leaves out a shop with none", () => {
+  it("narrows each shop's goods by name and leaves out a shop with none", () => {
     const shops = [
-      shop("総力戦", "", true, [offer(1, "秘伝ノート", 0, 500), offer(2, "エーテルの粉", 3, 24)]),
-      shop("指名手配", "", true, [offer(3, "エーテルの欠片", 15, 40)]),
+      shop("総力戦", "", true, [good(1, "秘伝ノート", []), good(2, "エーテルの粉", [])]),
+      shop("指名手配", "", true, [good(3, "エーテルの欠片", [])]),
     ];
-    expect(filterShops(shops, "秘伝")).toEqual([{ ...shops[0], offers: [shops[0].offers[0]] }]);
+    expect(filterShops(shops, "秘伝")).toEqual([{ ...shops[0], goods: [shops[0].goods[0]] }]);
     expect(filterShops(shops, "")).toEqual(shops);
+  });
+});
+
+describe("plan", () => {
+  it("tells what is short against what is held", () => {
+    expect(
+      needCells({ kind: "item", name: "初級技術ノート（ゲヘナ）", need: 30, have: { exact: 12 } }),
+    ).toEqual({
+      name: "初級技術ノート（ゲヘナ）",
+      need: "30",
+      have: "12",
+      short: "不足 18",
+      enough: false,
+    });
+    expect(
+      needCells({ kind: "credits", name: "", need: 1500000, have: { exact: 244654006 } }),
+    ).toEqual({
+      name: "クレジット",
+      need: "1,500,000",
+      have: "244,654,006",
+      short: "足りる",
+      enough: true,
+    });
+    expect(
+      needCells({ kind: "report_exp", name: "", need: 60000, have: { about: 51000 } }),
+    ).toEqual({
+      name: "レポート（経験値）",
+      need: "60,000",
+      have: "約51,000",
+      short: "不足 約9,000",
+      enough: false,
+    });
+    expect(needCells({ kind: "orb_exp", name: "", need: 5, have: null }).short).toBe("?");
+  });
+
+  it("names the parts that could not be counted, student by student", () => {
+    expect(
+      unknownText([
+        { id: -1, name: "ツムギ", part: { skill: 0 } },
+        { id: -1, name: "ツムギ", part: { equipment: 2 } },
+        { id: 10, name: "アル", part: "level" },
+      ]),
+    ).toEqual(["ツムギ: EX・装備3", "アル: Lv"]);
   });
 });

@@ -17,6 +17,8 @@ pub mod items;
 pub mod keep;
 pub mod ocr;
 mod order;
+pub mod plan;
+pub mod price;
 pub mod quantity;
 pub mod screen;
 pub mod shop;
@@ -27,7 +29,10 @@ mod embedded {
     include!(concat!(env!("OUT_DIR"), "/embedded.rs"));
 }
 
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+};
 
 use image::{RgbImage, RgbaImage};
 use serde::{Deserialize, Serialize};
@@ -121,8 +126,11 @@ fn picture(read: &Read, path: &str) -> Result<RgbaImage, String> {
 
 pub struct Recognizer {
     items: Catalog,
-    /// The items again, as the shops' goods.
+    /// The items again, as the shops' goods, and what the shops ask for them.
     goods: shop::Goods,
+    prices: price::Prices,
+    /// The growth data training plans are counted with.
+    planner: plan::Planner,
     equipment: Catalog,
     digits: Digits,
     /// The sort buttons in the default order (`data/sort-default.png`).
@@ -169,6 +177,17 @@ impl Recognizer {
         Ok(Self {
             items: items::catalog(read)?,
             goods: items::goods(read)?,
+            prices: price::Prices::new(
+                serde_yaml::from_slice(&read("shops.yaml")?)
+                    .map_err(|e| format!("shops.yaml: {e}"))?,
+                json(read, "schaledb/items.json")?,
+                &json::<Vec<price::Student>>(read, "schaledb/students.json")?,
+            ),
+            planner: plan::Planner {
+                growth: json(read, "schaledb/growth.json")?,
+                growers: json(read, "schaledb/students.json")?,
+                pieces: json(read, "schaledb/equipment.json")?,
+            },
             equipment: equipment::catalog(read)?,
             digits: json(read, "digits.json")?,
             sort_template: template("sort-default.png")?,
@@ -196,37 +215,130 @@ impl Recognizer {
         })
     }
 
+    /// What the `targets` take against what is held, line by line (credits,
+    /// report exp, orb exp, then items and blueprints in id order), and the
+    /// parts that could not be counted, their students named.
+    pub fn plan_rows(
+        &self,
+        targets: &BTreeMap<i64, plan::Target>,
+        students: &[watch::StudentRow],
+        items: &[Row],
+        equipment: &[Row],
+        credits: Option<u64>,
+    ) -> (Vec<plan::NeedRow>, Vec<plan::UnknownRow>) {
+        use plan::{Held, Kind, NeedRow, held};
+        let trained = students.iter().map(|s| (s.id, s.training)).collect();
+        let needs = self.planner.needs(targets, &trained);
+        let counts = |rows: &[Row]| -> HashMap<i64, Count> {
+            rows.iter().map(|r| (r.id, r.count)).collect()
+        };
+        let (items_held, equipment_held) = (counts(items), counts(equipment));
+        let growth = &self.planner.growth;
+        let line = |kind, id, name: &str, need, have| NeedRow {
+            kind,
+            id,
+            name: name.to_owned(),
+            need,
+            have,
+        };
+        let named = |catalog: &Catalog, id: i64| {
+            catalog
+                .entries()
+                .iter()
+                .find(|e| e.id == id)
+                .map(|e| e.name.clone())
+                .unwrap_or_default()
+        };
+        let mut rows = vec![
+            line(
+                Kind::Credits,
+                0,
+                "",
+                needs.credits,
+                credits.map(Held::Exact),
+            ),
+            line(
+                Kind::ReportExp,
+                0,
+                "",
+                needs.report_exp,
+                Some(held(&items_held, &growth.reports)),
+            ),
+            line(
+                Kind::OrbExp,
+                0,
+                "",
+                needs.orb_exp,
+                Some(held(&equipment_held, &growth.orbs)),
+            ),
+        ];
+        rows.retain(|r| r.need > 0);
+        rows.extend(needs.items.iter().map(|(&id, &need)| {
+            line(
+                Kind::Item,
+                id,
+                &named(&self.items, id),
+                need,
+                Some(held(&items_held, &[(id, 1)])),
+            )
+        }));
+        rows.extend(needs.equipment.iter().map(|(&id, &need)| {
+            let have = Some(held(&equipment_held, &[(id, 1)]));
+            line(Kind::Equipment, id, &named(&self.equipment, id), need, have)
+        }));
+        let unknown = needs
+            .unknown
+            .into_iter()
+            .map(|(id, part)| plan::UnknownRow {
+                id,
+                name: students
+                    .iter()
+                    .find(|s| s.id == id)
+                    .map(|s| s.name.clone())
+                    .unwrap_or_default(),
+                part,
+            })
+            .collect();
+        (rows, unknown)
+    }
+
     /// The shelves in the menu's order, their offers' items named.
     pub fn shop_rows(&self, shelves: &BTreeMap<String, shop::Shelf>) -> Vec<shop::ShopRow> {
         let items = self.items.entries();
+        let named = |id: i64| {
+            items
+                .iter()
+                .find(|i| i.id == id)
+                .map(|i| i.name.clone())
+                .unwrap_or_default()
+        };
         shop::SHOPS
             .iter()
             .filter_map(|&name| {
                 let kept = shelves.get(name)?;
+                let coins = self.prices.coins(name);
+                let goods = shop::goods(&kept.offers, coins.len())
+                    .into_iter()
+                    .map(|(id, offers)| shop::GoodRow {
+                        id,
+                        name: named(id),
+                        offers: offers
+                            .iter()
+                            .map(|o| {
+                                o.map(|o| shop::OfferRow {
+                                    left: o.left,
+                                    price: self.prices.find(name, id, o.coin),
+                                })
+                            })
+                            .collect(),
+                    })
+                    .collect();
                 Some(shop::ShopRow {
                     name: name.to_owned(),
                     read_at: kept.read_at.clone(),
                     resets: name != shop::LASTING,
-                    coins: if shop::TWO_COINS.contains(&name) {
-                        2
-                    } else {
-                        1
-                    },
-                    offers: kept
-                        .offers
-                        .iter()
-                        .map(|o| shop::OfferRow {
-                            id: o.id,
-                            name: items
-                                .iter()
-                                .find(|i| i.id == o.id)
-                                .map(|i| i.name.clone())
-                                .unwrap_or_default(),
-                            coin: o.coin,
-                            left: o.left,
-                            price: o.price,
-                        })
-                        .collect(),
+                    coins: coins.to_vec(),
+                    goods,
                 })
             })
             .collect()
@@ -235,7 +347,7 @@ impl Recognizer {
     /// The shop screen (see `shop::Goods::read`); `None` on any other screen,
     /// and without the OCR.
     pub fn read_shop(&self, image: &RgbImage) -> Option<shop::Seen> {
-        self.goods.read(image, self.ocr.as_ref()?)
+        self.goods.read(image, self.ocr.as_ref()?, &self.prices)
     }
 
     pub fn students(&self) -> &[(i64, String)] {

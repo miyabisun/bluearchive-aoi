@@ -29,3 +29,17 @@ export async function exportAll() {
   }
   return invoke("export");
 }
+
+/**
+ * Marks the student `id` for training up to `target`, or unmarks them
+ * (`null`); the app answers with a new snapshot. Outside the app it notes the
+ * call in `window.__AOI_CALLS__`.
+ */
+export async function setTarget(id, target) {
+  if (!("__TAURI_INTERNALS__" in window)) {
+    const w = /** @type {any} */ (window);
+    (w.__AOI_CALLS__ ??= []).push({ id, target });
+    return;
+  }
+  return invoke("set_target", { id, target });
+}

@@ -2,7 +2,13 @@
 //! tool: the students' training, the counts of the item and equipment lists
 //! and the shops' offers.
 
-use crate::{Row, keep::ReadAt, shop::ShopRow, watch::StudentRow};
+use crate::{
+    Row,
+    keep::ReadAt,
+    price::Price,
+    shop::{GoodRow, OfferRow, ShopRow},
+    watch::StudentRow,
+};
 
 /// The YAML of everything read, headed by when it was written (`stamp`) and
 /// when each list was last read.
@@ -27,7 +33,7 @@ pub fn yaml(
     out += "# skills は EX・ノーマル・パッシブ・サブ、ability は HP・攻撃力・治癒力の能力解放。\n";
     out += "# count の K は千単位（51K は 50,500〜51,499）。\n";
     out += "# id: null の生徒は SchaleDB に未登録（名前だけで照合）。\n";
-    out += "# shops の left はあと何回買えるか、coin はショップ上部のコインの左から 0・1（1 種の店は 0）。\n";
+    out += "# shops の left はあと何回買えるか。price・amount・limit は 1 回の価格・個数と回数の上限（ショップの決まり、無ければ null）。\n";
     out += "# カケラ(文字) 以外のショップは月が替わると戻る（read_at が前の月なら前の月の値）。\n";
     out += "credits: ";
     out += &credits.map_or("null".to_owned(), |c| c.to_string());
@@ -66,16 +72,31 @@ pub fn yaml(
     out += &list("items", items, counted);
     out += &list("equipment", equipment, counted);
     out += &list("shops", shops, |shop| {
-        let offers = list("offers", &shop.offers, |o| {
+        // Each good's offers, one per coin, the coin named.
+        let offers: Vec<(&GoodRow, &str, OfferRow)> = shop
+            .goods
+            .iter()
+            .flat_map(|g| {
+                g.offers.iter().enumerate().filter_map(move |(coin, o)| {
+                    let name = shop.coins.get(coin).map_or("", String::as_str);
+                    o.map(|o| (g, name, o))
+                })
+            })
+            .collect();
+        let offers = list("offers", &offers, |(good, coin, o)| {
+            let terms = |f: fn(&Price) -> u32| {
+                o.price
+                    .as_ref()
+                    .map_or("null".to_owned(), |p| f(p).to_string())
+            };
             vec![
-                format!("id: {}", o.id),
-                format!("name: {}", quoted(&o.name)),
-                format!("coin: {}", o.coin),
+                format!("id: {}", good.id),
+                format!("name: {}", quoted(&good.name)),
+                format!("coin: {}", quoted(coin)),
                 format!("left: {}", o.left),
-                format!(
-                    "price: {}",
-                    o.price.map_or("null".to_owned(), |p| p.to_string())
-                ),
+                format!("price: {}", terms(|p| p.price)),
+                format!("amount: {}", terms(|p| p.amount)),
+                format!("limit: {}", terms(|p| p.limit)),
             ]
         });
         vec![
@@ -131,8 +152,9 @@ mod tests {
     use super::*;
     use crate::{
         keep::ReadAt,
+        price::Price,
         quantity::Count,
-        shop::{OfferRow, ShopRow},
+        shop::{GoodRow, OfferRow, ShopRow},
         student::{Gear, Training, Weapon},
     };
 
@@ -300,27 +322,30 @@ shops: []
 
     #[test]
     fn writes_each_shop_with_its_offers() {
+        let terms = Price {
+            price: 10,
+            amount: 1,
+            limit: 40,
+        };
         let shops = [ShopRow {
             name: "総力戦".to_owned(),
             read_at: "2026-10-12 22:00:00".to_owned(),
             resets: true,
-            coins: 2,
-            offers: vec![
-                OfferRow {
-                    id: 9000,
-                    name: "秘伝ノート".to_owned(),
-                    coin: 1,
-                    left: 0,
-                    price: Some(500),
-                },
-                OfferRow {
-                    id: 3000,
-                    name: "初級戦術教育BD（百鬼夜行）".to_owned(),
-                    coin: 0,
-                    left: 40,
-                    price: None,
-                },
-            ],
+            coins: vec!["総力戦レアコイン".to_owned(), "総力戦コイン".to_owned()],
+            goods: vec![GoodRow {
+                id: 3000,
+                name: "初級戦術教育BD（百鬼夜行）".to_owned(),
+                offers: vec![
+                    Some(OfferRow {
+                        left: 12,
+                        price: None,
+                    }),
+                    Some(OfferRow {
+                        left: 40,
+                        price: Some(terms),
+                    }),
+                ],
+            }],
         }];
         let text = yaml("", &ReadAt::default(), None, &[], &[], &[], &shops);
         let tail: String = text
@@ -334,16 +359,20 @@ shops: []
   - name: "総力戦"
     read_at: "2026-10-12 22:00:00"
     offers:
-      - id: 9000
-        name: "秘伝ノート"
-        coin: 1
-        left: 0
-        price: 500
       - id: 3000
         name: "初級戦術教育BD（百鬼夜行）"
-        coin: 0
-        left: 40
+        coin: "総力戦レアコイン"
+        left: 12
         price: null
+        amount: null
+        limit: null
+      - id: 3000
+        name: "初級戦術教育BD（百鬼夜行）"
+        coin: "総力戦コイン"
+        left: 40
+        price: 10
+        amount: 1
+        limit: 40
 "#
         );
     }

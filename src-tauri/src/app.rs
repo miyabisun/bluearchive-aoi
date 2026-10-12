@@ -1,6 +1,7 @@
 //! The window: shows what the watcher sees and the tally, and keeps it.
 
 use std::{
+    collections::BTreeMap,
     path::PathBuf,
     sync::{Arc, Mutex, PoisonError},
 };
@@ -11,6 +12,7 @@ use tauri::{Emitter, Manager};
 use crate::{
     List, Recognizer, Row, export,
     keep::{self, Kept, ReadAt, now},
+    plan::{NeedRow, Target, UnknownRow},
     shop::ShopRow,
     tally::Tally,
     watch::{self, Status, StudentRow, Update},
@@ -25,13 +27,26 @@ pub struct Snapshot {
     students: Vec<StudentRow>,
     credits: Option<u64>,
     shops: Vec<ShopRow>,
+    /// The students marked for training and their targets.
+    targets: Vec<TargetRow>,
+    /// What the targets take against what is held, and what could not be counted.
+    plan: Vec<NeedRow>,
+    plan_unknown: Vec<UnknownRow>,
     read_at: ReadAt,
     /// Why what was read could not be kept or brought back, while it lasts.
     keep_error: Option<String>,
 }
 
+/// A student marked for training, with the target.
+#[derive(Debug, Clone, Serialize)]
+struct TargetRow {
+    id: i64,
+    target: Target,
+}
+
 /// Where what is read is kept: `state.json` in the app's folder, brought back
 /// on the next run, and `Documents\Aoi\aoi.yaml`, the latest of it to read.
+#[derive(Clone)]
 struct Places {
     state: PathBuf,
     latest: PathBuf,
@@ -43,16 +58,40 @@ impl Snapshot {
         let rows = |list, counts: &std::collections::BTreeMap<i64, crate::quantity::Count>| {
             recognizer.rows(list, &Tally::seeded(counts.clone().into_iter().collect()))
         };
-        Self {
+        let mut snapshot = Self {
             status: Status::NoGame,
             items: rows(List::Items, &kept.items),
             equipment: rows(List::Equipment, &kept.equipment),
             students: watch::student_rows(recognizer, &kept.students),
             credits: kept.credits,
             shops: recognizer.shop_rows(&kept.shops),
+            targets: kept
+                .targets
+                .iter()
+                .map(|(&id, &target)| TargetRow { id, target })
+                .collect(),
+            plan: Vec::new(),
+            plan_unknown: Vec::new(),
             read_at: kept.read_at.clone(),
             keep_error,
-        }
+        };
+        snapshot.replan(recognizer);
+        snapshot
+    }
+
+    fn targets(&self) -> BTreeMap<i64, Target> {
+        self.targets.iter().map(|t| (t.id, t.target)).collect()
+    }
+
+    /// Counts the plan again from the targets and what was read.
+    fn replan(&mut self, recognizer: &Recognizer) {
+        (self.plan, self.plan_unknown) = recognizer.plan_rows(
+            &self.targets(),
+            &self.students,
+            &self.items,
+            &self.equipment,
+            self.credits,
+        );
     }
 
     /// What is kept of the window.
@@ -68,6 +107,7 @@ impl Snapshot {
                 .iter()
                 .map(|s| (s.name.clone(), s.shelf()))
                 .collect(),
+            targets: self.targets(),
             read_at: self.read_at.clone(),
         }
     }
@@ -106,6 +146,38 @@ fn snapshot(latest: tauri::State<'_, Latest>) -> Snapshot {
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .clone()
+}
+
+/// Marks the student `id` for training up to `target`, or unmarks them
+/// (`None`); the plan follows and is kept.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Tauri hands command arguments over by value.
+fn set_target(
+    id: i64,
+    target: Option<Target>,
+    app: tauri::AppHandle,
+    latest: tauri::State<'_, Latest>,
+    recognizer: tauri::State<'_, Arc<Recognizer>>,
+    places: tauri::State<'_, Places>,
+) -> Result<(), String> {
+    let mut snapshot = latest.0.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut targets = snapshot.targets();
+    match target {
+        Some(target) => targets.insert(id, target),
+        None => targets.remove(&id),
+    };
+    snapshot.targets = targets
+        .into_iter()
+        .map(|(id, target)| TargetRow { id, target })
+        .collect();
+    snapshot.replan(&recognizer);
+    let kept = keep_in(&places, &snapshot);
+    snapshot.keep_error = kept
+        .as_ref()
+        .err()
+        .map(|e| format!("読み取り結果を保存できませんでした: {e}"));
+    let _ = app.emit(EVENT, &*snapshot);
+    kept
 }
 
 /// Writes everything read to `<Documents>\Aoi\aoi-<date>-<time>.yaml`; the path
@@ -151,6 +223,9 @@ pub fn run(context: tauri::Context) {
                 &kept,
                 trouble,
             ))));
+            app.manage(recognizer.clone());
+            app.manage(places.clone());
+            let planner = recognizer.clone();
             let handle = app.handle().clone();
             watch::start(recognizer.clone(), kept, move |status, update| {
                 let latest = handle.state::<Latest>();
@@ -178,6 +253,7 @@ pub fn run(context: tauri::Context) {
                         // Each shop carries when it was read.
                         Update::Shops(rows) => snapshot.shops = rows,
                     }
+                    snapshot.replan(&planner);
                     snapshot.keep_error = keep_in(&places, &snapshot)
                         .err()
                         .map(|e| format!("読み取り結果を保存できませんでした: {e}"));
@@ -186,7 +262,7 @@ pub fn run(context: tauri::Context) {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![snapshot, export])
+        .invoke_handler(tauri::generate_handler![snapshot, export, set_target])
         .run(context)
         .expect("bluearchive-aoi failed to start");
 }
