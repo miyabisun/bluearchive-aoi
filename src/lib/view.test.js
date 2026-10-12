@@ -29,6 +29,16 @@ describe("filterRows", () => {
     expect(filterRows(rows, "nebra").map((r) => r.id)).toEqual([30]);
   });
 
+  it("matches katakana typed in hiragana", () => {
+    const students = [
+      { id: 1, name: "アカネ（バニーガール）" },
+      { id: 2, name: "ホシノ" },
+    ];
+    expect(filterRows(students, "あかね").map((r) => r.id)).toEqual([1]);
+    expect(filterRows(students, "ばにー").map((r) => r.id)).toEqual([1]);
+    expect(filterRows(rows, "ぎじゅつ")).toEqual([]);
+  });
+
   it("needs every word of the query", () => {
     expect(filterRows(rows, "BD ゲヘナ").map((r) => r.id)).toEqual([10]);
     expect(filterRows(rows, "BD ミレニアム")).toEqual([]);

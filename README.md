@@ -36,7 +36,7 @@ It is a single exe with nothing to install; run it from anywhere.
 2. In the game, open the item list (アイテム) or the equipment list (装備) and sort it by
    **デフォルト** with the ascending arrow (≡↑), the game's default.
 3. Scroll the list. Entries appear in Aoi in the game's order with their counts, under
-   the tab of their list; type in **名前で検索** to find one. Equipment names carry their
+   the tab of their list; type in **名前で検索** to find one (hiragana finds the katakana names). Equipment names carry their
    tier (T1 to T10), since a blueprint's name alone does not tell it.
 
 For students, open a student's screen (生徒 → a student, the 基本情報 tab) and step

@@ -1,5 +1,12 @@
-/** Folds full-width forms and case so a query matches however it is typed. */
-const fold = (text) => text.normalize("NFKC").toLowerCase();
+/**
+ * Folds full-width forms, case and hiragana (into katakana) so a query matches
+ * however it is typed: the IME gives hiragana, the names are in katakana.
+ */
+const fold = (text) =>
+  text
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 
 /** The rows whose name holds every word of `query`. */
 export function filterRows(rows, query) {
