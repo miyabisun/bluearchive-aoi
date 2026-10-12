@@ -29,5 +29,6 @@
 {"image": "students/tsurugi.png", "role": "tune", "id": 10013, "level": 90, "rarity": 5, "bond": 26, "skills": [5, 10, 10, 10], "weapon": {"level": 60, "stars": 4}, "equipment": [[10, 70], [10, 70], [10, 70]], "gear": 2, "ability": [0, 25, 0]},
 {"image": "students/kaho.png", "role": "tune", "id": 10065, "level": 70, "rarity": 3, "bond": 20, "skills": [1, 1, 1, 1], "weapon": null, "equipment": [[1, 1], [1, 1], [1, 1]], "gear": 2, "ability": [0, 0, 0]},
 {"image": "students/mika.png", "role": "eval", "id": 10059, "level": 90, "rarity": 5, "bond": 43, "skills": [5, 10, 10, 10], "weapon": {"level": 50, "stars": 3}, "equipment": [[10, 70], [10, 70], [10, 70]], "gear": 0, "ability": [25, 25, 0]},
-{"image": "students/tsumugi.png", "role": "eval", "id": -1, "level": 90, "rarity": 5, "bond": 12, "skills": [5, 9, 9, 10], "weapon": {"level": 40, "stars": 2}, "equipment": [[10, 70], [10, 70], [10, 70]], "gear": 0, "ability": [25, 0, 25]}
+{"image": "students/tsumugi.png", "role": "eval", "id": -1, "level": 90, "rarity": 5, "bond": 12, "skills": [5, 9, 9, 10], "weapon": {"level": 40, "stars": 2}, "equipment": [[10, 70], [10, 70], [10, 70]], "gear": 0, "ability": [25, 0, 25]},
+{"image": "students/karin.png", "role": "tune", "id": 20001, "level": 90, "rarity": 5, "bond": 24, "skills": [2, 5, 3, 3], "weapon": {"level": 40, "stars": 2}, "equipment": [[10, 70], [10, 70], [10, 70]], "gear": 2, "ability": [0, 0, 0]}
 ]
