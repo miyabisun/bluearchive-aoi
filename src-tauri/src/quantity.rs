@@ -186,7 +186,7 @@ pub fn glyphs(image: &RgbImage, card: &Card) -> Option<Vec<Vec<f32>>> {
 }
 
 /// A count as the list shows it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Count {
     /// Below 10,000 the exact number ("x1383").

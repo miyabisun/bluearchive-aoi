@@ -306,3 +306,15 @@ test("counts the students read on their tab", async ({ page }) => {
   await expect(tab).toHaveText("生徒 42");
   await expect(page.getByRole("tab", { name: "生徒 42" })).toHaveAttribute("aria-selected", "true");
 });
+
+test("tells why what was read could not be kept", async ({ page }) => {
+  await open(page, {
+    status: reading("items"),
+    items,
+    equipment,
+    keep_error: "読み取り結果を保存できませんでした: アクセスが拒否されました。",
+  });
+  await expect(page.getByRole("alert")).toHaveText(
+    "読み取り結果を保存できませんでした: アクセスが拒否されました。",
+  );
+});

@@ -18,7 +18,7 @@ use glyph::{Fonts, Ink, Rect, Style};
 
 /// A student's training as the 基本情報 tab shows it; `None` where a field
 /// could not be read.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Training {
     pub level: Option<u8>,
     /// Rarity, 1 to 5 stars.
@@ -29,7 +29,11 @@ pub struct Training {
     /// The unique weapon; `Some(None)` while it is locked (under 5 stars).
     /// Left out of the window's data when unknown, so it stays apart from
     /// locked (`null`).
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
     pub weapon: Option<Option<Weapon>>,
     /// The three equipment slots.
     pub equipment: [Option<Gear>; 3],
@@ -39,13 +43,21 @@ pub struct Training {
     pub ability: [Option<u8>; 3],
 }
 
+/// A field that is there, `null` or not: `Some` of what it holds (a missing
+/// field is `None` by its default).
+fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
+    d: D,
+) -> Result<Option<T>, D::Error> {
+    T::deserialize(d).map(Some)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Weapon {
     pub level: u8,
     pub stars: u8,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Gear {
     pub tier: u8,
     pub level: u8,

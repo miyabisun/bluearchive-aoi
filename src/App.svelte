@@ -38,6 +38,8 @@
     items: [],
     equipment: [],
     students: [],
+    /** Why what was read could not be kept or brought back. */
+    keep_error: /** @type {string | null} */ (null),
   });
   let view = $state({ tab: "items", lastRead: null });
   let query = $state("");
@@ -104,6 +106,9 @@
   <div id="list" role="tabpanel" aria-labelledby="tab-{view.tab}">
     {#if snapshot.status.state === "failed"}
       <p class="error" role="alert">{snapshot.status.message}</p>
+    {/if}
+    {#if snapshot.keep_error}
+      <p class="error" role="alert">{snapshot.keep_error}</p>
     {/if}
     {#if exported?.error}
       <p class="error" role="alert">書き出せませんでした: {exported.error}</p>

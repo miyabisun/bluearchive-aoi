@@ -2,7 +2,7 @@
 //! list from the newest frame, dropping frames the reader could not keep up with.
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::{
         Arc, Condvar, Mutex, PoisonError,
         atomic::{AtomicU32, Ordering},
@@ -26,6 +26,7 @@ use windows_capture::{
 
 use crate::{
     Frame as Shown, List, Recognizer, Row,
+    keep::Kept,
     student::{Training, roster::Roster},
     tally::Tally,
 };
@@ -344,10 +345,9 @@ fn capture(
     Capture::start_free_threaded(settings).map_err(|err| err.to_string())
 }
 
-/// The students seen, in id order, with their names.
-fn student_rows(recognizer: &Recognizer, roster: &Roster) -> Vec<StudentRow> {
-    roster
-        .students()
+/// The students `known`, in id order, with their names.
+pub fn student_rows(recognizer: &Recognizer, known: &BTreeMap<i64, Training>) -> Vec<StudentRow> {
+    known
         .iter()
         .map(|(&id, training)| StudentRow {
             id,
@@ -362,10 +362,11 @@ fn student_rows(recognizer: &Recognizer, roster: &Roster) -> Vec<StudentRow> {
         .collect()
 }
 
-/// Start watching; `report` hears every change of status, and every change of
-/// a tally with the rows to show.
+/// Start watching from what was `kept`; `report` hears every change of status,
+/// and every change of a tally with the rows to show.
 pub fn start(
     recognizer: Arc<Recognizer>,
+    kept: Kept,
     report: impl Fn(&Status, Option<Update>) + Send + Sync + 'static,
 ) {
     let board = Arc::new(Board {
@@ -379,8 +380,14 @@ pub fn start(
     {
         let (board, latest, frames) = (board.clone(), latest.clone(), frames.clone());
         thread::spawn(move || {
-            let mut tallies: HashMap<List, Tally> = HashMap::new();
-            let mut roster = Roster::default();
+            let mut tallies = HashMap::from([
+                (List::Items, Tally::seeded(kept.items.into_iter().collect())),
+                (
+                    List::Equipment,
+                    Tally::seeded(kept.equipment.into_iter().collect()),
+                ),
+            ]);
+            let mut roster = Roster::seeded(kept.students);
             loop {
                 let read = recognizer.read_frame(&latest.take());
                 frames.fetch_add(1, Ordering::Relaxed);
@@ -399,7 +406,8 @@ pub fn start(
                         }
                     }
                     Some(Shown::Student(Some(id), training)) if roster.observe(id, training) => {
-                        board.changed(Update::Students(student_rows(&recognizer, &roster)));
+                        let rows = student_rows(&recognizer, roster.students());
+                        board.changed(Update::Students(rows));
                     }
                     _ => {}
                 }

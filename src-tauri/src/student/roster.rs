@@ -34,6 +34,14 @@ impl Training {
 }
 
 impl Roster {
+    /// A roster starting from the students kept from before.
+    pub fn seeded(students: BTreeMap<i64, Training>) -> Self {
+        Self {
+            students,
+            streak: None,
+        }
+    }
+
     /// Take one frame's reading of student `id`; returns whether what is known
     /// of the students changed.
     pub fn observe(&mut self, id: i64, training: Training) -> bool {

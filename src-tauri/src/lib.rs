@@ -13,6 +13,7 @@ pub mod export;
 pub mod grid;
 pub mod icon;
 pub mod items;
+pub mod keep;
 pub mod ocr;
 mod order;
 pub mod quantity;

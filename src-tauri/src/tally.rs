@@ -19,6 +19,15 @@ pub struct Tally {
 }
 
 impl Tally {
+    /// A tally starting from counts kept from before; each stays until its
+    /// item is read again.
+    pub fn seeded(counts: HashMap<i64, Count>) -> Self {
+        Self {
+            counts,
+            streaks: HashMap::new(),
+        }
+    }
+
     /// Take one frame's cells; returns whether a count changed.
     pub fn observe(&mut self, cells: &[Cell]) -> bool {
         let mut changed = false;
@@ -48,6 +57,8 @@ impl Tally {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::{CONFIRM, Count, Tally};
     use crate::Cell;
 
@@ -61,6 +72,16 @@ mod tests {
 
     fn frames(tally: &mut Tally, cells: &[Cell], n: u8) -> Vec<bool> {
         (0..n).map(|_| tally.observe(cells)).collect()
+    }
+
+    #[test]
+    fn counts_kept_from_before_stay_until_read_again() {
+        let kept = HashMap::from([(110, Count::Exact(1875)), (120, Count::Exact(3))]);
+        let mut tally = Tally::seeded(kept);
+        assert_eq!(tally.counts().get(&120), Some(&Count::Exact(3)));
+        frames(&mut tally, &[cell(110, 1900)], CONFIRM);
+        assert_eq!(tally.counts().get(&110), Some(&Count::Exact(1900)));
+        assert_eq!(tally.counts().get(&120), Some(&Count::Exact(3)));
     }
 
     #[test]

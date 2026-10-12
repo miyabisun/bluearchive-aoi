@@ -5,8 +5,8 @@ trained. Keep it open next to the game and scroll through the item list or the
 equipment list, or step through your students' screens. Aoi reads what the game's
 window shows, up to 30 times a second, and lists what it has seen by name.
 
-It only looks: it sends no input to the game, and saves nothing unless you export what
-it read. The lists last until you close Aoi.
+It only looks: it sends no input to the game. What it reads is kept: Aoi starts from it
+the next time, and writes the latest of it to `Documents\Aoi\aoi.yaml`.
 
 ## Requirements
 
@@ -97,11 +97,14 @@ Other windows may cover the game; Aoi reads the game window itself, not the scre
   later keeps its known value when a frame cannot read it. Students released after the
   bundled student data are not listed.
 
-### Exporting
+### What is kept
 
-**書き出す**, at the right of the tabs, writes everything read so far (students, items and
-equipment) to `Documents\Aoi\aoi-<date>-<time>.yaml` and shows the file's path. Hand the
-file to an agent or a tool to check what Aoi read or to plan with it:
+Whenever something read changes, Aoi writes everything read so far (students, items and
+equipment) to `Documents\Aoi\aoi.yaml`, headed by when each list was last read, and keeps
+it for its next run: a list read again replaces what it showed, entry by entry. Hand the
+file to an agent or a tool to check what Aoi read or to plan with it. **書き出す**, at the
+right of the tabs, writes the same as `Documents\Aoi\aoi-<date>-<time>.yaml`, to keep how
+things stood at that moment:
 
 <!-- prettier-ignore -->
 ```yaml
