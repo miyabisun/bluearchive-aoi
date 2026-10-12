@@ -4,12 +4,13 @@ import { listen } from "@tauri-apps/api/event";
 /**
  * Calls `onChange` with the watcher's snapshot ({ status, items, equipment, students }) now and on
  * every change. Outside the app (the browser tests) it shows
- * `window.__AOI_DEMO__` instead.
+ * `window.__AOI_DEMO__` instead, and `window.__AOI_PUSH__(snapshot)` sends a later one.
  */
 export async function follow(onChange) {
   if (!("__TAURI_INTERNALS__" in window)) {
-    const demo = /** @type {any} */ (window).__AOI_DEMO__;
-    onChange(demo ?? { status: { state: "no_game" }, items: [], equipment: [] });
+    const w = /** @type {any} */ (window);
+    w.__AOI_PUSH__ = onChange;
+    onChange(w.__AOI_DEMO__ ?? { status: { state: "no_game" }, items: [], equipment: [] });
     return;
   }
   await listen("snapshot", (event) => onChange(event.payload));

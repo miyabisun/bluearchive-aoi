@@ -1,5 +1,6 @@
 <script>
   import { onMount } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import { exportAll, follow, setTarget } from "./lib/snapshot.js";
   import {
     LISTS,
@@ -89,6 +90,11 @@
   let sortBy = $state("level");
   /** The last export: `{ path }` or `{ error }`. */
   let exported = $state(null);
+  /**
+   * The shops opened by hand, by name. Kept here, not in the page: every frame
+   * read brings a new snapshot, which would close them again.
+   */
+  const opened = new SvelteSet();
 
   const status = $derived(statusView(snapshot.status));
   const rows = $derived(snapshot[view.tab] ?? []);
@@ -251,8 +257,16 @@
       {:else if view.tab === "shops"}
         <div class="table-scroll">
           {#each shown as shop (shop.name)}
-            <!-- Closed until opened, or while a search narrows the goods. -->
-            <details class="shop" open={query.trim() !== ""}>
+            <!-- Closed until opened, and open while a search narrows the goods. -->
+            <details
+              class="shop"
+              open={query.trim() !== "" || opened.has(shop.name)}
+              ontoggle={(event) => {
+                if (query.trim() !== "") return;
+                if (event.currentTarget.open) opened.add(shop.name);
+                else opened.delete(shop.name);
+              }}
+            >
               <summary>
                 <h2>
                   {shop.name}<span class="read-at"

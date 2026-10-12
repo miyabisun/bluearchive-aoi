@@ -391,6 +391,24 @@ test("shows each shop's goods, shop by shop, when the game shows a shop", async 
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
+test("a shop opened stays open while the game is read", async ({ page }) => {
+  const snapshot = { status: reading("shops"), items, equipment, shops };
+  await open(page, snapshot);
+  await page.locator("summary").first().click();
+  await expect(page.locator("details").first()).toHaveAttribute("open", "");
+  // Every frame read sends a new snapshot; what the user opened stays open.
+  await page.evaluate(
+    (s) => window.__AOI_PUSH__({ ...s, status: { ...s.status, fps: 9 } }),
+    snapshot,
+  );
+  await page.evaluate(
+    (s) => window.__AOI_PUSH__({ ...s, status: { ...s.status, fps: 8 } }),
+    snapshot,
+  );
+  await expect(page.locator("details").first()).toHaveAttribute("open", "");
+  await expect(page.locator("details").first().locator("tbody tr").first()).toBeVisible();
+});
+
 test("guides to the shop before any is read", async ({ page }) => {
   await open(page, { status: { state: "other_screen" }, items, equipment, shops: [] });
   await page.getByRole("tab", { name: "ショップ" }).click();
@@ -439,6 +457,32 @@ test("shows the targets and what they take against what is held", async ({ page 
   await page.keyboard.press("ArrowDown");
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([
     { id: 20019, target: { ...target, skills: [4, 10, 10, 10] } },
+  ]);
+});
+
+test("a target being typed is kept while the game is read", async ({ page }) => {
+  const snapshot = {
+    status: reading("items"),
+    items,
+    equipment,
+    students,
+    targets: [{ id: 20019, target }],
+    plan: [],
+    plan_unknown: [],
+  };
+  await open(page, snapshot);
+  await page.getByRole("tab", { name: "育成" }).click();
+  const level = page.getByLabel("アカネ（バニーガール）のLvの目標");
+  await level.fill("8");
+  await page.evaluate(
+    (s) => window.__AOI_PUSH__({ ...s, status: { ...s.status, fps: 9 } }),
+    snapshot,
+  );
+  await expect(level).toHaveValue("8");
+  await level.press("Enter");
+  await level.blur();
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([
+    { id: 20019, target: { ...target, level: 8 } },
   ]);
 });
 
