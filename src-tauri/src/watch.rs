@@ -24,7 +24,11 @@ use windows_capture::{
     window::Window,
 };
 
-use crate::{List, Recognizer, Row, tally::Tally};
+use crate::{
+    Frame as Shown, List, Recognizer, Row,
+    student::{Training, roster::Roster},
+    tally::Tally,
+};
 
 const GAME: &str = "BlueArchive.exe";
 /// Frames are taken at most this often (30 a second).
@@ -42,9 +46,37 @@ pub enum Status {
     OtherScreen,
     /// `list` is being read, `fps` frames a second; `dropped` frames arrived
     /// while the reader was busy and were replaced by newer ones.
-    Reading { list: List, fps: f32, dropped: u32 },
+    Reading {
+        list: Screen,
+        fps: f32,
+        dropped: u32,
+    },
     /// The window cannot be captured.
     Failed { message: String },
+}
+
+/// What can be read: a list, or the student screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Screen {
+    Items,
+    Equipment,
+    Students,
+}
+
+/// A student seen, for the window.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct StudentRow {
+    pub id: i64,
+    pub name: String,
+    pub training: Training,
+}
+
+/// What changed in a tally.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Update {
+    List(List, Vec<Row>),
+    Students(Vec<StudentRow>),
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -59,8 +91,8 @@ enum Game {
 #[derive(Debug, Clone, PartialEq, Default)]
 struct Seen {
     game: Game,
-    /// The list the last frame read showed in its default order.
-    on_list: Option<List>,
+    /// What the last frame read showed.
+    on_list: Option<Screen>,
     fps: f32,
     dropped: u32,
 }
@@ -82,7 +114,7 @@ fn status(seen: &Seen) -> Status {
     }
 }
 
-type Report = dyn Fn(&Status, Option<(List, Vec<Row>)>) + Send + Sync;
+type Report = dyn Fn(&Status, Option<Update>) + Send + Sync;
 
 /// Keeps what is seen and reports the status whenever it changes.
 struct Board {
@@ -101,9 +133,9 @@ impl Board {
         }
     }
 
-    fn rows(&self, list: List, rows: Vec<Row>) {
+    fn changed(&self, update: Update) {
         let guard = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
-        (self.report)(&status(&guard.0), Some((list, rows)));
+        (self.report)(&status(&guard.0), Some(update));
     }
 }
 
@@ -280,11 +312,29 @@ fn capture(
     Capture::start_free_threaded(settings).map_err(|err| err.to_string())
 }
 
+/// The students seen, in id order, with their names.
+fn student_rows(recognizer: &Recognizer, roster: &Roster) -> Vec<StudentRow> {
+    roster
+        .students()
+        .iter()
+        .map(|(&id, training)| StudentRow {
+            id,
+            name: recognizer
+                .students()
+                .iter()
+                .find(|(s, _)| *s == id)
+                .map(|(_, name)| name.clone())
+                .unwrap_or_default(),
+            training: *training,
+        })
+        .collect()
+}
+
 /// Start watching; `report` hears every change of status, and every change of
-/// the tally with the rows to show.
+/// a tally with the rows to show.
 pub fn start(
     recognizer: Arc<Recognizer>,
-    report: impl Fn(&Status, Option<(List, Vec<Row>)>) + Send + Sync + 'static,
+    report: impl Fn(&Status, Option<Update>) + Send + Sync + 'static,
 ) {
     let board = Arc::new(Board {
         seen: Mutex::new((Seen::default(), None)),
@@ -298,15 +348,28 @@ pub fn start(
         let (board, latest, frames) = (board.clone(), latest.clone(), frames.clone());
         thread::spawn(move || {
             let mut tallies: HashMap<List, Tally> = HashMap::new();
+            let mut roster = Roster::default();
             loop {
-                let read = recognizer.read_list(&latest.take());
+                let read = recognizer.read_frame(&latest.take());
                 frames.fetch_add(1, Ordering::Relaxed);
-                board.update(|seen| seen.on_list = read.as_ref().map(|(list, _)| *list));
-                if let Some((list, cells)) = read {
-                    let tally = tallies.entry(list).or_default();
-                    if tally.observe(&cells) {
-                        board.rows(list, recognizer.rows(list, tally));
+                board.update(|seen| {
+                    seen.on_list = read.as_ref().map(|frame| match frame {
+                        Shown::List(List::Items, _) => Screen::Items,
+                        Shown::List(List::Equipment, _) => Screen::Equipment,
+                        Shown::Student(..) => Screen::Students,
+                    });
+                });
+                match read {
+                    Some(Shown::List(list, cells)) => {
+                        let tally = tallies.entry(list).or_default();
+                        if tally.observe(&cells) {
+                            board.changed(Update::List(list, recognizer.rows(list, tally)));
+                        }
                     }
+                    Some(Shown::Student(Some(id), training)) if roster.observe(id, training) => {
+                        board.changed(Update::Students(student_rows(&recognizer, &roster)));
+                    }
+                    _ => {}
                 }
             }
         });
@@ -352,7 +415,7 @@ pub fn start(
 
 #[cfg(test)]
 mod tests {
-    use super::{Game, List, Seen, Status, is_game, status};
+    use super::{Game, Screen, Seen, Status, is_game, status};
 
     #[test]
     fn the_game_is_known_by_its_exe_name() {
@@ -370,7 +433,7 @@ mod tests {
             fps: 28.5,
             dropped: 4,
         };
-        let items = Some(List::Items);
+        let items = Some(Screen::Items);
         assert_eq!(status(&seen(Game::Absent, items)), Status::NoGame);
         assert_eq!(
             status(&seen(Game::Failed("denied".into()), None)),
@@ -380,9 +443,9 @@ mod tests {
         );
         assert_eq!(status(&seen(Game::Captured, None)), Status::OtherScreen);
         assert_eq!(
-            status(&seen(Game::Captured, Some(List::Equipment))),
+            status(&seen(Game::Captured, Some(Screen::Students))),
             Status::Reading {
-                list: List::Equipment,
+                list: Screen::Students,
                 fps: 28.5,
                 dropped: 4
             }

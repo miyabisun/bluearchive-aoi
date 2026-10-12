@@ -108,6 +108,80 @@ test("the tabs and the search field take focus from the keyboard", async ({ page
   await page.keyboard.press("Enter");
   await expect(page.getByRole("tab", { name: "装備" })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("tab", { name: "生徒" })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByLabel("名前で検索")).toBeFocused();
   await page.screenshot({ path: "test-results/wide-dark.png" });
+});
+
+const students = [
+  {
+    id: 10005,
+    name: "ホシノ",
+    training: {
+      level: 90,
+      rarity: 5,
+      bond: 34,
+      skills: [5, 10, 10, 10],
+      weapon: { level: 60, stars: 4 },
+      equipment: [
+        { tier: 10, level: 70 },
+        { tier: 10, level: 70 },
+        { tier: 10, level: 70 },
+      ],
+      gear: 2,
+      ability: [25, 0, 25],
+    },
+  },
+  {
+    id: 20019,
+    name: "アカネ（バニーガール）",
+    training: {
+      level: null,
+      rarity: 3,
+      bond: 20,
+      skills: [2, 3, 3, 6],
+      weapon: null,
+      equipment: [{ tier: 4, level: 40 }, null, { tier: 3, level: 30 }],
+      gear: 0,
+      ability: [0, 0, 0],
+    },
+  },
+];
+
+test("shows the students read from the student screen", async ({ page }) => {
+  await open(page, { status: reading("students"), items, equipment, students });
+  await expect(page.getByRole("status")).toHaveText("生徒を集計中 27 fps");
+  await expect(page.getByRole("tab", { name: "生徒" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("tbody tr").first().locator("td")).toHaveText([
+    "ホシノ",
+    "90",
+    "★5",
+    "★4 Lv60",
+    "5MMM",
+    "T10/10/10",
+    "T2",
+    "25/0/25",
+    "34",
+  ]);
+  await expect(page.locator("tbody tr").nth(1).locator("td")).toHaveText([
+    "アカネ（バニーガール）",
+    "?",
+    "★3",
+    "—",
+    "2336",
+    "T4/?/3",
+    "—",
+    "0/0/0",
+    "20",
+  ]);
+  await page.getByLabel("名前で検索").fill("ｱｶﾈ");
+  await expect(page.locator("tbody tr")).toHaveCount(1);
+});
+
+test("keeps a narrow window from scrolling sideways with the student table", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await open(page, { status: reading("students"), items, equipment, students });
+  expect(await overflow(page)).toBe(0);
+  await page.screenshot({ path: "test-results/narrow-students.png" });
 });

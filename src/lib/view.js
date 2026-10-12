@@ -14,6 +14,7 @@ export function filterRows(rows, query) {
 export const LISTS = [
   { id: "items", name: "アイテム" },
   { id: "equipment", name: "装備" },
+  { id: "students", name: "生徒" },
 ];
 
 const listName = (id) => LISTS.find((l) => l.id === id)?.name ?? id;
@@ -49,4 +50,29 @@ export function formatCount(count) {
 export function followTab(view, status) {
   if (status.state !== "reading" || status.list === view.lastRead) return view;
   return { tab: status.list, lastRead: status.list };
+}
+
+const known = (v) => v !== null && v !== undefined;
+const show = (v) => (known(v) ? String(v) : "?");
+
+/**
+ * A student's training as table cells, written as timeline-arona writes a
+ * party: skills "5M7M" (the EX level, then M for a skill at 10), equipment
+ * "T10/9/8". "?" marks what could not be read; "—" what the student lacks.
+ * The unique weapon is `null` while locked, absent when unknown.
+ */
+export function studentCells(t) {
+  const [ex, ...others] = t.skills;
+  const weapon = !("weapon" in t) || t.weapon === undefined ? "?" : t.weapon;
+  return {
+    level: show(t.level),
+    rarity: known(t.rarity) ? `★${t.rarity}` : "?",
+    weapon: weapon === "?" ? "?" : weapon === null ? "—" : `★${weapon.stars} Lv${weapon.level}`,
+    skills: show(ex) + others.map((s) => (s === 10 ? "M" : show(s))).join(""),
+    equipment: "T" + t.equipment.map((e) => (known(e) ? String(e.tier) : "?")).join("/"),
+    equipmentLevels: "Lv" + t.equipment.map((e) => (known(e) ? String(e.level) : "?")).join("/"),
+    gear: !known(t.gear) ? "?" : t.gear === 0 ? "—" : `T${t.gear}`,
+    ability: t.ability.map(show).join("/"),
+    bond: show(t.bond),
+  };
 }

@@ -1,0 +1,363 @@
+//! Reads a student's training from the student detail screen (the 基本情報 tab).
+//!
+//! The screen keeps its layout at any 16:9 window size, so each field sits at
+//! a fixed place measured in window heights from the left or the right edge.
+//! The name is read by the OCR built into Windows (`ocr`); the short italic
+//! texts it cannot read ("Lv.65", "T10", "MAX") are read character by character
+//! against references from labeled screenshots (`glyph`). A field that cannot
+//! be read for sure is left unknown.
+
+pub mod glyph;
+pub mod name;
+pub mod roster;
+
+use image::RgbImage;
+use serde::{Deserialize, Serialize};
+
+use glyph::{Fonts, Ink, Rect, Style};
+
+/// A student's training as the 基本情報 tab shows it; `None` where a field
+/// could not be read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Training {
+    pub level: Option<u8>,
+    /// Rarity, 1 to 5 stars.
+    pub rarity: Option<u8>,
+    pub bond: Option<u8>,
+    /// EX (up to 5), normal, passive and sub skills (up to 10).
+    pub skills: [Option<u8>; 4],
+    /// The unique weapon; `Some(None)` while it is locked (under 5 stars).
+    /// Left out of the window's data when unknown, so it stays apart from
+    /// locked (`null`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weapon: Option<Option<Weapon>>,
+    /// The three equipment slots.
+    pub equipment: [Option<Gear>; 3],
+    /// The favourite item's tier, 0 when none is equipped.
+    pub gear: Option<u8>,
+    /// Ability release (能力解放) of HP, attack and healing, 0 when not released.
+    pub ability: [Option<u8>; 3],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Weapon {
+    pub level: u8,
+    pub stars: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Gear {
+    pub tier: u8,
+    pub level: u8,
+}
+
+/// A part of the screen in window heights: across from `x.0` to `x.1` away from
+/// the left (or the right) edge, down from `y.0` to `y.1`.
+#[derive(Debug, Clone, Copy)]
+pub struct Area {
+    pub from_right: bool,
+    pub x: (f32, f32),
+    pub y: (f32, f32),
+}
+
+const fn left(x: (f32, f32), y: (f32, f32)) -> Area {
+    Area {
+        from_right: false,
+        x,
+        y,
+    }
+}
+
+const fn right(x: (f32, f32), y: (f32, f32)) -> Area {
+    Area {
+        from_right: true,
+        x,
+        y,
+    }
+}
+
+/// The name with the bond heart and the stars around it: the OCR reads a name
+/// more surely with some of its surroundings.
+pub const NAME: Area = left((0.04, 0.48), (0.76, 0.83));
+const BOND: Area = left((0.0624, 0.0944), (0.786, 0.807));
+const RARITY: Area = left((0.364, 0.474), (0.789, 0.818));
+const LEVEL: Area = left((0.048, 0.116), (0.827, 0.856));
+/// HP and attack on the first row, healing on the second, each with its
+/// ability release ("Lv.25") after the value.
+/// Below the "MAX" tag that tops a fully released badge.
+const ABILITY: [Area; 3] = [
+    right((0.834, 0.498), (0.324, 0.350)),
+    right((0.498, 0.258), (0.324, 0.350)),
+    right((0.498, 0.258), (0.373, 0.398)),
+];
+const SKILLS: [Area; 4] = [
+    right((0.815, 0.727), (0.558, 0.590)),
+    right((0.666, 0.578), (0.558, 0.590)),
+    right((0.519, 0.431), (0.558, 0.590)),
+    right((0.372, 0.284), (0.558, 0.590)),
+];
+const SKILL_MAX: [u8; 4] = [5, 10, 10, 10];
+const WEAPON_LEVEL: Area = right((0.698, 0.614), (0.629, 0.659));
+/// Room for four stars, which stand right-aligned.
+const WEAPON_STARS: Area = right((0.400, 0.258), (0.706, 0.740));
+/// Up to the "E" badge of the equipped piece.
+const EQUIPMENT_LEVEL: [Area; 3] = [
+    right((0.822, 0.738), (0.774, 0.797)),
+    right((0.690, 0.606), (0.774, 0.797)),
+    right((0.558, 0.474), (0.774, 0.797)),
+];
+const EQUIPMENT_TIER: [Area; 3] = [
+    right((0.830, 0.770), (0.853, 0.883)),
+    right((0.698, 0.638), (0.853, 0.883)),
+    right((0.566, 0.506), (0.853, 0.883)),
+];
+const GEAR_TIER: Area = right((0.434, 0.374), (0.853, 0.883));
+
+/// The pixel rectangle of `area` in `image`.
+pub fn rect(image: &RgbImage, area: Area) -> Option<Rect> {
+    let (w, h) = (image.width() as f32, image.height() as f32);
+    let (x0, x1) = if area.from_right {
+        (w - area.x.0 * h, w - area.x.1 * h)
+    } else {
+        (area.x.0 * h, area.x.1 * h)
+    };
+    let (y0, y1) = (area.y.0 * h, area.y.1 * h);
+    (x0 >= 0.0 && x1 <= w && y1 <= h && x0 < x1)
+        .then_some((x0 as u32, y0 as u32, x1 as u32, y1 as u32))
+}
+
+fn luminance(c: [u8; 3]) -> f32 {
+    0.299 * f32::from(c[0]) + 0.587 * f32::from(c[1]) + 0.114 * f32::from(c[2])
+}
+
+/// The light text on the dark name plate ("Lv.65").
+const LIGHT: Ink = |c| c.iter().all(|&v| v > 150);
+/// The dark digits in the bond heart.
+const DARK: Ink = |c| luminance(c) < 100.0;
+/// The navy skill levels ("Lv.7").
+const NAVY: Ink = |c| luminance(c) < 130.0 && c[2] >= c[0];
+/// The white fill of the italic levels of the equipment, whose outlines touch.
+const FILL: Ink = |c| c.iter().all(|&v| v >= 245);
+/// The blue tier ("T10").
+const BLUE: Ink = |c| i32::from(c[2]) - i32::from(c[0]) > 90 && c[2] > 150;
+/// The yellow ability release ("Lv.25").
+const YELLOW: Ink = |c| c[0] > 200 && c[1] > 190 && c[2] < 110;
+/// The gold "MAX" of a skill at its highest level.
+const GOLD: Ink = |c| c[0] > 200 && c[1] > 150 && c[2] < 120;
+/// The rarity stars.
+const STAR: Ink = |c| c[0] > 220 && c[1] > 150 && c[2] < 100;
+/// The unique weapon's stars.
+const WEAPON_STAR: Ink = |c| c[2] > 220 && c[1] > 180 && c[0] < 180;
+
+const fn style(
+    ink: Ink,
+    tall: f32,
+    width: f32,
+    widest: f32,
+    framed: bool,
+    clear_top: bool,
+) -> Style {
+    Style {
+        ink,
+        tall,
+        framed,
+        clear_top,
+        widest,
+        width,
+    }
+}
+
+/// Characters never wider than this share of their height are left whole.
+const WHOLE: f32 = 1.2;
+
+/// The text styles by name (`Fonts` holds references under it). The italic
+/// font of the level draws neighbours touching ("Lv", "90"), cut apart by
+/// width; the white italic levels of the weapon and the equipment are read by
+/// their fill, which their outlines keep apart.
+pub const STYLES: &[(&str, Style)] = &[
+    (
+        "level",
+        style(LIGHT, 0.5, 0.62, f32::INFINITY, false, false),
+    ),
+    ("bond", style(DARK, 0.5, WHOLE, 1.3, false, false)),
+    ("skill", style(NAVY, 0.5, WHOLE, 1.3, false, false)),
+    ("weapon", style(FILL, 0.5, WHOLE, 1.3, false, true)),
+    ("equipment", style(FILL, 0.5, WHOLE, 1.3, false, true)),
+    ("tier", style(BLUE, 0.5, 0.62, 1.6, true, false)),
+    ("ability", style(YELLOW, 0.5, WHOLE, 1.3, false, false)),
+];
+
+fn style_of(name: &str) -> Style {
+    STYLES
+        .iter()
+        .find(|(s, _)| *s == name)
+        .map(|&(_, s)| s)
+        .unwrap()
+}
+
+/// The text of `style` in `area`.
+fn text(image: &RgbImage, fonts: &Fonts, name: &str, area: Area) -> Option<String> {
+    let shapes = glyph::shapes(image, rect(image, area)?, style_of(name));
+    if shapes.is_empty() {
+        return Some(String::new());
+    }
+    fonts.read(name, &shapes)
+}
+
+/// The number after `prefix` in the text of `style` in `area`.
+fn number(image: &RgbImage, fonts: &Fonts, style: &str, prefix: &str, area: Area) -> Option<u8> {
+    text(image, fonts, style, area)?
+        .strip_prefix(prefix)?
+        .parse()
+        .ok()
+}
+
+/// How many pixels of `ink` `area` holds.
+fn count(image: &RgbImage, area: Area, ink: Ink) -> Option<usize> {
+    let (x0, y0, x1, y1) = rect(image, area)?;
+    Some(
+        (y0..y1)
+            .flat_map(|y| (x0..x1).map(move |x| (x, y)))
+            .filter(|&(x, y)| ink(image.get_pixel(x, y).0))
+            .count(),
+    )
+}
+
+/// How many stars of `ink` stand in a row in `area`, `pitch` window heights apart.
+fn stars(image: &RgbImage, area: Area, ink: Ink, pitch: f32) -> Option<u8> {
+    let (x0, y0, x1, y1) = rect(image, area)?;
+    let columns: Vec<u32> = (x0..x1)
+        .filter(|&x| (y0..y1).any(|y| ink(image.get_pixel(x, y).0)))
+        .collect();
+    let (Some(first), Some(last)) = (columns.first(), columns.last()) else {
+        return Some(0);
+    };
+    let span = (last - first + 1) as f32 / (pitch * image.height() as f32);
+    Some(span.round() as u8)
+}
+
+/// Rarity stars stand this far apart (window heights). Measured on
+/// 2026-10-12 at 1250 high: 3, 4 and 5 stars span 77, 101 and 124 pixels.
+const RARITY_PITCH: f32 = 0.0200;
+/// The unique weapon's stars stand this far apart (window heights): 1 to 4
+/// stars span 31, 59, 88 and 116 pixels at 1250 high.
+const WEAPON_PITCH: f32 = 0.0228;
+/// "MAX" in gold covers at least this share of a skill label. Measured on
+/// 2026-10-12: about 0.010 for MAX, 0 for every "Lv.N".
+const GOLD_SHARE: f32 = 0.004;
+
+/// Reads the training of the student on screen.
+pub fn read(image: &RgbImage, fonts: &Fonts) -> Training {
+    let skill = |i: usize| -> Option<u8> {
+        let area = SKILLS[i];
+        let (x0, y0, x1, y1) = rect(image, area)?;
+        let gold = count(image, area, GOLD)? as f32 / ((x1 - x0) * (y1 - y0)) as f32;
+        if gold >= GOLD_SHARE {
+            return Some(SKILL_MAX[i]);
+        }
+        number(image, fonts, "skill", "Lv", area).filter(|&n| (1..SKILL_MAX[i]).contains(&n))
+    };
+    let weapon_level = number(image, fonts, "weapon", "Lv", WEAPON_LEVEL);
+    let weapon_stars = stars(image, WEAPON_STARS, WEAPON_STAR, WEAPON_PITCH);
+    let weapon = match (weapon_level, weapon_stars) {
+        (None, Some(0)) => Some(None),
+        (Some(level), Some(stars @ 1..=4)) => Some(Some(Weapon { level, stars })),
+        _ => None,
+    };
+    let equipment = |i: usize| -> Option<Gear> {
+        let tier = number(image, fonts, "tier", "T", EQUIPMENT_TIER[i])?;
+        let level = number(image, fonts, "equipment", "Lv", EQUIPMENT_LEVEL[i])?;
+        Some(Gear { tier, level })
+    };
+    let ability = |i: usize| -> Option<u8> {
+        match text(image, fonts, "ability", ABILITY[i])?.as_str() {
+            "" => Some(0),
+            t => t.strip_prefix("Lv")?.parse().ok(),
+        }
+    };
+    let gear = match text(image, fonts, "tier", GEAR_TIER) {
+        Some(t) if t.is_empty() => Some(0),
+        Some(t) => t.strip_prefix('T').and_then(|n| n.parse().ok()),
+        None => None,
+    };
+    Training {
+        level: number(image, fonts, "level", "Lv", LEVEL),
+        rarity: stars(image, RARITY, STAR, RARITY_PITCH).filter(|n| (1..=5).contains(n)),
+        bond: number(image, fonts, "bond", "", BOND),
+        skills: [skill(0), skill(1), skill(2), skill(3)],
+        weapon,
+        equipment: [equipment(0), equipment(1), equipment(2)],
+        gear,
+        ability: [ability(0), ability(1), ability(2)],
+    }
+}
+
+/// A student screen labeled by eye (`tests/fixtures/students.json`).
+#[derive(Debug, Deserialize)]
+pub struct Label {
+    pub image: String,
+    pub role: String,
+    pub id: i64,
+    pub level: u8,
+    pub rarity: u8,
+    pub bond: u8,
+    pub skills: [u8; 4],
+    /// `None` while the unique weapon is locked.
+    pub weapon: Option<Weapon>,
+    /// Tier and level of each equipment slot.
+    pub equipment: [[u8; 2]; 3],
+    pub gear: u8,
+    pub ability: [u8; 3],
+}
+
+impl Label {
+    pub fn training(&self) -> Training {
+        Training {
+            level: Some(self.level),
+            rarity: Some(self.rarity),
+            bond: Some(self.bond),
+            skills: self.skills.map(Some),
+            weapon: Some(self.weapon),
+            equipment: self
+                .equipment
+                .map(|[tier, level]| Some(Gear { tier, level })),
+            gear: Some(self.gear),
+            ability: self.ability.map(Some),
+        }
+    }
+
+    /// The texts the screen shows in each style, where, for building references:
+    /// the tall characters only (the "v" and "." of "Lv." are left out).
+    pub fn texts(&self) -> Vec<(&'static str, Area, String)> {
+        let mut out = vec![
+            ("level", LEVEL, format!("Lv{}", self.level)),
+            ("bond", BOND, self.bond.to_string()),
+        ];
+        for (i, &level) in self.skills.iter().enumerate() {
+            if level < SKILL_MAX[i] {
+                out.push(("skill", SKILLS[i], format!("Lv{level}")));
+            }
+        }
+        if let Some(weapon) = self.weapon {
+            out.push(("weapon", WEAPON_LEVEL, format!("Lv{}", weapon.level)));
+        }
+        for (i, [tier, level]) in self.equipment.iter().enumerate() {
+            out.push(("tier", EQUIPMENT_TIER[i], format!("T{tier}")));
+            out.push(("equipment", EQUIPMENT_LEVEL[i], format!("Lv{level}")));
+        }
+        if self.gear > 0 {
+            out.push(("tier", GEAR_TIER, format!("T{}", self.gear)));
+        }
+        for (i, &level) in self.ability.iter().enumerate() {
+            if level > 0 {
+                out.push(("ability", ABILITY[i], format!("Lv{level}")));
+            }
+        }
+        out
+    }
+}
+
+/// The characters of `style` in `area`, normalized, for building references.
+pub fn shapes(image: &RgbImage, name: &str, area: Area) -> Option<Vec<Vec<f32>>> {
+    Some(glyph::shapes(image, rect(image, area)?, style_of(name)))
+}

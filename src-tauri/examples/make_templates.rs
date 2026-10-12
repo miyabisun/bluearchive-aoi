@@ -1,8 +1,10 @@
 //! Writes the pictures the screen is compared with: `data/sort-default.png`, the
 //! sort buttons in the default order ("デフォルト ≡↑"), and `data/title-items.png`
 //! and `data/title-equipment.png`, the screens' titles, from screenshots of the
-//! item list and the equipment list sorted that way.
-//! Run with `cargo run --example make_templates -- <item list.png> <equipment list.png>`.
+//! item list and the equipment list sorted that way; `data/title-students.png`
+//! and `data/student-tab.png` (the selected "基本情報" tab) from one of the
+//! student screen.
+//! Run with `cargo run --example make_templates -- <item list.png> <equipment list.png> <student.png>`.
 
 use std::path::Path;
 
@@ -15,6 +17,7 @@ fn main() {
         args.next().expect("item list"),
         args.next().expect("equipment list"),
     );
+    let student = args.next().expect("student screen");
     let open = |path: &str| {
         let image = image::open(path).unwrap().to_rgb8();
         let unit = grid::find_panel(&image).expect("a list").card_height;
@@ -58,5 +61,29 @@ fn main() {
             screen::TITLE_HEIGHT,
         )
         .expect("title"),
+    );
+    let image = image::open(&student).unwrap().to_rgb8();
+    let unit = (image.height() as f32 * screen::STUDENT_UNIT).round() as u32;
+    save(
+        "title-students.png",
+        screen::crop(
+            &image,
+            unit,
+            screen::TITLE,
+            (0.0, 0.0),
+            screen::TITLE_HEIGHT,
+        )
+        .expect("title"),
+    );
+    save(
+        "student-tab.png",
+        screen::crop(
+            &image,
+            unit,
+            screen::STUDENT_TAB,
+            (0.0, 0.0),
+            screen::HEIGHT,
+        )
+        .expect("tab"),
     );
 }

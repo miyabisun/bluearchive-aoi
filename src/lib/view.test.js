@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterRows, followTab, formatCount, statusView } from "./view.js";
+import { filterRows, followTab, formatCount, statusView, studentCells } from "./view.js";
 
 const rows = [
   { id: 10, name: "初級戦術教育BD（ゲヘナ）", count: 12 },
@@ -71,5 +71,56 @@ describe("followTab", () => {
     const view = { tab: "equipment", lastRead: "equipment" };
     expect(followTab(view, { state: "other_screen" })).toEqual(view);
     expect(followTab(view, { state: "no_game" })).toEqual(view);
+  });
+});
+
+describe("studentCells", () => {
+  const known = {
+    level: 90,
+    rarity: 5,
+    bond: 34,
+    skills: [5, 10, 7, 10],
+    weapon: { level: 60, stars: 4 },
+    equipment: [
+      { tier: 10, level: 70 },
+      { tier: 9, level: 65 },
+      { tier: 8, level: 60 },
+    ],
+    gear: 2,
+    ability: [25, 0, 25],
+  };
+
+  it("writes a student's training the way timeline-arona does", () => {
+    expect(studentCells(known)).toEqual({
+      level: "90",
+      rarity: "★5",
+      weapon: "★4 Lv60",
+      skills: "5M7M",
+      equipment: "T10/9/8",
+      equipmentLevels: "Lv70/65/60",
+      gear: "T2",
+      ability: "25/0/25",
+      bond: "34",
+    });
+  });
+
+  it("marks what is locked, missing or unknown", () => {
+    const cells = studentCells({
+      ...known,
+      level: null,
+      weapon: null,
+      skills: [3, null, 1, 1],
+      equipment: [{ tier: 1, level: 1 }, null, { tier: 1, level: 10 }],
+      gear: 0,
+      ability: [0, null, 0],
+    });
+    expect(cells.level).toBe("?");
+    expect(cells.weapon).toBe("—");
+    expect(cells.skills).toBe("3?11");
+    expect(cells.equipment).toBe("T1/?/1");
+    expect(cells.equipmentLevels).toBe("Lv1/?/10");
+    expect(cells.gear).toBe("—");
+    expect(cells.ability).toBe("0/?/0");
+    expect(studentCells({ ...known, weapon: undefined }).weapon).toBe("?");
   });
 });

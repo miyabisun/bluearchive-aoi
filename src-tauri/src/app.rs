@@ -7,7 +7,7 @@ use tauri::{Emitter, Manager};
 
 use crate::{
     List, Recognizer, Row,
-    watch::{self, Status},
+    watch::{self, Status, StudentRow, Update},
 };
 
 /// Everything the window shows; sent whole on every change.
@@ -16,6 +16,7 @@ pub struct Snapshot {
     status: Status,
     items: Vec<Row>,
     equipment: Vec<Row>,
+    students: Vec<StudentRow>,
 }
 
 /// The newest snapshot, for a page that loads after it was sent.
@@ -41,6 +42,7 @@ pub fn run(context: tauri::Context) {
             status: Status::NoGame,
             items: Vec::new(),
             equipment: Vec::new(),
+            students: Vec::new(),
         })))
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -49,8 +51,9 @@ pub fn run(context: tauri::Context) {
                 let mut snapshot = latest.0.lock().unwrap_or_else(PoisonError::into_inner);
                 snapshot.status = status.clone();
                 match rows {
-                    Some((List::Items, rows)) => snapshot.items = rows,
-                    Some((List::Equipment, rows)) => snapshot.equipment = rows,
+                    Some(Update::List(List::Items, rows)) => snapshot.items = rows,
+                    Some(Update::List(List::Equipment, rows)) => snapshot.equipment = rows,
+                    Some(Update::Students(rows)) => snapshot.students = rows,
                     None => {}
                 }
                 let _ = handle.emit(EVENT, &*snapshot);

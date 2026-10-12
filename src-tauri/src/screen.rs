@@ -30,6 +30,14 @@ pub const TITLE: Region = Region {
     x: (1.0, 2.35),
     y: (0.06, 0.4),
 };
+/// The selected "基本情報" tab of the student screen, which has no cards: there
+/// a card height is `STUDENT_UNIT` window heights (what it is on the lists).
+pub const STUDENT_TAB: Region = Region {
+    from_right: true,
+    x: (6.47, 4.59),
+    y: (1.24, 1.76),
+};
+pub const STUDENT_UNIT: f32 = 165.0 / 1250.0;
 /// The buttons may sit this far off (card heights), across and down.
 const SLACK: (f32, f32) = (0.15, 0.06);
 /// Height of the compared picture of the sort buttons, in pixels.
@@ -171,6 +179,20 @@ pub fn title(image: &RgbImage, card_height: u32, titles: &[RgbImage]) -> Option<
         .filter(|(i, _)| *i != best)
         .all(|(_, s)| score - s >= TITLE_LEAD);
     (score >= TITLE_MATCH && lead).then_some(best)
+}
+
+/// How alike the student screen's "基本情報" tab is to `template` (the tab
+/// selected), at the unit `STUDENT_UNIT` gives.
+pub fn student_tab(image: &RgbImage, template: &RgbImage) -> bool {
+    let unit = (image.height() as f32 * STUDENT_UNIT).round() as u32;
+    best_match(
+        image,
+        unit,
+        (STUDENT_TAB, HEIGHT),
+        &SIZES,
+        template,
+        |area, ox, oy| ncc(template, 0..template.width(), area, ox, oy),
+    ) >= MATCH
 }
 
 /// The best `score` of `template` over the positions and `sizes` tried in

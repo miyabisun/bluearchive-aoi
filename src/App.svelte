@@ -1,7 +1,14 @@
 <script>
   import { onMount } from "svelte";
   import { follow } from "./lib/snapshot.js";
-  import { LISTS, filterRows, followTab, formatCount, statusView } from "./lib/view.js";
+  import {
+    LISTS,
+    filterRows,
+    followTab,
+    formatCount,
+    statusView,
+    studentCells,
+  } from "./lib/view.js";
 
   /** What each tab tells before anything of its list is read. */
   const EMPTY = {
@@ -9,9 +16,16 @@
       "ブルーアーカイブのアイテム一覧を「デフォルト」の昇順で開いてスクロールすると、見えたアイテムの個数がここに並びます。",
     equipment:
       "ブルーアーカイブの装備一覧を「デフォルト」の昇順で開いてスクロールすると、見えた装備の個数がここに並びます。",
+    students:
+      "ブルーアーカイブの生徒詳細画面（基本情報）を開いて「＞」で送ると、見えた生徒の育成状況がここに並びます。",
   };
 
-  let snapshot = $state({ status: { state: "no_game" }, items: [], equipment: [] });
+  let snapshot = $state({
+    status: { state: "no_game" },
+    items: [],
+    equipment: [],
+    students: [],
+  });
   let view = $state({ tab: "items", lastRead: null });
   let query = $state("");
 
@@ -64,6 +78,40 @@
       </label>
       {#if shown.length === 0}
         <p class="empty" data-state="no-match">一致する項目がありません</p>
+      {:else if view.tab === "students"}
+        <div class="table-scroll">
+          <table data-state="success" class="students">
+            <thead>
+              <tr>
+                <th scope="col">生徒</th>
+                <th scope="col" class="num">Lv</th>
+                <th scope="col">★</th>
+                <th scope="col">固有武器</th>
+                <th scope="col">スキル</th>
+                <th scope="col">装備</th>
+                <th scope="col">愛用品</th>
+                <th scope="col">能力解放</th>
+                <th scope="col" class="num">絆</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each shown as row (row.id)}
+                {@const cells = studentCells(row.training)}
+                <tr>
+                  <td>{row.name}</td>
+                  <td class="num">{cells.level}</td>
+                  <td>{cells.rarity}</td>
+                  <td>{cells.weapon}</td>
+                  <td class="code">{cells.skills}</td>
+                  <td class="code" title={cells.equipmentLevels}>{cells.equipment}</td>
+                  <td>{cells.gear}</td>
+                  <td class="code">{cells.ability}</td>
+                  <td class="num">{cells.bond}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
       {:else}
         <table data-state="success">
           <thead>
@@ -205,6 +253,24 @@
     font-size: var(--fs-sm)
     font-weight: 500
     color: var(--c-muted)
+
+  .table-scroll
+    overflow-x: auto
+
+  .students
+    th, td
+      padding: var(--sp-2)
+      white-space: nowrap
+    td:first-child
+      white-space: normal
+      min-width: 8em
+
+  .num
+    text-align: right
+    font-variant-numeric: tabular-nums
+
+  .code
+    font-variant-numeric: tabular-nums
 
   .count
     width: 7em

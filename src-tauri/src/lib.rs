@@ -1,5 +1,5 @@
 //! Reads kinds and counts from screenshots of the Blue Archive item list and
-//! equipment list.
+//! equipment list, and students' training from the student screen.
 //!
 //! Both lists share the cutting of cells from the grey list (`grid`), the screen
 //! checks (`screen`), the counts (`quantity`) and the telling apart of icons
@@ -12,9 +12,11 @@ pub mod equipment;
 pub mod grid;
 pub mod icon;
 pub mod items;
+pub mod ocr;
 mod order;
 pub mod quantity;
 pub mod screen;
+pub mod student;
 pub mod tally;
 pub mod watch;
 mod embedded {
@@ -64,6 +66,23 @@ pub struct Item {
     pub tier: u8,
 }
 
+/// What a frame shows that can be read.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Frame {
+    /// A list in its default order, cell by cell.
+    List(List, Vec<Cell>),
+    /// The student screen: the student (`None` when the name could not be
+    /// told) and the training shown.
+    Student(Option<i64>, student::Training),
+}
+
+/// A student of the SchaleDB snapshot (`data/schaledb/students.json`).
+#[derive(Deserialize, Debug, Clone)]
+pub struct StudentEntry {
+    pub id: i64,
+    pub name: String,
+}
+
 /// One line of a tally, for the window.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Row {
@@ -94,6 +113,14 @@ pub struct Recognizer {
     sort_template: RgbImage,
     /// Each list's screen title (`data/title-*.png`).
     titles: Vec<(List, RgbImage)>,
+    students: Vec<(i64, String)>,
+    /// The student screen's title and its selected "基本情報" tab.
+    student_screen: (RgbImage, RgbImage),
+    /// References for the short texts of the student screen.
+    fonts: student::glyph::Fonts,
+    /// The OCR reading students' names; without it (no Japanese OCR on this
+    /// Windows) the student screen is not read.
+    ocr: Option<ocr::Ocr>,
 }
 
 impl Recognizer {
@@ -130,7 +157,49 @@ impl Recognizer {
                 (List::Items, template("title-items.png")?),
                 (List::Equipment, template("title-equipment.png")?),
             ],
+            students: json::<Vec<StudentEntry>>(read, "schaledb/students.json")?
+                .into_iter()
+                .map(|s| (s.id, s.name))
+                .collect(),
+            student_screen: (
+                template("title-students.png")?,
+                template("student-tab.png")?,
+            ),
+            fonts: json(read, "student-fonts.json")?,
+            ocr: ocr::Ocr::japanese().ok(),
         })
+    }
+
+    pub fn students(&self) -> &[(i64, String)] {
+        &self.students
+    }
+
+    /// Reads whatever the frame shows that can be read: a list in its default
+    /// order, or the student screen's 基本情報 tab.
+    pub fn read_frame(&self, image: &RgbImage) -> Option<Frame> {
+        if let Some((list, cells)) = self.read_list(image) {
+            return Some(Frame::List(list, cells));
+        }
+        self.read_student(image)
+            .map(|(id, training)| Frame::Student(id, training))
+    }
+
+    /// Reads the student screen's 基本情報 tab; any other screen gives `None`.
+    pub fn read_student(&self, image: &RgbImage) -> Option<(Option<i64>, student::Training)> {
+        let ocr = self.ocr.as_ref()?;
+        let (title, tab) = &self.student_screen;
+        let unit = (image.height() as f32 * screen::STUDENT_UNIT).round() as u32;
+        screen::title(image, unit, std::slice::from_ref(title))?;
+        if !screen::student_tab(image, tab) {
+            return None;
+        }
+        let (x0, y0, x1, y1) = student::rect(image, student::NAME)?;
+        let name = image::imageops::crop_imm(image, x0, y0, x1 - x0, y1 - y0).to_image();
+        let id = ocr
+            .read(&name)
+            .ok()
+            .and_then(|text| student::name::find(&text, &self.students));
+        Some((id, student::read(image, &self.fonts)))
     }
 
     pub fn catalog(&self, list: List) -> &Catalog {
