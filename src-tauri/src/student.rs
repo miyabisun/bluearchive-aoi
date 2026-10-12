@@ -199,6 +199,7 @@ const fn style(
     widest: f32,
     framed: bool,
     clear_top: bool,
+    skew: f32,
 ) -> Style {
     Style {
         ink,
@@ -207,6 +208,7 @@ const fn style(
         clear_top,
         widest,
         width,
+        skew,
     }
 }
 
@@ -214,20 +216,24 @@ const fn style(
 const WHOLE: f32 = 1.2;
 
 /// The text styles by name (`Fonts` holds references under it). The italic
-/// font of the level draws neighbours touching ("Lv", "90"), cut apart by
-/// width; the white italic levels of the weapon and the equipment are read by
-/// their fill, which their outlines keep apart.
+/// font of the level draws neighbours touching ("Lv", "90"): it is stood
+/// upright first (a skew of 0.15, measured on 2026-10-12 over the level
+/// samples: the evaluation characters lie within 5.0 of their own references
+/// and at most 0.19 of the way to the next one, where 0.12 or 0.2 leave 0.8
+/// and 0.52, and 0.25 misreads "56"), then cut apart by width. The white
+/// italic levels of the weapon and the equipment are read by their fill,
+/// which their outlines keep apart.
 pub const STYLES: &[(&str, Style)] = &[
     (
         "level",
-        style(LIGHT, 0.5, 0.62, f32::INFINITY, false, false),
+        style(LIGHT, 0.5, 0.62, f32::INFINITY, false, false, 0.15),
     ),
-    ("bond", style(DARK, 0.5, WHOLE, 1.3, false, false)),
-    ("skill", style(NAVY, 0.5, WHOLE, 1.3, false, false)),
-    ("weapon", style(FILL, 0.5, WHOLE, 1.3, false, true)),
-    ("equipment", style(FILL, 0.5, WHOLE, 1.3, false, true)),
-    ("tier", style(BLUE, 0.5, 0.62, 1.6, true, false)),
-    ("ability", style(YELLOW, 0.5, WHOLE, 1.3, false, false)),
+    ("bond", style(DARK, 0.5, WHOLE, 1.3, false, false, 0.0)),
+    ("skill", style(NAVY, 0.5, WHOLE, 1.3, false, false, 0.0)),
+    ("weapon", style(FILL, 0.5, WHOLE, 1.3, false, true, 0.0)),
+    ("equipment", style(FILL, 0.5, WHOLE, 1.3, false, true, 0.0)),
+    ("tier", style(BLUE, 0.5, 0.62, 1.6, true, false, 0.0)),
+    ("ability", style(YELLOW, 0.5, WHOLE, 1.3, false, false, 0.0)),
 ];
 
 fn style_of(name: &str) -> Style {

@@ -28,6 +28,10 @@ pub struct Style {
     /// draw neighbours touching ("Lv", "90"); such a blob is cut into as many
     /// equal parts as characters of this width fit in it.
     pub width: f32,
+    /// How far the font leans: each row is moved right by this share of its
+    /// height from the top, which stands the italic characters upright and
+    /// parts neighbours that touch only along their slant.
+    pub skew: f32,
 }
 
 /// Normalized character size; characters keep their width relative to their height.
@@ -55,16 +59,31 @@ struct Blob {
     bottom: u32,
 }
 
-/// The ink's blobs (8-connected) in `rect`, left to right. With `thin_away`,
-/// lines a pixel or two thin (the ring of the tier badge, which touches its
-/// characters) are worn off first.
-fn blobs(image: &RgbImage, rect: Rect, ink: Ink, thin_away: bool) -> (Vec<Blob>, Vec<bool>) {
+/// Which pixels of `rect` are of the ink, each row moved right by `skew`
+/// times its height from the top; the mask and its width and height.
+fn mask(image: &RgbImage, rect: Rect, ink: Ink, skew: f32) -> (Vec<bool>, usize, usize) {
     let (x0, y0, x1, y1) = rect;
-    let (width, height) = ((x1 - x0) as usize, (y1 - y0) as usize);
-    let mut on: Vec<bool> = (y0..y1)
-        .flat_map(|y| (x0..x1).map(move |x| (x, y)))
-        .map(|(x, y)| ink(image.get_pixel(x, y).0))
-        .collect();
+    let (w, height) = ((x1 - x0) as usize, (y1 - y0) as usize);
+    let width = w + (skew * height as f32).ceil() as usize;
+    let mut on = vec![false; width * height];
+    for y in 0..height {
+        let shift = (skew * y as f32).round() as usize;
+        for x in 0..w {
+            on[y * width + x + shift] = ink(image.get_pixel(x0 + x as u32, y0 + y as u32).0);
+        }
+    }
+    (on, width, height)
+}
+
+/// The blobs (8-connected) of the mask `on`, left to right, and the mask they
+/// were found in. With `thin_away`, lines a pixel or two thin (the ring of the
+/// tier badge, which touches its characters) are worn off first.
+fn blobs(
+    mut on: Vec<bool>,
+    width: usize,
+    height: usize,
+    thin_away: bool,
+) -> (Vec<Blob>, Vec<bool>) {
     if thin_away {
         let at = |x: usize, y: usize| on[y * width + x];
         on = (0..width * height)
@@ -160,9 +179,9 @@ fn outside(ink: &[bool], width: usize, height: usize) -> Vec<bool> {
 
 /// The characters of `style` in `rect`, left to right, normalized.
 pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
-    let (ink, framed) = (style.ink, style.framed);
-    let (width, height) = ((rect.2 - rect.0) as usize, (rect.3 - rect.1) as usize);
-    let (mut blobs, on) = blobs(image, rect, ink, framed);
+    let framed = style.framed;
+    let (raw, width, height) = mask(image, rect, style.ink, style.skew);
+    let (mut blobs, on) = blobs(raw.clone(), width, height, framed);
     if style.clear_top {
         blobs.retain(|b| b.top > 0);
     }
@@ -171,8 +190,7 @@ pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
         // it, even touching the ring, lies where the outside reaches. The
         // outside is looked for two pixels around each character (the gap to
         // the ring is wider).
-        let (_, unworn) = self::blobs(image, rect, ink, false);
-        let outside = outside(&unworn, width, height);
+        let outside = outside(&raw, width, height);
         let reached = |x: u32, y: u32| outside[y as usize * width + x as usize];
         blobs.retain(|b| {
             let (left, top) = (b.left.saturating_sub(2), b.top.saturating_sub(2));

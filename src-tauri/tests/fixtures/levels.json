@@ -1,6 +1,7 @@
 [
 {"image": "levels/akari-65.png", "role": "tune", "level": 65},
 {"image": "levels/aru-newyear-35.png", "role": "eval", "level": 35},
+{"image": "levels/haruna-track-56.png", "role": "eval", "level": 56},
 {"image": "levels/izumi-75.png", "role": "eval", "level": 75},
 {"image": "levels/juri-65.png", "role": "eval", "level": 65},
 {"image": "levels/koyuki-pajama-01.png", "role": "tune", "level": 1},
