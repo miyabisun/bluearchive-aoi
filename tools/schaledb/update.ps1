@@ -132,6 +132,13 @@ $growth = [ordered]@{
   # (SchaleDB/SchaleDB js/common.js) had them: EX Lv2 to 5, the others Lv2 to 10.
   ex_credits = @(80000, 500000, 3000000, 10000000)
   skill_credits = @(5000, 7500, 60000, 90000, 300000, 450000, 1500000, 2400000, 4000000)
+  # Raising a student's star, from 1 to 5, and the unique weapon's, from 1 to
+  # 4: [elephs, credits] a step. The game's recipes (ba-data
+  # RecipeIngredientExcelTable, the same for every student); the weapon's 4th
+  # step takes 200 elephs as the Blue Archive wiki's Unique weapons page has it,
+  # where the recipe still holds a placeholder of 1.
+  star_up = @(@(30, 10000), @(80, 40000), @(100, 200000), @(120, 1000000))
+  weapon_up = @(@(120, 1000000), @(180, 1500000), @(200, 2000000))
   # A skill's Lv10 also takes one Secret Technique Note.
   secret_note = [int64]($items | Where-Object { $_.Icon -eq 'item_icon_skillbook_ultimate' }).Id
 }

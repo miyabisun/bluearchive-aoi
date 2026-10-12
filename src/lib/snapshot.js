@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 /**
@@ -44,3 +44,10 @@ export async function setTarget(id, target) {
   }
   return invoke("set_target", { id, target });
 }
+
+/**
+ * Where the window loads the icon `name` from: the app's `icon` protocol;
+ * outside the app `/icon/<name>`, which the browser tests answer.
+ */
+export const iconUrl = (name) =>
+  "__TAURI_INTERNALS__" in window ? convertFileSrc(name, "icon") : `/icon/${name}`;

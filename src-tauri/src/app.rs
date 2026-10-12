@@ -262,6 +262,20 @@ pub fn run(context: tauri::Context) {
             });
             Ok(())
         })
+        // The window shows item icons from what is built in: `icon://<name>`.
+        .register_uri_scheme_protocol("icon", |_, request| {
+            let name = request.uri().path().trim_start_matches('/');
+            let response = tauri::http::Response::builder();
+            match crate::icon(name) {
+                Some((bytes, media)) => response
+                    .header("Content-Type", media)
+                    .body(std::borrow::Cow::Borrowed(bytes)),
+                None => response
+                    .status(404)
+                    .body(std::borrow::Cow::Borrowed(&[][..])),
+            }
+            .expect("a response of a status and a body")
+        })
         .invoke_handler(tauri::generate_handler![snapshot, export, set_target])
         .run(context)
         .expect("bluearchive-aoi failed to start");

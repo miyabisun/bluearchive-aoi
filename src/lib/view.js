@@ -174,27 +174,81 @@ const PLAN_KINDS = {
   orb_exp: "強化珠（経験値）",
 };
 
+/** Credits in millions ("28.4M"), to a hundredth below a million. */
+const millions = (n) =>
+  new Intl.NumberFormat("ja-JP", { maximumFractionDigits: n < 1e6 ? 2 : 1 }).format(n / 1e6) + "M";
+
+/** What a line of the plan holds: the count ("約" where it is in thousands), `null` unknown. */
+function held(row) {
+  if (!row.have) return { have: null, mark: "" };
+  return "about" in row.have
+    ? { have: row.have.about, mark: "約" }
+    : { have: row.have.exact, mark: "" };
+}
+
 /**
- * A line of the plan as table cells: what is needed, what is held ("約" where
- * a count is in thousands, "?" unknown) and how far short it falls.
+ * A line of the plan as table cells: what is needed, what is held ("?"
+ * unknown) and how far short it falls; credits in millions.
  */
 export function needCells(row) {
-  const about = row.have && "about" in row.have;
-  const have = row.have ? (row.have.exact ?? row.have.about) : null;
-  const mark = about ? "約" : "";
+  const { have, mark } = held(row);
+  const format = row.kind === "credits" ? millions : (n) => exact.format(n);
   const enough = have !== null && have >= row.need;
   return {
     name: PLAN_KINDS[row.kind] ?? row.name,
-    need: exact.format(row.need),
-    have: have === null ? "?" : mark + exact.format(have),
-    short: have === null ? "?" : enough ? "足りる" : `不足 ${mark}${exact.format(row.need - have)}`,
+    need: format(row.need),
+    have: have === null ? "?" : mark + format(have),
+    short: have === null ? "?" : enough ? "足りる" : `不足 ${mark}${format(row.need - have)}`,
     enough,
   };
+}
+
+/**
+ * The plan's lines of the kinds that come in four tiers, one per kind with
+ * its tiers in order (`null` where none is needed), and the other lines.
+ */
+export function groupPlan(rows) {
+  const families = new Map();
+  const rest = [];
+  for (const row of rows) {
+    if (!row.family) {
+      rest.push(row);
+      continue;
+    }
+    const [id, tier] = row.family;
+    const family = families.get(id) ?? { id, tiers: [null, null, null, null] };
+    family.tiers[tier - 1] = row;
+    families.set(id, family);
+  }
+  return { families: [...families.values()].sort((a, b) => a.id - b.id), rest };
+}
+
+/** A tier of a kind as "needed / held", and whether that is enough. */
+export function tierCell(row) {
+  const { have, mark } = held(row);
+  return {
+    text: `${exact.format(row.need)} / ${have === null ? "?" : mark + exact.format(have)}`,
+    enough: have !== null && have >= row.need,
+  };
+}
+
+/** A star as the targets name it: the student's ★1 to ★5, then the unique weapon's 2 to 4. */
+export const starName = (star) => (star <= 5 ? `★${star}` : `固有${star - 4}`);
+
+/**
+ * A student's star counted on into the unique weapon's (★5 with the weapon at
+ * ★2 is 6), `null` unread: the weapon is had from ★5, so a ★5 needs it read.
+ */
+export function starOf(t) {
+  if (!known(t.rarity)) return null;
+  if (t.rarity < 5) return t.rarity;
+  return t.weapon ? 4 + t.weapon.stars : null;
 }
 
 /** The columns of a target: the level, the four skills and the three equipment slots. */
 const PART_NAMES = {
   level: "Lv",
+  star: "★",
   skill: ["EX", "N", "P", "S"],
   equipment: ["装備1", "装備2", "装備3"],
 };

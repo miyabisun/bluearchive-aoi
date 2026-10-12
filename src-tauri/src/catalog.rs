@@ -199,6 +199,7 @@ fn rows(entries: &[Item], rules: &Rules, counts: &HashMap<i64, Count>) -> Vec<Ro
         .map(|(e, count)| Row {
             id: e.id,
             name: e.name.clone(),
+            icon: e.icon.clone(),
             tier: (e.tier > 0).then_some(e.tier),
             count,
         })

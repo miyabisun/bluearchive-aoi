@@ -16,6 +16,8 @@ pub struct Target {
     pub level: u8,
     pub skills: [u8; 4],
     pub equipment: [u8; 3],
+    /// The star (see `star`); `None` leaves it as it is.
+    pub star: Option<u8>,
 }
 
 impl Default for Target {
@@ -26,6 +28,7 @@ impl Default for Target {
             level: 90,
             skills: [5, 10, 10, 10],
             equipment: [10, 10, 10],
+            star: None,
         }
     }
 }
@@ -72,6 +75,10 @@ pub struct Growth {
     pub ex_credits: Vec<u64>,
     pub skill_credits: Vec<u64>,
     pub secret_note: i64,
+    /// Elephs and credits of each star step: the student's from 2 to 5, the
+    /// unique weapon's from 2 to 4.
+    pub star_up: Vec<(u64, u64)>,
+    pub weapon_up: Vec<(u64, u64)>,
 }
 
 /// A part of a student's training.
@@ -81,6 +88,7 @@ pub enum Part {
     Level,
     Skill(usize),
     Equipment(usize),
+    Star,
 }
 
 /// What a plan takes: items and equipment (blueprints) by id, credits, the exp
@@ -192,6 +200,11 @@ pub struct NeedRow {
     pub kind: Kind,
     pub id: i64,
     pub name: String,
+    /// The icon's name (see `crate::icon`); none for credits and exp.
+    pub icon: String,
+    /// For the kinds that come in four tiers, the family (its first tier's id)
+    /// and the tier, the window showing a family on one line.
+    pub family: Option<(i64, u8)>,
     pub need: u64,
     pub have: Option<Held>,
 }
@@ -202,6 +215,16 @@ pub struct UnknownRow {
     pub id: i64,
     pub name: String,
     pub part: Part,
+}
+
+/// A student's star on one scale: 1 to 5 their own (5 with the unique
+/// weapon's first), then 6 to 8 the weapon's 2 to 4.
+pub fn star_of(now: &Training) -> Option<u8> {
+    match (now.rarity?, now.weapon) {
+        (5, Some(Some(weapon))) => Some(4 + weapon.stars),
+        (5, _) => None,
+        (rarity, _) => Some(rarity),
+    }
 }
 
 /// What the student `id` takes from `now` to `target`; `grower` is `None` for
@@ -233,6 +256,24 @@ pub fn needs(
             (Some(from), _) if from >= to => {}
             (Some(from), Some(grower)) => skill_needs(&mut n, grower, skill, from, to, growth),
             _ => n.unknown.push((id, Part::Skill(skill))),
+        }
+    }
+    if let Some(to) = target.star {
+        match star_of(now) {
+            Some(star) if star >= to => {}
+            // A student's elephs are the item of their id.
+            Some(star) if id >= 0 => {
+                for step in star + 1..=to {
+                    let (elephs, credits) = if step <= 5 {
+                        growth.star_up[usize::from(step) - 2]
+                    } else {
+                        growth.weapon_up[usize::from(step) - 6]
+                    };
+                    *n.items.entry(id).or_default() += elephs;
+                    n.credits += credits;
+                }
+            }
+            _ => n.unknown.push((id, Part::Star)),
         }
     }
     for (slot, (&gear, &to)) in now.equipment.iter().zip(&target.equipment).enumerate() {
@@ -306,7 +347,7 @@ fn equipment_needs(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::student::Gear;
+    use crate::student::{Gear, Weapon};
 
     /// Small tables: Lv1 to 4, two equipment tiers of three levels.
     fn growth() -> Growth {
@@ -320,6 +361,8 @@ mod tests {
             ex_credits: vec![100, 200, 300, 400],
             skill_credits: vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
             secret_note: 9999,
+            star_up: vec![(30, 10), (80, 40), (100, 200), (120, 1000)],
+            weapon_up: vec![(120, 1500), (180, 2000), (200, 2500)],
         }
     }
 
@@ -372,7 +415,67 @@ mod tests {
             level: t.level.unwrap(),
             skills: t.skills.map(Option::unwrap),
             equipment: t.equipment.map(|g| g.map_or(1, |g| g.tier)),
+            star: None,
         }
+    }
+
+    #[test]
+    fn stars_take_the_students_elephs_up_to_the_weapons_fourth() {
+        // ★3 to the weapon's ★3: ★4, ★5 (the weapon's ★1 with it), weapon ★2, ★3.
+        let student = now(4, [1, 1, 1, 1], Some(Gear { tier: 1, level: 1 }));
+        let target = Target {
+            star: Some(7),
+            ..reached(&student)
+        };
+        let n = needs(
+            10000,
+            Some(&grower()),
+            &student,
+            &target,
+            &growth(),
+            &pieces(),
+        );
+        assert_eq!(n.items, BTreeMap::from([(10000, 100 + 120 + 120 + 180)]));
+        assert_eq!(n.credits, 200 + 1000 + 1500 + 2000);
+        // Where the weapon is, the steps go on from it.
+        let mut five = student;
+        five.rarity = Some(5);
+        five.weapon = Some(Some(Weapon {
+            level: 30,
+            stars: 2,
+        }));
+        assert_eq!(star_of(&five), Some(6));
+        let n = needs(
+            10000,
+            None,
+            &five,
+            &Target {
+                star: Some(8),
+                ..target
+            },
+            &growth(),
+            &pieces(),
+        );
+        assert_eq!(n.items, BTreeMap::from([(10000, 180 + 200)]));
+        // A target at or below the star asks nothing; a student SchaleDB lacks
+        // has no eleph to count.
+        assert_eq!(
+            needs(
+                10000,
+                None,
+                &five,
+                &Target {
+                    star: Some(5),
+                    ..target
+                },
+                &growth(),
+                &pieces()
+            )
+            .items,
+            BTreeMap::new()
+        );
+        let n = needs(-1, None, &student, &target, &growth(), &pieces());
+        assert_eq!(n.unknown, [(-1, Part::Star)]);
     }
 
     #[test]
@@ -478,6 +581,7 @@ mod tests {
             level: 3,
             skills: [1, 1, 2, 1],
             equipment: [2, 2, 1],
+            star: None,
         };
         let n = needs(1, Some(&grower()), &student, &target, &growth(), &pieces());
         assert_eq!(n.unknown, [(1, Part::Skill(2)), (1, Part::Equipment(1))]);

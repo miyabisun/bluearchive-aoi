@@ -35,9 +35,9 @@ It is a single exe with nothing to install; run it from anywhere.
 1. Start Aoi, before or after the game. It finds the game's window by itself.
 2. In the game, open the item list (アイテム) or the equipment list (装備) and sort it by
    **デフォルト** with the ascending arrow (≡↑), the game's default.
-3. Scroll the list. Entries appear in Aoi in the game's order with their counts, under
-   the tab of their list; type in **名前で検索** to find one (hiragana finds the katakana names). Equipment names carry their
-   tier (T1 to T10), since a blueprint's name alone does not tell it.
+3. Scroll the list. Entries appear in Aoi in the game's order, each as its icon with its
+   count at the corner, under the tab of their list; hover an icon for its name, or type
+   in **名前で検索** to find one (hiragana finds the katakana names).
 
 For students, open a student's screen (生徒 → a student, the 基本情報 tab) and step
 through your students with the game's ＜ and ＞ buttons, pausing a moment on each. Each
@@ -80,10 +80,15 @@ not read.
 
 To plan training, tick 育成 beside the students to train under the 生徒 tab. The 育成 tab
 lists them with their targets, Lv90, skills 5/10/10/10 and equipment T10/10/10 to start
-with; click a target and change it with ↑ and ↓ (the value read stands over it). Below
-come what the targets take, all together, against what is held: credits, the exp of
-activity reports and of enhancement orbs, then skill materials and blueprints, each
-足りる or 不足 by how much (約 where a count is in thousands). A student SchaleDB does not
+with; click a target and change it with ↑ and ↓ (the value read stands over it). The star
+(★) stays at the student's own until you choose one: ★1 to ★5, then the unique weapon's
+固有2 to 固有4, counting the elephs and credits each step takes. Below come what the
+targets take, all together, against what is held: credits (in millions, M), the exp of
+activity reports and of enhancement orbs, then the other materials and blueprints, each
+足りる or 不足 by how much (約 where a count is in thousands). Tech notes, tactical BDs and
+ooparts follow, one line a kind, their four tiers left to right on grey, blue, yellow and
+purple: each by its icon (hover for its name) with what is needed / held, green when
+enough and red when short. A student SchaleDB does not
 list yet, or a value not read, is named as what could not be counted. The exp within a
 level is not read, so a student partway to the next level takes a little less than shown;
 equipment is counted levelled to the top of each tier before it is made into the next.

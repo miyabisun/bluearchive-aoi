@@ -185,6 +185,7 @@ mod tests {
         Row {
             id,
             name: name.to_owned(),
+            icon: String::new(),
             tier,
             count,
         }

@@ -29,6 +29,26 @@ mod embedded {
     include!(concat!(env!("OUT_DIR"), "/embedded.rs"));
 }
 
+/// The picture of the item or equipment icon `name` built into the program
+/// (`data/schaledb/icons`, `data/schaledb/equipment-icons`, `data/extra/icons`,
+/// `data/extra/equipment-icons`), with its media type.
+pub fn icon(name: &str) -> Option<(&'static [u8], &'static str)> {
+    [
+        ("schaledb/icons/", ".webp", "image/webp"),
+        ("schaledb/equipment-icons/", ".webp", "image/webp"),
+        ("extra/icons/", ".png", "image/png"),
+        ("extra/equipment-icons/", ".png", "image/png"),
+    ]
+    .into_iter()
+    .find_map(|(dir, ext, media)| {
+        let path = format!("{dir}{name}{ext}");
+        embedded::FILES
+            .iter()
+            .find(|(file, _)| *file == path)
+            .map(|(_, bytes)| (*bytes, media))
+    })
+}
+
 use std::{
     collections::{BTreeMap, HashMap},
     path::Path,
@@ -107,6 +127,8 @@ struct ExtraStudent {
 pub struct Row {
     pub id: i64,
     pub name: String,
+    /// The icon's name (see `icon`).
+    pub icon: String,
     pub tier: Option<u8>,
     pub count: Count,
 }
@@ -234,40 +256,37 @@ impl Recognizer {
         };
         let (items_held, equipment_held) = (counts(items), counts(equipment));
         let growth = &self.planner.growth;
-        let line = |kind, id, name: &str, need, have| NeedRow {
+        let line = |kind, id, entry: Option<&Item>, need, have| NeedRow {
             kind,
             id,
-            name: name.to_owned(),
+            name: entry.map(|e| e.name.clone()).unwrap_or_default(),
+            icon: entry.map(|e| e.icon.clone()).unwrap_or_default(),
+            family: (kind == Kind::Item)
+                .then(|| self.prices.family(id))
+                .flatten(),
             need,
             have,
         };
-        let named = |catalog: &Catalog, id: i64| {
-            catalog
-                .entries()
-                .iter()
-                .find(|e| e.id == id)
-                .map(|e| e.name.clone())
-                .unwrap_or_default()
-        };
+        let entry = |list: List, id: i64| self.catalog(list).entries().iter().find(|e| e.id == id);
         let mut rows = vec![
             line(
                 Kind::Credits,
                 0,
-                "",
+                None,
                 needs.credits,
                 credits.map(Held::Exact),
             ),
             line(
                 Kind::ReportExp,
                 0,
-                "",
+                None,
                 needs.report_exp,
                 Some(held(&items_held, &growth.reports)),
             ),
             line(
                 Kind::OrbExp,
                 0,
-                "",
+                None,
                 needs.orb_exp,
                 Some(held(&equipment_held, &growth.orbs)),
             ),
@@ -277,14 +296,14 @@ impl Recognizer {
             line(
                 Kind::Item,
                 id,
-                &named(&self.items, id),
+                entry(List::Items, id),
                 need,
                 Some(held(&items_held, &[(id, 1)])),
             )
         }));
         rows.extend(needs.equipment.iter().map(|(&id, &need)| {
             let have = Some(held(&equipment_held, &[(id, 1)]));
-            line(Kind::Equipment, id, &named(&self.equipment, id), need, have)
+            line(Kind::Equipment, id, entry(List::Equipment, id), need, have)
         }));
         let unknown = needs
             .unknown

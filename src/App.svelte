@@ -1,25 +1,33 @@
 <script>
   import { onMount } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
-  import { exportAll, follow, setTarget } from "./lib/snapshot.js";
+  import { exportAll, follow, iconUrl, setTarget } from "./lib/snapshot.js";
   import {
     LISTS,
     filterRows,
     filterShops,
     followTab,
     formatCount,
-    needCells,
     goodCells,
+    groupPlan,
+    needCells,
     shopStale,
     sortStudents,
+    starName,
+    starOf,
     statusView,
     studentCells,
+    tierCell,
     unknownText,
   } from "./lib/view.js";
 
-  /** The columns of a target: where each reads and changes, and its highest value. */
+  /**
+   * The columns of a target: where each reads and changes, and its highest
+   * value; the star is chosen from a list.
+   */
   const TARGET_COLUMNS = [
     { label: "Lv", max: 90, at: ["level"] },
+    { label: "★", star: true },
     { label: "EX", max: 5, at: ["skills", 0] },
     { label: "N", max: 10, at: ["skills", 1] },
     { label: "P", max: 10, at: ["skills", 2] },
@@ -43,6 +51,16 @@
     const target = structuredClone($state.snapshot(row.target));
     if (i === undefined) target[key] = n;
     else target[key][i] = n;
+    setTarget(row.id, target);
+  }
+
+  /** The stars a target can be: ★1 to ★5, then the unique weapon's 2 to 4. */
+  const STARS = [1, 2, 3, 4, 5, 6, 7, 8];
+
+  /** Sets a target's star (kept as the student's while never chosen). */
+  function restar(row, value) {
+    const target = structuredClone($state.snapshot(row.target));
+    target.star = Number(value);
     setTarget(row.id, target);
   }
 
@@ -103,7 +121,6 @@
     const found = filterRows(rows, query);
     return view.tab === "students" ? sortStudents(found, sortBy) : found;
   });
-  const heading = $derived(LISTS.find((l) => l.id === view.tab).name);
   /** How many students were read, to compare with how many the game holds. */
   const studentCount = $derived((snapshot.students ?? []).length);
   const nothingRead = $derived(LISTS.every((l) => (snapshot[l.id] ?? []).length === 0));
@@ -198,18 +215,37 @@
                 <tr>
                   <td class="name">{row.name}</td>
                   {#each TARGET_COLUMNS as column (column.label)}
-                    <td>
-                      <span class="now"
-                        >{row.training ? valueAt(row.training, column.at) : "?"}→</span
-                      ><input
-                        type="number"
-                        min="1"
-                        max={column.max}
-                        value={valueAt(row.target, column.at)}
-                        aria-label="{row.name}の{column.label}の目標"
-                        onchange={(event) => retarget(row, column, event.currentTarget.value)}
-                      />
-                    </td>
+                    {#if column.star}
+                      {@const now = row.training ? starOf(row.training) : null}
+                      {@const to = row.target.star ?? now}
+                      <td>
+                        <span class="now">{now === null ? "?" : starName(now)}→</span><select
+                          value={to ?? ""}
+                          aria-label="{row.name}の★の目標"
+                          onchange={(event) => restar(row, event.currentTarget.value)}
+                        >
+                          {#if to === null}<option value="">?</option>{/if}
+                          {#each STARS as star (star)}
+                            <option value={star} disabled={now !== null && star < now}
+                              >{starName(star)}</option
+                            >
+                          {/each}
+                        </select>
+                      </td>
+                    {:else}
+                      <td>
+                        <span class="now"
+                          >{row.training ? valueAt(row.training, column.at) : "?"}→</span
+                        ><input
+                          type="number"
+                          min="1"
+                          max={column.max}
+                          value={valueAt(row.target, column.at)}
+                          aria-label="{row.name}の{column.label}の目標"
+                          onchange={(event) => retarget(row, column, event.currentTarget.value)}
+                        />
+                      </td>
+                    {/if}
                   {/each}
                 </tr>
               {/each}
@@ -221,6 +257,7 @@
           {#if (snapshot.plan ?? []).length === 0}
             <p class="empty" data-state="reached">目標までに要る素材はありません</p>
           {:else}
+            {@const plan = groupPlan(snapshot.plan)}
             <table class="plan" data-state="success">
               <thead>
                 <tr>
@@ -231,17 +268,53 @@
                 </tr>
               </thead>
               <tbody>
-                {#each snapshot.plan as line (`${line.kind}-${line.id}`)}
+                {#each plan.rest as line (`${line.kind}-${line.id}`)}
                   {@const cells = needCells(line)}
                   <tr>
                     <td>{cells.name}</td>
                     <td class="fit">{cells.need}</td>
                     <td class="fit">{cells.have}</td>
-                    <td class="fit" class:short={!cells.enough}>{cells.short}</td>
+                    <td class="fit" class:enough={cells.enough} class:short={!cells.enough}
+                      >{cells.short}</td
+                    >
                   </tr>
                 {/each}
               </tbody>
             </table>
+            {#if plan.families.length > 0}
+              <!-- A kind's tiers on one line, told by their icons and colours. -->
+              <table class="tiers" data-state="success">
+                <thead class="hidden">
+                  <tr>
+                    {#each ["初級", "中級", "上級", "最上級"] as tier (tier)}
+                      <th scope="col">{tier}</th>
+                    {/each}
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each plan.families as family (family.id)}
+                    <tr>
+                      {#each family.tiers as line, i (i)}
+                        <td class="tier-{i + 1}">
+                          {#if line}
+                            {@const cell = tierCell(line)}
+                            <img
+                              src={iconUrl(line.icon)}
+                              alt={line.name}
+                              title={line.name}
+                              width="40"
+                              height="40"
+                            /><span class:enough={cell.enough} class:short={!cell.enough}
+                              >{cell.text}</span
+                            >
+                          {/if}
+                        </td>
+                      {/each}
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {/if}
           {/if}
         </div>
       {/if}
@@ -347,22 +420,21 @@
           </table>
         </div>
       {:else}
+        <!-- Each item by its icon, the count at its corner and the name on hover. -->
         <div class="table-scroll">
-          <table data-state="success">
-            <thead>
-              <tr><th scope="col">{heading}</th><th scope="col" class="count">個数</th></tr>
-            </thead>
-            <tbody>
-              {#each shown as row (row.id)}
-                <tr>
-                  <td>
-                    {#if row.tier}<span class="tier">T{row.tier}</span>{/if}{row.name}
-                  </td>
-                  <td class="count">{formatCount(row.count)}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
+          <ul class="tiles" data-state="success">
+            {#each shown as row (row.id)}
+              <li title={row.name}>
+                <img
+                  src={iconUrl(row.icon)}
+                  alt={row.name}
+                  width="64"
+                  height="64"
+                  loading="lazy"
+                /><span class="count">{formatCount(row.count)}</span>
+              </li>
+            {/each}
+          </ul>
         </div>
       {/if}
     {/if}
@@ -448,12 +520,6 @@
     font-size: var(--fs-sm)
     color: var(--c-muted)
     overflow-wrap: anywhere
-
-  .tier
-    margin-right: var(--sp-2)
-    color: var(--c-muted)
-    font-size: var(--fs-sm)
-    font-variant-numeric: tabular-nums
 
   h1
     margin: 0
@@ -626,7 +692,7 @@
     width: 1%
     text-align: center
 
-  // The current value over the target's field, so eight targets fit 720px.
+  // The current value over the target's field, so nine targets fit 720px.
   .targets
     margin-bottom: var(--sp-4)
     td:not(.name)
@@ -636,7 +702,8 @@
       color: var(--c-muted)
       font-size: var(--fs-caption)
       font-variant-numeric: tabular-nums
-    input
+    input, select
+      box-sizing: border-box
       width: 3em
       padding: 2px var(--sp-1)
       border: 1px solid var(--c-border)
@@ -647,6 +714,9 @@
       font-variant-numeric: tabular-nums
       &:focus
         border-color: var(--c-accent)
+    // As wide as its longest star.
+    select
+      width: auto
 
   // Narrower than its numbers, the table scrolls sideways rather than squeeze the names.
   .plan :is(th, td):first-child
@@ -657,9 +727,35 @@
     color: var(--c-muted)
     font-size: var(--fs-sm)
 
+  .enough
+    color: var(--c-ok)
+
   .short
-    color: var(--c-on-surface)
+    color: var(--c-danger)
     font-weight: 600
+
+  // Each tier on its colour, from the grey of the first to the purple of the last.
+  .tiers
+    margin-top: var(--sp-4)
+    td
+      width: 25%
+      padding: var(--sp-1) var(--sp-2)
+      border-bottom: 2px solid var(--c-surface)
+      font-variant-numeric: tabular-nums
+      white-space: nowrap
+    @for $i from 1 through 4
+      .tier-#{$i}
+        background: var(--c-tier-#{$i})
+    img
+      vertical-align: middle
+      margin-right: var(--sp-2)
+
+  .hidden
+    position: absolute
+    width: 1px
+    height: 1px
+    overflow: hidden
+    clip-path: inset(50%)
 
   // As narrow as their contents, leaving the names the room.
   .fit
@@ -669,9 +765,33 @@
     font-variant-numeric: tabular-nums
     white-space: nowrap
 
-  .count
-    width: 7em
-    text-align: right
-    font-variant-numeric: tabular-nums
-    white-space: nowrap
+  .tiles
+    display: grid
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr))
+    gap: var(--sp-2)
+    margin: 0
+    padding: 0
+    list-style: none
+    li
+      position: relative
+      display: flex
+      justify-content: center
+      padding: var(--sp-1)
+      border-radius: var(--radius-sm)
+      background: var(--c-wash-base)
+    img
+      display: block
+      width: 64px
+      height: 64px
+      object-fit: contain
+    .count
+      position: absolute
+      right: 2px
+      bottom: 2px
+      padding: 0 var(--sp-1)
+      border-radius: var(--radius-sm)
+      background: var(--c-surface)
+      font-size: var(--fs-caption)
+      font-variant-numeric: tabular-nums
+      white-space: nowrap
 </style>

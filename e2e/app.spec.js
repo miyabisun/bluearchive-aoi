@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 
 const items = Array.from({ length: 120 }, (_, i) => ({
@@ -6,24 +7,55 @@ const items = Array.from({ length: 120 }, (_, i) => ({
     i === 3
       ? "とても長い名前の期間限定でない普通のアイテム（ゲヘナ・トリニティ・ミレニアム共通）"
       : `アイテム${i}`,
+  icon: `item_icon_skillbook_gehenna_${i % 4}`,
   tier: null,
   count: i === 5 ? { thousands: 51 } : { exact: i * 997 },
 }));
 
 const equipment = [
-  { id: 1, name: "初級強化珠", tier: null, count: { exact: 1383 } },
-  { id: 1000, name: "無地のキャップ", tier: 1, count: { exact: 249 } },
-  { id: 101009, name: "ゲーミングヘルメットの設計図", tier: 10, count: { exact: 17 } },
-  { id: 501000, name: "帽子の万能設計図", tier: null, count: { thousands: 51 } },
+  { id: 1, name: "初級強化珠", icon: "equipment_icon_exp_0", tier: null, count: { exact: 1383 } },
+  {
+    id: 1000,
+    name: "無地のキャップ",
+    icon: "equipment_icon_hat_tier1",
+    tier: 1,
+    count: { exact: 249 },
+  },
+  {
+    id: 101009,
+    name: "ゲーミングヘルメットの設計図",
+    icon: "equipment_icon_hat_tier10_piece",
+    tier: 10,
+    count: { exact: 17 },
+  },
+  {
+    id: 501000,
+    name: "帽子の万能設計図",
+    icon: "equipment_icon_hat_useall_piece",
+    tier: null,
+    count: { thousands: 51 },
+  },
 ];
+
+/** Where the app's icons are, which the page loads from `/icon/<name>` here. */
+const ICONS = ["src-tauri/data/schaledb/icons", "src-tauri/data/schaledb/equipment-icons"];
 
 const reading = (list, fps = 27.4) => ({ state: "reading", list, fps, dropped: 0 });
 
-/** Opens the page showing `snapshot` as the watcher's. */
+/** Opens the page showing `snapshot` as the watcher's, with the app's icons. */
 async function open(page, snapshot) {
+  await page.route("**/icon/*", (route) => {
+    const name = new URL(route.request().url()).pathname.slice("/icon/".length);
+    const file = ICONS.map((dir) => `${dir}/${name}.webp`).find(existsSync);
+    return file ? route.fulfill({ path: file }) : route.fulfill({ status: 404 });
+  });
   await page.addInitScript((demo) => (window.__AOI_DEMO__ = demo), snapshot);
   await page.goto("/");
 }
+
+/** The names of the tiles shown, as their hover tells them. */
+const tileNames = (page) =>
+  page.locator(".tiles li").evaluateAll((tiles) => tiles.map((t) => t.title));
 
 const overflow = (page) =>
   page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -35,12 +67,16 @@ test("lists the item tally in order and narrows it by name", async ({ page }) =>
     "aria-selected",
     "true",
   );
-  await expect(page.locator("tbody tr")).toHaveCount(120);
-  await expect(page.locator("tbody tr").nth(2)).toHaveText("アイテム21,994");
-  await expect(page.locator("tbody tr").nth(5).locator("td.count")).toHaveText("51K");
+  const tiles = page.locator(".tiles li");
+  await expect(tiles).toHaveCount(120);
+  await expect(tiles.nth(2)).toHaveText("1,994");
+  await expect(tiles.nth(2)).toHaveAttribute("title", "アイテム2");
+  await expect(tiles.nth(2).getByRole("img", { name: "アイテム2" })).toBeVisible();
+  await expect(tiles.nth(5)).toHaveText("51K");
 
   await page.getByLabel("名前で検索").fill("ｱｲﾃﾑ11");
-  await expect(page.locator("tbody td:first-child")).toHaveText([
+  await expect(tiles).toHaveCount(11);
+  expect(await tileNames(page)).toEqual([
     "アイテム11",
     ...Array.from({ length: 10 }, (_, i) => `アイテム${110 + i}`),
   ]);
@@ -48,22 +84,25 @@ test("lists the item tally in order and narrows it by name", async ({ page }) =>
   await expect(page.getByText("一致する項目がありません")).toBeVisible();
 });
 
-test("shows the equipment tab with tiers when the game shows the equipment list", async ({
-  page,
-}) => {
+test("shows the equipment tab when the game shows the equipment list", async ({ page }) => {
   await open(page, { status: reading("equipment"), items, equipment });
   await expect(page.getByRole("status")).toHaveText("装備を集計中 27 fps");
   await expect(page.getByRole("tab", { name: "装備" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.locator("thead th").first()).toHaveText("装備");
-  await expect(page.locator("tbody tr")).toHaveText([
-    "初級強化珠1,383",
-    "T1無地のキャップ249",
-    "T10ゲーミングヘルメットの設計図17",
-    "帽子の万能設計図51K",
+  await expect(page.locator(".tiles li")).toHaveText(["1,383", "249", "17", "51K"]);
+  expect(await tileNames(page)).toEqual([
+    "初級強化珠",
+    "無地のキャップ",
+    "ゲーミングヘルメットの設計図",
+    "帽子の万能設計図",
   ]);
+  // The icons load from the app.
+  const loaded = await page
+    .locator(".tiles img")
+    .evaluateAll((imgs) => imgs.map((i) => i.complete && i.naturalWidth > 0));
+  expect(loaded).toEqual([true, true, true, true]);
 
   await page.getByRole("tab", { name: "アイテム" }).click();
-  await expect(page.locator("tbody tr")).toHaveCount(120);
+  await expect(page.locator(".tiles li")).toHaveCount(120);
 });
 
 test("guides to the list before anything is read", async ({ page }) => {
@@ -72,7 +111,7 @@ test("guides to the list before anything is read", async ({ page }) => {
   await expect(page.locator("[data-state=empty]")).toContainText("アイテム一覧");
   await expect(page.getByLabel("名前で検索")).toHaveCount(0);
   await page.getByRole("tab", { name: "装備" }).click();
-  await expect(page.locator("tbody tr")).toHaveCount(4);
+  await expect(page.locator(".tiles li")).toHaveCount(4);
 });
 
 test("shows why the capture failed", async ({ page }) => {
@@ -220,23 +259,12 @@ test("has nothing to export before anything is read", async ({ page }) => {
   await expect(page.getByRole("button", { name: "書き出す" })).toBeDisabled();
 });
 
-/** Whether nothing covers the middle of the first column heading. */
-const headingShows = (page) =>
-  page
-    .locator("thead th")
-    .first()
-    .evaluate((th) => {
-      const r = th.getBoundingClientRect();
-      return th.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
-    });
-
-test("keeps the column headings in sight down to the last row", async ({ page }) => {
+test("keeps the search field in sight down to the last tile", async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 480 });
   await open(page, { status: reading("items"), items, equipment });
-  await page.locator("tbody tr").last().scrollIntoViewIfNeeded();
-  await expect(page.locator("tbody tr").last()).toBeInViewport();
-  await expect(page.locator("thead th").first()).toBeInViewport();
-  expect(await headingShows(page)).toBe(true);
+  await page.locator(".tiles li").last().scrollIntoViewIfNeeded();
+  await expect(page.locator(".tiles li").last()).toBeInViewport();
+  await expect(page.getByLabel("名前で検索")).toBeInViewport();
 });
 
 test("keeps the student headings over their columns when scrolled sideways", async ({ page }) => {
@@ -421,7 +449,18 @@ test("marks a student for training from the student tab", async ({ page }) => {
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ id: 10005, target: {} }]);
 });
 
-const target = { level: 90, skills: [5, 10, 10, 10], equipment: [10, 10, 10] };
+const target = { level: 90, skills: [5, 10, 10, 10], equipment: [10, 10, 10], star: null };
+
+/** A line of the plan for an item of the kinds that come in four tiers. */
+const tiered = (id, name, family, tier, need, have) => ({
+  kind: "item",
+  id,
+  name,
+  icon: `item_icon_skillbook_gehenna_${tier - 1}`,
+  family: [family, tier],
+  need,
+  have,
+});
 
 test("shows the targets and what they take against what is held", async ({ page }) => {
   await open(page, {
@@ -433,7 +472,9 @@ test("shows the targets and what they take against what is held", async ({ page 
     plan: [
       { kind: "credits", id: 0, name: "", need: 1500000, have: { exact: 244654006 } },
       { kind: "report_exp", id: 0, name: "", need: 60000, have: { about: 51000 } },
-      { kind: "item", id: 4030, name: "初級技術ノート（ゲヘナ）", need: 30, have: { exact: 12 } },
+      tiered(4030, "初級技術ノート（ゲヘナ）", 4030, 1, 30, { exact: 12 }),
+      tiered(4033, "最上級技術ノート（ゲヘナ）", 4030, 4, 3, { about: 51000 }),
+      { kind: "item", id: 9999, name: "秘伝ノート", icon: "", family: null, need: 3, have: null },
     ],
     plan_unknown: [
       { id: 20019, name: "アカネ（バニーガール）", part: "level" },
@@ -443,13 +484,32 @@ test("shows the targets and what they take against what is held", async ({ page 
   await page.getByRole("tab", { name: "育成" }).click();
   const row = page.locator("table.targets tbody tr");
   await expect(row.locator("td").first()).toHaveText("アカネ（バニーガール）");
-  await expect(row.locator(".now")).toHaveText(["?→", "2→", "3→", "3→", "6→", "4→", "?→", "3→"]);
+  await expect(row.locator(".now")).toHaveText([
+    "?→",
+    "★3→",
+    "2→",
+    "3→",
+    "3→",
+    "6→",
+    "4→",
+    "?→",
+    "3→",
+  ]);
   await expect(page.getByText("アカネ（バニーガール）: Lv・装備2 は数えられません")).toBeVisible();
   await expect(page.locator("table.plan tbody tr")).toHaveText([
-    "クレジット1,500,000244,654,006足りる",
+    "クレジット1.5M244.7M足りる",
     "レポート（経験値）60,000約51,000不足 約9,000",
-    "初級技術ノート（ゲヘナ）3012不足 18",
+    "秘伝ノート3??",
   ]);
+  // A kind's four tiers on one line, by icon: what is needed over what is held.
+  const tiers = page.locator("table.tiers tbody tr td");
+  await expect(tiers).toHaveText(["30 / 12", "", "", "3 / 約51,000"]);
+  await expect(tiers.first().locator(".short")).toHaveCount(1);
+  await expect(tiers.last().locator(".enough")).toHaveCount(1);
+  await expect(page.getByRole("img", { name: "最上級技術ノート（ゲヘナ）" })).toHaveAttribute(
+    "src",
+    "/icon/item_icon_skillbook_gehenna_3",
+  );
 
   // A target changes from the keyboard, within its range.
   const ex = page.getByLabel("アカネ（バニーガール）のEXの目標");
@@ -484,6 +544,48 @@ test("a target being typed is kept while the game is read", async ({ page }) => 
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([
     { id: 20019, target: { ...target, level: 8 } },
   ]);
+});
+
+test("a star is chosen from the student's on, and kept while the game is read", async ({
+  page,
+}) => {
+  const snapshot = {
+    status: reading("items"),
+    items,
+    equipment,
+    students,
+    targets: [{ id: 20019, target }],
+    plan: [],
+    plan_unknown: [],
+  };
+  await open(page, snapshot);
+  await page.getByRole("tab", { name: "育成" }).click();
+  const star = page.getByLabel("アカネ（バニーガール）の★の目標");
+  // Never chosen, the target stays at the student's star; none below it.
+  await expect(star).toHaveValue("3");
+  await expect(star.locator("option:disabled")).toHaveText(["★1", "★2"]);
+  await star.selectOption({ label: "固有2" });
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([
+    { id: 20019, target: { ...target, star: 6 } },
+  ]);
+  await page.evaluate(
+    (s) =>
+      window.__AOI_PUSH__({
+        ...s,
+        targets: [{ id: 20019, target: { ...s.targets[0].target, star: 6 } }],
+      }),
+    snapshot,
+  );
+  await page.evaluate(
+    (s) =>
+      window.__AOI_PUSH__({
+        ...s,
+        status: { ...s.status, fps: 9 },
+        targets: [{ id: 20019, target: { ...s.targets[0].target, star: 6 } }],
+      }),
+    snapshot,
+  );
+  await expect(star).toHaveValue("6");
 });
 
 test("guides to the student tab before any student is marked", async ({ page }) => {

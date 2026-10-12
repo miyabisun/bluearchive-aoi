@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   filterRows,
   filterShops,
+  groupPlan,
   needCells,
+  starName,
+  starOf,
+  tierCell,
   unknownText,
   goodCells,
   shopStale,
@@ -295,11 +299,14 @@ describe("plan", () => {
       needCells({ kind: "credits", name: "", need: 1500000, have: { exact: 244654006 } }),
     ).toEqual({
       name: "クレジット",
-      need: "1,500,000",
-      have: "244,654,006",
+      need: "1.5M",
+      have: "244.7M",
       short: "足りる",
       enough: true,
     });
+    expect(
+      needCells({ kind: "credits", name: "", need: 28431500, have: { exact: 12000000 } }).short,
+    ).toBe("不足 16.4M");
     expect(
       needCells({ kind: "report_exp", name: "", need: 60000, have: { about: 51000 } }),
     ).toEqual({
@@ -310,6 +317,50 @@ describe("plan", () => {
       enough: false,
     });
     expect(needCells({ kind: "orb_exp", name: "", need: 5, have: null }).short).toBe("?");
+  });
+
+  it("puts the four tiers of a kind on one line, the rest apart", () => {
+    const row = (id, family) => ({
+      kind: "item",
+      id,
+      name: String(id),
+      family,
+      need: 1,
+      have: null,
+    });
+    const rows = [
+      { kind: "credits", id: 0, name: "", family: null, need: 5, have: null },
+      row(4002, [4000, 3]),
+      row(3000, [3000, 1]),
+      row(4000, [4000, 1]),
+      row(9999, null),
+    ];
+    expect(groupPlan(rows)).toEqual({
+      families: [
+        { id: 3000, tiers: [rows[2], null, null, null] },
+        { id: 4000, tiers: [rows[3], null, rows[1], null] },
+      ],
+      rest: [rows[0], rows[4]],
+    });
+  });
+
+  it("writes a tier as needed against held", () => {
+    expect(tierCell({ need: 30, have: { exact: 12 } })).toEqual({ text: "30 / 12", enough: false });
+    expect(tierCell({ need: 3, have: { about: 51000 } })).toEqual({
+      text: "3 / 約51,000",
+      enough: true,
+    });
+  });
+
+  it("names a star: the student's 1 to 5, then the unique weapon's", () => {
+    expect([1, 4, 5, 6, 8].map(starName)).toEqual(["★1", "★4", "★5", "固有2", "固有4"]);
+  });
+
+  it("counts a student's star on into the unique weapon's", () => {
+    const at = (rarity, weapon) => starOf({ rarity, weapon });
+    expect([at(3, null), at(5, { level: 40, stars: 2 }), at(5, undefined), at(null, null)]).toEqual(
+      [3, 6, null, null],
+    );
   });
 
   it("names the parts that could not be counted, student by student", () => {

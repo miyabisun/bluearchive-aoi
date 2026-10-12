@@ -72,3 +72,34 @@ fn lv1_to_90_takes_the_game_tables_exp() {
     assert_eq!(need(&rows, Kind::ReportExp, 0), 1_249_185);
     assert_eq!(need(&rows, Kind::Credits, 0), 1_249_185 * 7);
 }
+
+/// What the plan asks for of items and blueprints shows by icons the window
+/// loads, and the kinds of four tiers go by their first tier.
+#[test]
+fn the_planned_goods_have_icons_and_the_tiered_kinds_families() {
+    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let (rows, _) = recognizer.plan_rows(
+        &BTreeMap::from([(10000, Target::default())]),
+        &[aru(1)],
+        &[],
+        &[],
+        None,
+    );
+    let goods: Vec<_> = rows
+        .iter()
+        .filter(|r| matches!(r.kind, Kind::Item | Kind::Equipment))
+        .collect();
+    assert!(goods.len() > 10, "{goods:?}");
+    for row in goods {
+        assert!(
+            aoi::icon(&row.icon).is_some(),
+            "{} {:?}",
+            row.name,
+            row.icon
+        );
+    }
+    // Aru's skills take Gehenna's tech notes, 4030 the first tier.
+    let family = |id| rows.iter().find(|r| r.id == id).and_then(|r| r.family);
+    assert_eq!(family(4031), Some((4030, 2)));
+    assert_eq!(family(9999), None);
+}

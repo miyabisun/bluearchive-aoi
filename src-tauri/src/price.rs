@@ -84,6 +84,20 @@ impl Prices {
         }
     }
 
+    /// The family and tier of a good of the kinds that come in four tiers
+    /// (tactical BDs, tech notes, ooparts), the family told by its first tier.
+    pub fn family(&self, id: i64) -> Option<(i64, u8)> {
+        let good = self.goods.get(&id)?;
+        if !["戦術教育BD", "技術ノート", "オーパーツ"]
+            .iter()
+            .any(|kind| is(good, kind))
+        {
+            return None;
+        }
+        let tier = tier(&good.rarity)?;
+        Some((id - i64::from(tier) + 1, tier))
+    }
+
     /// The coins of `shop`, left first (none for a shop without terms).
     pub fn coins(&self, shop: &str) -> &[String] {
         self.shops.get(shop).map_or(&[], |t| t.coins.as_slice())
@@ -243,6 +257,15 @@ mod tests {
         // No rule for the rare coin's notes, nor for a shop without terms.
         assert_eq!(p.find("総力戦", 4000, 0), None);
         assert_eq!(p.find("カケラ(文字)", 10019, 0), None);
+    }
+
+    #[test]
+    fn the_four_tier_kinds_go_in_families_by_their_first_tier() {
+        let p = prices();
+        assert_eq!(p.family(4003), Some((4000, 4)));
+        assert_eq!(p.family(201), Some((200, 2)));
+        assert_eq!(p.family(9999), None);
+        assert_eq!(p.family(10019), None);
     }
 
     #[test]
