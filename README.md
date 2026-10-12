@@ -54,6 +54,10 @@ student appears under the 生徒 tab with their training:
 
 A field Aoi cannot read for sure shows ?.
 
+The 生徒 tab tells how many students have been read (生徒 42). Compare it with how many
+students you have in the game to see whether any were missed; a student whose name could
+not be read is not counted.
+
 Students are listed highest level first, then by rarity, then by bond. Click a column's
 heading to list them by that column instead, highest first (skills, ability release and
 the equipment's tiers by their total); ties keep the default order, and ? comes last.

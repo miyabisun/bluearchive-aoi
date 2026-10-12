@@ -292,3 +292,17 @@ test("orders students by level, rarity and bond, or by the column chosen", async
   await page.keyboard.press("Enter");
   await expect(names).toHaveText(["ヒナ", "アル", "ミカ", "ホシノ"]);
 });
+
+test("counts the students read on their tab", async ({ page }) => {
+  const tab = page.getByRole("tab", { name: "生徒" });
+  await open(page, { status: { state: "no_game" }, items, equipment, students: [] });
+  await expect(tab).toHaveText("生徒");
+
+  await open(page, { status: reading("students"), items, equipment, students });
+  await expect(tab).toHaveText("生徒 2");
+
+  const roster = Array.from({ length: 42 }, (_, i) => trained(i + 1, `生徒${i + 1}`, {}));
+  await open(page, { status: reading("students"), items, equipment, students: roster });
+  await expect(tab).toHaveText("生徒 42");
+  await expect(page.getByRole("tab", { name: "生徒 42" })).toHaveAttribute("aria-selected", "true");
+});

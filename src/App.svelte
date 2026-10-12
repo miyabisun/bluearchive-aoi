@@ -53,6 +53,8 @@
     return view.tab === "students" ? sortStudents(found, sortBy) : found;
   });
   const heading = $derived(LISTS.find((l) => l.id === view.tab).name);
+  /** How many students were read, to compare with how many the game holds. */
+  const studentCount = $derived((snapshot.students ?? []).length);
   const nothingRead = $derived(LISTS.every((l) => (snapshot[l.id] ?? []).length === 0));
 
   async function save() {
@@ -87,7 +89,10 @@
           id="tab-{list.id}"
           aria-selected={view.tab === list.id}
           aria-controls="list"
-          onclick={() => (view = { ...view, tab: list.id })}>{list.name}</button
+          onclick={() => (view = { ...view, tab: list.id })}
+          >{list.name}{#if list.id === "students" && studentCount > 0}<span class="tally"
+              >&nbsp;{studentCount}</span
+            >{/if}</button
         >
       {/each}
     </div>
@@ -214,6 +219,11 @@
         border-bottom-color: var(--c-accent)
         color: var(--c-on-surface)
         font-weight: 600
+
+  .tally
+    color: var(--c-muted)
+    font-weight: 400
+    font-variant-numeric: tabular-nums
 
   .export
     margin-left: auto
