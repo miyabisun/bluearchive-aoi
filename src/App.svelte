@@ -132,30 +132,33 @@
           </table>
         </div>
       {:else}
-        <table data-state="success">
-          <thead>
-            <tr><th scope="col">{heading}</th><th scope="col" class="count">個数</th></tr>
-          </thead>
-          <tbody>
-            {#each shown as row (row.id)}
-              <tr>
-                <td>
-                  {#if row.tier}<span class="tier">T{row.tier}</span>{/if}{row.name}
-                </td>
-                <td class="count">{formatCount(row.count)}</td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table data-state="success">
+            <thead>
+              <tr><th scope="col">{heading}</th><th scope="col" class="count">個数</th></tr>
+            </thead>
+            <tbody>
+              {#each shown as row (row.id)}
+                <tr>
+                  <td>
+                    {#if row.tier}<span class="tier">T{row.tier}</span>{/if}{row.name}
+                  </td>
+                  <td class="count">{formatCount(row.count)}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
       {/if}
     {/if}
   </div>
 </main>
 
 <style lang="sass">
+  // The page itself never scrolls: the top and the search field stay, and the
+  // table scrolls in its own box under them, its headings held at the box's top.
   .top
-    position: sticky
-    top: 0
+    flex: none
     background: var(--c-wash-base)
     border-bottom: 1px solid var(--c-border)
 
@@ -250,9 +253,21 @@
     color: var(--c-danger)
 
   .content
+    flex: 1
+    min-height: 0
+    display: flex
+    flex-direction: column
+    width: 100%
     max-width: 720px
     margin: 0 auto
-    padding: var(--sp-4) var(--sp-3)
+    padding: var(--sp-4) var(--sp-3) 0
+    box-sizing: border-box
+
+  #list
+    flex: 1
+    min-height: 0
+    display: flex
+    flex-direction: column
 
   .error
     margin: 0 0 var(--sp-4)
@@ -287,7 +302,9 @@
 
   table
     width: 100%
-    border-collapse: collapse
+    // Separate borders stay on the held headings; collapsed ones do not.
+    border-collapse: separate
+    border-spacing: 0
 
   th, td
     padding: var(--sp-2) var(--sp-1)
@@ -296,12 +313,17 @@
     overflow-wrap: anywhere
 
   th
+    position: sticky
+    top: 0
+    background: var(--c-surface)
     font-size: var(--fs-sm)
     font-weight: 500
     color: var(--c-muted)
 
   .table-scroll
-    overflow-x: auto
+    flex: 1
+    min-height: 0
+    overflow: auto
 
   .students
     th, td

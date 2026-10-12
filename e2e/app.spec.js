@@ -213,3 +213,33 @@ test("has nothing to export before anything is read", async ({ page }) => {
   await open(page, { status: { state: "no_game" }, items: [], equipment: [], students: [] });
   await expect(page.getByRole("button", { name: "書き出す" })).toBeDisabled();
 });
+
+/** Whether nothing covers the middle of the first column heading. */
+const headingShows = (page) =>
+  page
+    .locator("thead th")
+    .first()
+    .evaluate((th) => {
+      const r = th.getBoundingClientRect();
+      return th.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+    });
+
+test("keeps the column headings in sight down to the last row", async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 480 });
+  await open(page, { status: reading("items"), items, equipment });
+  await page.locator("tbody tr").last().scrollIntoViewIfNeeded();
+  await expect(page.locator("tbody tr").last()).toBeInViewport();
+  await expect(page.locator("thead th").first()).toBeInViewport();
+  expect(await headingShows(page)).toBe(true);
+});
+
+test("keeps the student headings over their columns when scrolled sideways", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 480 });
+  await open(page, { status: reading("students"), items, equipment, students });
+  const last = page.locator("tbody tr").first().locator("td").last();
+  await last.scrollIntoViewIfNeeded();
+  const cell = await last.boundingBox();
+  const heading = await page.locator("thead th").last().boundingBox();
+  expect(Math.abs(heading.x - cell.x)).toBeLessThan(1);
+  await expect(page.locator("thead th").last()).toBeInViewport();
+});
