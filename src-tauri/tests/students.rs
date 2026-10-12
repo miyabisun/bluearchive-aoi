@@ -155,6 +155,21 @@ fn folded_names_stay_apart() {
     assert_eq!(folded.len(), names.len());
 }
 
+/// A student SchaleDB does not list yet is named from the extra list
+/// (`data/extra/students.json`) under an id of Aoi's own, below zero.
+#[test]
+fn a_student_schaledb_lacks_is_named_from_the_extra_list() {
+    let recognizer = recognizer();
+    let id = student::name::find("? ツ ム キ", recognizer.students()).expect("ツムギ");
+    assert!(id < 0, "{id}");
+    let name = recognizer
+        .students()
+        .iter()
+        .find(|(s, _)| *s == id)
+        .map(|(_, n)| n.as_str());
+    assert_eq!(name, Some("ツムギ"));
+}
+
 /// Whether `c` is the light blue of the unique weapon's stars.
 fn weapon_blue(c: [u8; 3]) -> bool {
     c[2] > 220 && c[1] > 180 && c[0] < 180

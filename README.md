@@ -126,14 +126,16 @@ equipment:
     count: 51K  # thousands: 50,500 to 51,499
 ```
 
-`null` marks a field Aoi could not read, apart from what the student lacks.
+`null` marks a field Aoi could not read, apart from what the student lacks. A student
+SchaleDB does not list yet has `id: null`.
 
 ## Item data
 
 Names and icons of items and equipment, and student names, come from a snapshot of
-[SchaleDB](https://schaledb.com) built into the exe. A few items SchaleDB lacks, and a
-few icons the game draws unlike SchaleDB, are added in `src-tauri/data/extra`, cut from
-the game. `tools/schaledb/update.ps1` refreshes the snapshot.
+[SchaleDB](https://schaledb.com) built into the exe. A few items and students SchaleDB
+lacks, and a few icons the game draws unlike SchaleDB, are added in
+`src-tauri/data/extra`, cut from the game; a student added there is told by name alone
+until SchaleDB lists them. `tools/schaledb/update.ps1` refreshes the snapshot.
 
 ## Development
 

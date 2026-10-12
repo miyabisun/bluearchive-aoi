@@ -9,6 +9,7 @@ pub fn yaml(stamp: &str, students: &[StudentRow], items: &[Row], equipment: &[Ro
     out += "# null は読めなかった欄。weapon: locked は固有武器が未解放、gear: 0 は愛用品なし。\n";
     out += "# skills は EX・ノーマル・パッシブ・サブ、ability は HP・攻撃力・治癒力の能力解放。\n";
     out += "# count の K は千単位（51K は 50,500〜51,499）。\n";
+    out += "# id: null の生徒は SchaleDB に未登録（名前だけで照合）。\n";
     out += &list("students", students, |s| {
         let t = &s.training;
         let weapon = match t.weapon {
@@ -21,8 +22,14 @@ pub fn yaml(stamp: &str, students: &[StudentRow], items: &[Row], equipment: &[Ro
                 format!("{{tier: {}, level: {}}}", e.tier, e.level)
             })
         });
+        // A student SchaleDB does not list yet has no id but Aoi's own.
+        let id = if s.id < 0 {
+            "null".to_owned()
+        } else {
+            s.id.to_string()
+        };
         vec![
-            format!("id: {}", s.id),
+            format!("id: {id}"),
             format!("name: {}", quoted(&s.name)),
             format!("level: {}", value(t.level)),
             format!("rarity: {}", value(t.rarity)),
@@ -188,6 +195,16 @@ equipment:
         student.training.weapon = None;
         let text = yaml("", &[student], &[], &[]);
         assert!(text.lines().any(|l| l == "    weapon: null"), "{text}");
+    }
+
+    #[test]
+    fn writes_no_id_for_a_student_schaledb_lacks() {
+        let mut student = mika();
+        student.id = -1;
+        student.name = "ツムギ".to_owned();
+        let text = yaml("", &[student], &[], &[]);
+        assert!(text.lines().any(|l| l == "  - id: null"), "{text}");
+        assert!(text.lines().any(|l| l == r#"    name: "ツムギ""#), "{text}");
     }
 
     #[test]

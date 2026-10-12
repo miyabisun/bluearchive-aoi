@@ -84,6 +84,14 @@ pub struct StudentEntry {
     pub name: String,
 }
 
+/// A student the snapshot lacks (`data/extra/students.json`), known by name
+/// until SchaleDB lists them. Such a student takes an id of Aoi's own below
+/// zero, which an export writes as no id.
+#[derive(Deserialize, Debug, Clone)]
+struct ExtraStudent {
+    name: String,
+}
+
 /// One line of a tally, for the window.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Row {
@@ -128,8 +136,8 @@ pub struct Recognizer {
 
 impl Recognizer {
     /// Loads the files under `data` (the crate's `data` directory): the SchaleDB
-    /// snapshot (`schaledb`), the items it lacks (`extra`, icons cut from
-    /// screenshots), the count references and the screen templates.
+    /// snapshot (`schaledb`), the items and students it lacks (`extra`, icons
+    /// cut from screenshots), the count references and the screen templates.
     pub fn load(data: &Path) -> Result<Self, String> {
         Self::build(&|path| {
             std::fs::read(data.join(path))
@@ -163,6 +171,12 @@ impl Recognizer {
             students: json::<Vec<StudentEntry>>(read, "schaledb/students.json")?
                 .into_iter()
                 .map(|s| (s.id, s.name))
+                .chain(
+                    json::<Vec<ExtraStudent>>(read, "extra/students.json")?
+                        .into_iter()
+                        .zip(1..)
+                        .map(|(s, n): (ExtraStudent, i64)| (-n, s.name)),
+                )
                 .collect(),
             student_screen: (
                 template("title-students.png")?,
