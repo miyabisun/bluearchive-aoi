@@ -262,17 +262,27 @@ fn count(image: &RgbImage, area: Area, ink: Ink) -> Option<usize> {
     )
 }
 
-/// How many stars of `ink` stand in a row in `area`, `pitch` window heights apart.
+/// How many stars of `ink` stand in a row in `area`, `pitch` window heights
+/// apart: counted from the right one, a place at a time, while the place holds
+/// a star's worth of ink. A picture beside the row (Eimi's gun hangs a tag
+/// left of her weapon's stars) is never taken for one.
 fn stars(image: &RgbImage, area: Area, ink: Ink, pitch: f32) -> Option<u8> {
     let (x0, y0, x1, y1) = rect(image, area)?;
-    let columns: Vec<u32> = (x0..x1)
-        .filter(|&x| (y0..y1).any(|y| ink(image.get_pixel(x, y).0)))
-        .collect();
-    let (Some(first), Some(last)) = (columns.first(), columns.last()) else {
+    let inked = |x: u32| (y0..y1).filter(|&y| ink(image.get_pixel(x, y).0)).count();
+    let Some(right) = (x0..x1).rev().find(|&x| inked(x) > 0) else {
         return Some(0);
     };
-    let span = (last - first + 1) as f32 / (pitch * image.height() as f32);
-    Some(span.round() as u8)
+    let step = pitch * image.height() as f32;
+    let star = |k: u8| {
+        let end = right as f32 + 1.0 - f32::from(k) * step;
+        let start = end - step;
+        if start < x0 as f32 {
+            return false;
+        }
+        let ink: usize = (start as u32..end as u32).map(inked).sum();
+        ink as f32 >= STAR_SHARE * step * (y1 - y0) as f32
+    };
+    Some((0..=u8::MAX).take_while(|&k| star(k)).count() as u8)
 }
 
 /// Rarity stars stand this far apart (window heights). Measured on
@@ -281,6 +291,10 @@ const RARITY_PITCH: f32 = 0.0200;
 /// The unique weapon's stars stand this far apart (window heights): 1 to 4
 /// stars span 31, 59, 88 and 116 pixels at 1250 high.
 const WEAPON_PITCH: f32 = 0.0228;
+/// A place in a row of stars holds a star when its ink covers this share of
+/// it. Measured on 2026-10-12: a weapon's star covers 0.28 of its place, an
+/// empty place nothing, the tag beside Eimi's stars nothing of theirs.
+const STAR_SHARE: f32 = 0.12;
 /// "MAX" in gold covers at least this share of a skill label. Measured on
 /// 2026-10-12: about 0.010 for MAX, 0 for every "Lv.N".
 const GOLD_SHARE: f32 = 0.004;
@@ -300,7 +314,8 @@ pub fn read(image: &RgbImage, fonts: &Fonts) -> Training {
     let weapon_stars = stars(image, WEAPON_STARS, WEAPON_STAR, WEAPON_PITCH);
     let weapon = match (weapon_level, weapon_stars) {
         (None, Some(0)) => Some(None),
-        (Some(level), Some(stars @ 1..=4)) => Some(Some(Weapon { level, stars })),
+        // Four stars so far; five is said to be the most there will be.
+        (Some(level), Some(stars @ 1..=5)) => Some(Some(Weapon { level, stars })),
         _ => None,
     };
     let equipment = |i: usize| -> Option<Gear> {

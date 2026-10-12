@@ -154,3 +154,58 @@ fn folded_names_stay_apart() {
     folded.dedup();
     assert_eq!(folded.len(), names.len());
 }
+
+/// Whether `c` is the light blue of the unique weapon's stars.
+fn weapon_blue(c: [u8; 3]) -> bool {
+    c[2] > 220 && c[1] > 180 && c[0] < 180
+}
+
+/// The weapon's stars are counted on every screen with a weapon, Eimi's too:
+/// the tag hanging from her gun beside them is no star.
+#[test]
+fn the_weapon_stars_read_on_every_screen() {
+    let fonts = fonts();
+    for label in labels() {
+        let image = image::open(root().join("tests/fixtures").join(&label.image))
+            .unwrap()
+            .to_rgb8();
+        let read = student::read(&image, &fonts);
+        assert_eq!(read.weapon, label.training().weapon, "{}", label.image);
+    }
+}
+
+/// No weapon has five stars yet, but one may: Eimi's four with a fifth pasted
+/// a star's pitch left of them read as five.
+#[test]
+fn a_fifth_weapon_star_counts() {
+    let mut image = image::open(root().join("tests/fixtures/students/eimi.png"))
+        .unwrap()
+        .to_rgb8();
+    // The stars stand right-aligned 0.0228 window heights apart, in the rows
+    // 0.711 to 0.734 down, ending left of the light blue 固有武器 button
+    // (0.258 window heights from the right edge).
+    let (h, pitch) = (
+        image.height() as f32,
+        (0.0228 * image.height() as f32).round() as u32,
+    );
+    let rows = (0.711 * h) as u32..(0.734 * h) as u32;
+    let right = (0..(image.width() as f32 - 0.258 * h) as u32)
+        .rev()
+        .find(|&x| rows.clone().any(|y| weapon_blue(image.get_pixel(x, y).0)))
+        .unwrap();
+    let left_star = right + 1 - 4 * pitch;
+    for x in left_star..left_star + pitch {
+        for y in rows.clone() {
+            let p = *image.get_pixel(x, y);
+            image.put_pixel(x - pitch, y, p);
+        }
+    }
+    let read = student::read(&image, &fonts());
+    assert_eq!(
+        read.weapon,
+        Some(Some(student::Weapon {
+            level: 60,
+            stars: 5
+        }))
+    );
+}
