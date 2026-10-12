@@ -87,7 +87,8 @@ Other windows may cover the game; Aoi reads the game window itself, not the scre
 - A count is taken once the same number has been read in three frames in a row, so a
   single misread frame does not change it. When you use an item in the game, its count
   follows when the list is shown again. An item used up leaves the game's list; Aoi drops
-  it once the entries before and after it show side by side.
+  it once the entries before and after it show side by side, or, for the list's first
+  entries, once the list is scrolled to its top.
 - Counts of 10,000 or more are shown as the game shows them, in thousands: 51K stands
   for 50,500 to 51,499.
 - A count Aoi cannot read for sure is skipped in that frame rather than guessed. The

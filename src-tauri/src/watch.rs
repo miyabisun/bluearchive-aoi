@@ -435,15 +435,15 @@ pub fn start(
                 }
                 board.update(|seen| {
                     seen.on_list = read.as_ref().map(|frame| match frame {
-                        Shown::List(List::Items, _) => Screen::Items,
-                        Shown::List(List::Equipment, _) => Screen::Equipment,
+                        Shown::List(List::Items, ..) => Screen::Items,
+                        Shown::List(List::Equipment, ..) => Screen::Equipment,
                         Shown::Student(..) => Screen::Students,
                     });
                 });
                 match read {
-                    Some(Shown::List(list, cells)) => {
+                    Some(Shown::List(list, cells, start)) => {
                         let tally = tallies.entry(list).or_default();
-                        let gone = recognizer.catalog(list).gaps(&cells);
+                        let gone = recognizer.catalog(list).gaps(&cells, start);
                         if tally.observe(&cells, &gone) {
                             board.changed(Update::List(list, recognizer.rows(list, tally)));
                         }

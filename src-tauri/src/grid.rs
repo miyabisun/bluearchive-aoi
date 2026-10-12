@@ -16,6 +16,10 @@ const GAP_ROW_SHARE: f32 = 0.85;
 const CUT_OFF_SLACK: u32 = 3;
 /// Spans between gaps shorter than this are no row of cards.
 const MIN_ROW: u32 = 20;
+/// The padding over a list's first row is taller than this share of the card
+/// height (11 and 13 px over 165 px cards); a gap between rows is lower (7 px
+/// at most).
+const START_PADDING: f32 = 0.055;
 
 /// A card, measured at its vertical centre where the shear has no effect.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -115,13 +119,14 @@ fn spans(flags: &[bool]) -> Vec<(u32, u32)> {
 }
 
 /// The list panel: its background's horizontal extent, the top of its scrolling
-/// viewport and the height of a card.
+/// viewport, the height of a card and whether the list's start shows.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Panel {
     pub left: u32,
     pub right: u32,
     pub top: u32,
     pub card_height: u32,
+    pub shows_start: bool,
 }
 
 /// The panel and its card rows `(top, bottom)`, when the frame shows the list.
@@ -166,6 +171,9 @@ fn layout(image: &RgbImage) -> Option<(Panel, Vec<(u32, u32)>)> {
         right: panel_right,
         top: gaps[0].0,
         card_height,
+        // The viewport's top gap lies right over the first row and is the padding.
+        shows_start: gaps[0].1 == first.0
+            && (gaps[0].1 - gaps[0].0) as f32 > START_PADDING * card_height as f32,
     };
     Some((panel, rows))
 }
@@ -265,6 +273,24 @@ mod tests {
     #[test]
     fn finds_full_rows_in_4_by_3() {
         check("items-4x3-ooparts.png", 30, 133, 148.5);
+    }
+
+    #[test]
+    fn tells_where_the_list_starts() {
+        for (name, start) in [
+            ("items-16x9-list-top.png", true),
+            ("equipment-16x9-top.png", true),
+            ("items-16x9-secretstone.png", false),
+            ("items-4x3-ooparts.png", false),
+            ("items-16x9-coins-materials.png", false),
+            ("items-16x9-gifts-tickets.png", false),
+            ("items-16x9-event-items.png", false),
+            ("equipment-16x9-middle.png", false),
+            ("equipment-16x9-end.png", false),
+        ] {
+            let panel = find_panel(&fixture(name)).unwrap();
+            assert_eq!(panel.shows_start, start, "{name}");
+        }
     }
 
     #[derive(serde::Deserialize)]

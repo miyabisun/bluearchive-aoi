@@ -141,7 +141,7 @@ fn each_list_is_told_apart_and_other_screens_give_nothing() {
     for fixture in fixtures() {
         let shown = recognizer.read_list(&open(&fixture.image));
         assert_eq!(
-            shown.map(|(list, cells)| (list, cells.len())),
+            shown.map(|(list, cells, _)| (list, cells.len())),
             Some((fixture.list, fixture.cells.len())),
             "{}",
             fixture.image
@@ -163,9 +163,9 @@ fn a_run_of_frames_tallies_to_the_labels() {
         for name in [fixture.image.as_str(), OTHER_SCREENS[0]] {
             let image = open(name);
             for _ in 0..CONFIRM {
-                if let Some((list, cells)) = recognizer.read_list(&image) {
+                if let Some((list, cells, start)) = recognizer.read_list(&image) {
                     // What each screen shows lacking must be no labeled item.
-                    let gone = recognizer.catalog(list).gaps(&cells);
+                    let gone = recognizer.catalog(list).gaps(&cells, start);
                     tallies.entry(list).or_default().observe(&cells, &gone);
                 }
             }

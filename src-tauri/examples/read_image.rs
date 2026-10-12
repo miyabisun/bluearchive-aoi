@@ -18,6 +18,7 @@ fn main() {
         Some(other) => panic!("unknown list {other}"),
         None => recognizer
             .read_list(&image)
+            .map(|(list, cells, _)| (list, cells))
             .expect("no list in its default order"),
     };
     println!("{list:?}");

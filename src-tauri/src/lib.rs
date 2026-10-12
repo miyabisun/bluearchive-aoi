@@ -72,8 +72,8 @@ pub struct Item {
 /// What a frame shows that can be read.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Frame {
-    /// A list in its default order, cell by cell.
-    List(List, Vec<Cell>),
+    /// A list in its default order, cell by cell, and whether its start shows.
+    List(List, Vec<Cell>, bool),
     /// The student screen: the student (`None` when the name could not be
     /// told) and the training shown.
     Student(Option<i64>, student::Training),
@@ -197,8 +197,8 @@ impl Recognizer {
     /// Reads whatever the frame shows that can be read: a list in its default
     /// order, or the student screen's 基本情報 tab.
     pub fn read_frame(&self, image: &RgbImage) -> Option<Frame> {
-        if let Some((list, cells)) = self.read_list(image) {
-            return Some(Frame::List(list, cells));
+        if let Some((list, cells, start)) = self.read_list(image) {
+            return Some(Frame::List(list, cells, start));
         }
         self.read_student(image)
             .map(|(id, training)| Frame::Student(id, training))
@@ -263,9 +263,10 @@ impl Recognizer {
             .read_cards(image, &grid::find_cards(image), &self.digits, None)
     }
 
-    /// Reads the cells when the frame shows a list sorted the default way,
-    /// ascending; any other screen or order gives `None`.
-    pub fn read_list(&self, image: &RgbImage) -> Option<(List, Vec<Cell>)> {
+    /// Reads the cells, and whether the list's start shows, when the frame
+    /// shows a list sorted the default way, ascending; any other screen or
+    /// order gives `None`.
+    pub fn read_list(&self, image: &RgbImage) -> Option<(List, Vec<Cell>, bool)> {
         let (panel, cards) = grid::find(image)?;
         if !screen::sorted_by_default(image, panel.card_height, &self.sort_template) {
             return None;
@@ -275,7 +276,7 @@ impl Recognizer {
         let cells = self
             .catalog(list)
             .read_cards(image, &cards, &self.digits, None);
-        Some((list, cells))
+        Some((list, cells, panel.shows_start))
     }
 }
 

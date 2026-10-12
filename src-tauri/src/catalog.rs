@@ -92,8 +92,8 @@ impl Catalog {
     }
 
     /// The entries the list shown in `cells` lacks (see `gaps`).
-    pub fn gaps(&self, cells: &[Cell]) -> Vec<i64> {
-        gaps(&self.entries, &self.rules, cells)
+    pub fn gaps(&self, cells: &[Cell], start: bool) -> Vec<i64> {
+        gaps(&self.entries, &self.rules, cells, start)
     }
 
     /// The index of the icon `id` is drawn with.
@@ -206,13 +206,19 @@ fn rows(entries: &[Item], rules: &Rules, counts: &HashMap<i64, Count>) -> Vec<Ro
 }
 
 /// The entries a list in its default order lacks: those whose place lies
-/// between two cells shown side by side, both told apart. An item used up
-/// leaves the list, and this is how its going is seen.
-pub fn gaps(entries: &[Item], rules: &Rules, cells: &[Cell]) -> Vec<i64> {
+/// between two cells shown side by side, both told apart, and, where the
+/// list's `start` shows, before its first cell. An item used up leaves the
+/// list, and this is how its going is seen.
+pub fn gaps(entries: &[Item], rules: &Rules, cells: &[Cell], start: bool) -> Vec<i64> {
     let key = |id: i64| entries.iter().find(|e| e.id == id).map(rules.key);
-    let mut gone: Vec<(ListKey, i64)> = cells
+    let before_all = start.then_some(Some((0, i64::MIN)));
+    let keys: Vec<Option<ListKey>> = before_all
+        .into_iter()
+        .chain(cells.iter().map(|c| c.id.and_then(key)))
+        .collect();
+    let mut gone: Vec<(ListKey, i64)> = keys
         .windows(2)
-        .filter_map(|pair| Some((key(pair[0].id?)?, key(pair[1].id?)?)))
+        .filter_map(|pair| Some((pair[0]?, pair[1]?)))
         .flat_map(|(after, before)| {
             entries
                 .iter()
@@ -294,7 +300,27 @@ mod tests {
             entry(14, "e", "Material", 0),
         ];
         let cells = [cell(Some(10)), cell(Some(13)), cell(Some(14))];
-        assert_eq!(gaps(&entries, &items::RULES, &cells), [11, 12]);
+        assert_eq!(gaps(&entries, &items::RULES, &cells, false), [11, 12]);
+    }
+
+    #[test]
+    fn what_lies_before_the_first_cell_is_gone_only_where_the_start_shows() {
+        let entries = [
+            entry(10, "a", "Material", 0),
+            entry(11, "b", "Material", 0),
+            entry(12, "c", "Material", 0),
+        ];
+        let cells = [cell(Some(12))];
+        assert_eq!(gaps(&entries, &items::RULES, &cells, true), [10, 11]);
+        assert_eq!(
+            gaps(&entries, &items::RULES, &cells, false),
+            Vec::<i64>::new()
+        );
+        let untold = [cell(None), cell(Some(12))];
+        assert_eq!(
+            gaps(&entries, &items::RULES, &untold, true),
+            Vec::<i64>::new()
+        );
     }
 
     #[test]
@@ -305,7 +331,10 @@ mod tests {
             entry(12, "c", "Material", 0),
         ];
         let cells = [cell(Some(10)), cell(None), cell(Some(12))];
-        assert_eq!(gaps(&entries, &items::RULES, &cells), Vec::<i64>::new());
+        assert_eq!(
+            gaps(&entries, &items::RULES, &cells, false),
+            Vec::<i64>::new()
+        );
     }
 
     #[test]
