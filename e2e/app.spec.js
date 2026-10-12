@@ -110,6 +110,8 @@ test("the tabs and the search field take focus from the keyboard", async ({ page
   await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "生徒" })).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("tab", { name: "ショップ" })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "書き出す" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByLabel("名前で検索")).toBeFocused();
@@ -325,4 +327,54 @@ test("shows the credits on the item tab once they are read", async ({ page }) =>
 
   await open(page, { status: reading("items"), items, equipment, credits: null });
   await expect(page.getByText(/^クレジット/)).toHaveCount(0);
+});
+
+const shops = [
+  {
+    name: "総力戦",
+    read_at: "2026-09-30 22:00:00",
+    resets: true,
+    coins: 2,
+    offers: [
+      { id: 1, name: "初級戦術教育BD（百鬼夜行）", coin: 1, left: 40, price: 10 },
+      { id: 2, name: "秘伝ノート", coin: 0, left: 0, price: 500 },
+      { id: 2, name: "秘伝ノート", coin: 1, left: 1, price: null },
+    ],
+  },
+  {
+    name: "指名手配",
+    read_at: "2999-01-01 08:30:00",
+    resets: true,
+    coins: 1,
+    offers: [{ id: 3, name: "エーテルの粉", coin: 0, left: 25, price: 24 }],
+  },
+];
+
+test("shows each shop's offers when the game shows a shop", async ({ page }) => {
+  await open(page, { status: reading("shops"), items, equipment, shops });
+  await expect(page.getByRole("status")).toHaveText("ショップを集計中 27 fps");
+  await expect(page.getByRole("tab", { name: "ショップ" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.locator("h2")).toHaveText([
+    "総力戦09/30 22:00前の月の値",
+    "指名手配01/01 08:30",
+  ]);
+  await expect(page.locator("section").first().locator("tbody tr")).toHaveText([
+    "初級戦術教育BD（百鬼夜行）40右 10",
+    "秘伝ノート買い切り左 500",
+    "秘伝ノート1右 ?",
+  ]);
+  await expect(page.locator("section").nth(1).locator("tbody tr")).toHaveText(["エーテルの粉2524"]);
+
+  await page.getByLabel("名前で検索").fill("エーテル");
+  await expect(page.locator("h2")).toHaveText(["指名手配01/01 08:30"]);
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});
+
+test("guides to the shop before any is read", async ({ page }) => {
+  await open(page, { status: { state: "other_screen" }, items, equipment, shops: [] });
+  await page.getByRole("tab", { name: "ショップ" }).click();
+  await expect(page.locator("[data-state=empty]")).toContainText("ショップで総力戦");
 });

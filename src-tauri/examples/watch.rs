@@ -29,6 +29,13 @@ fn main() {
                 Some(aoi::watch::Update::Credits(credits)) => {
                     println!("{at:6.1}s credits {credits}");
                 }
+                Some(aoi::watch::Update::Shops(shops)) => {
+                    let sizes: Vec<String> = shops
+                        .iter()
+                        .map(|s| format!("{} {}", s.name, s.offers.len()))
+                        .collect();
+                    println!("{at:6.1}s shops {}", sizes.join(" / "));
+                }
                 None => println!("{at:6.1}s {}", serde_json::to_string(status).unwrap()),
             }
         },

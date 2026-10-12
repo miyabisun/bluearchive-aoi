@@ -4,8 +4,11 @@
   import {
     LISTS,
     filterRows,
+    filterShops,
     followTab,
     formatCount,
+    offerCells,
+    shopStale,
     sortStudents,
     statusView,
     studentCells,
@@ -31,6 +34,8 @@
       "ブルーアーカイブの装備一覧を「デフォルト」の昇順で開いてスクロールすると、見えた装備の個数がここに並びます。",
     students:
       "ブルーアーカイブの生徒詳細画面（基本情報）を開いて「＞」で送ると、見えた生徒の育成状況がここに並びます。",
+    shops:
+      "ブルーアーカイブのショップで総力戦・大決戦・カケラ(文字)・合同火力演習・指名手配・熟達証書を開いて下まで送ると、品ごとにあと何回買えるかがここに並びます。",
   };
 
   let snapshot = $state({
@@ -38,6 +43,7 @@
     items: [],
     equipment: [],
     students: [],
+    shops: [],
     credits: /** @type {number | null} */ (null),
     /** Why what was read could not be kept or brought back. */
     keep_error: /** @type {string | null} */ (null),
@@ -50,8 +56,9 @@
   let exported = $state(null);
 
   const status = $derived(statusView(snapshot.status));
-  const rows = $derived(snapshot[view.tab]);
+  const rows = $derived(snapshot[view.tab] ?? []);
   const shown = $derived.by(() => {
+    if (view.tab === "shops") return filterShops(rows, query);
     const found = filterRows(rows, query);
     return view.tab === "students" ? sortStudents(found, sortBy) : found;
   });
@@ -132,6 +139,36 @@
       </label>
       {#if shown.length === 0}
         <p class="empty" data-state="no-match">一致する項目がありません</p>
+      {:else if view.tab === "shops"}
+        <div class="table-scroll">
+          {#each shown as shop (shop.name)}
+            <section class="shop">
+              <h2>
+                {shop.name}<span class="read-at">{shop.read_at.slice(5, 16).replace("-", "/")}</span
+                >{#if shopStale(shop)}<span class="stale">前の月の値</span>{/if}
+              </h2>
+              <table data-state="success">
+                <thead>
+                  <tr>
+                    <th scope="col">品</th>
+                    <th scope="col" class="fit">残り</th>
+                    <th scope="col" class="fit">価格</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each shop.offers as offer (`${offer.id}-${offer.coin}`)}
+                    {@const cells = offerCells(offer, shop.coins)}
+                    <tr>
+                      <td>{offer.name}</td>
+                      <td class="fit" class:sold={offer.left === 0}>{cells.left}</td>
+                      <td class="fit">{cells.price}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </section>
+          {/each}
+        </div>
       {:else if view.tab === "students"}
         <div class="table-scroll">
           <table data-state="success" class="students">
@@ -214,12 +251,18 @@
     align-items: center
     padding-right: var(--sp-3)
 
+  // Narrower than its tabs, the row scrolls sideways rather than wrap a name.
   .tabs
     display: flex
+    min-width: 0
+    overflow-x: auto
+    scrollbar-width: thin
     padding: 0 var(--sp-1)
     button
+      flex: none
       height: 40px
       padding: 0 var(--sp-3)
+      white-space: nowrap
       border: 0
       border-bottom: 2px solid transparent
       background: none
@@ -404,6 +447,37 @@
 
   .code
     font-variant-numeric: tabular-nums
+
+  .shop + .shop
+    margin-top: var(--sp-5)
+
+  h2
+    display: flex
+    align-items: baseline
+    gap: var(--sp-2)
+    margin: 0 0 var(--sp-1)
+    font-size: var(--fs-md)
+    font-weight: 600
+
+  .read-at
+    color: var(--c-muted)
+    font-size: var(--fs-sm)
+    font-weight: 400
+    font-variant-numeric: tabular-nums
+
+  .stale
+    font-size: var(--fs-sm)
+
+  .sold
+    color: var(--c-muted)
+
+  // As narrow as their contents, leaving the names the room.
+  .fit
+    width: 1%
+    padding-left: var(--sp-3)
+    text-align: right
+    font-variant-numeric: tabular-nums
+    white-space: nowrap
 
   .count
     width: 7em

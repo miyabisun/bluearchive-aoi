@@ -1,8 +1,9 @@
 # bluearchive-aoi
 
-Aoi counts your Blue Archive items and equipment and notes how far your students are
-trained. Keep it open next to the game and scroll through the item list or the
-equipment list, or step through your students' screens. Aoi reads what the game's
+Aoi counts your Blue Archive items and equipment, notes how far your students are
+trained and how many more times the shops sell each of their goods. Keep it open next
+to the game and scroll through the item list, the equipment list or a shop, or step
+through your students' screens. Aoi reads what the game's
 window shows, up to 30 times a second, and lists what it has seen by name.
 
 It only looks: it sends no input to the game. What it reads is kept: Aoi starts from it
@@ -15,7 +16,7 @@ the next time, and writes the latest of it to `Documents\Aoi\aoi.yaml`.
 - The Japanese PC version of Blue Archive (`BlueArchive.exe`). Item names are shown in
   Japanese.
 - Japanese text recognition of Windows, installed with the Japanese language. Aoi uses it
-  to read student names; without it, no student is listed.
+  to read student names and the shops; without it, no student or shop is listed.
 
 ## Install
 
@@ -64,6 +65,14 @@ Students are listed highest level first, then by rarity, then by bond. Click a c
 heading to list them by that column instead, highest first (skills, ability release and
 the equipment's tiers by their total); ties keep the default order, and ? comes last.
 
+For the shops, open ショップ, choose 総力戦, 大決戦, カケラ(文字), 合同火力演習, 指名手配 or
+熟達証書, and scroll its goods to the bottom, where those bought up go. Each shop appears
+under the ショップ tab with how many more times each of its goods can be bought (買い切り
+once bought up) and its price. 総力戦 and 大決戦 take two coins; their prices tell which,
+左 or 右, as the coins stand at the top of the shop. All but カケラ(文字) reset as the
+month changes: a shop read in an earlier month is marked 前の月の値 until it is read
+again. 通常アイテム, 青輝石, カケラ(その他) and 戦術対抗戦 are not read.
+
 Aoi switches to the tab of what the game starts showing; a tab you pick stays until the
 game shows another list or the student screen.
 
@@ -78,6 +87,7 @@ The badge at the top right tells what Aoi sees:
 | 対象外の画面                                | The game shows another screen, or the list in another order. Nothing is counted. |
 | アイテムを集計中 N fps / 装備を集計中 N fps | That list is being read, N frames a second.                                      |
 | 生徒を集計中 N fps                          | A student's screen is being read, N frames a second.                             |
+| ショップを集計中 N fps                      | A shop is being read, N frames a second.                                         |
 | キャプチャ失敗                              | Windows refused to capture the game's window; the reason is shown below.         |
 
 Other windows may cover the game; Aoi reads the game window itself, not the screen.
@@ -101,11 +111,14 @@ Other windows may cover the game; Aoi reads the game window itself, not the scre
 - A student's training is taken once three frames in a row read alike, and a field read
   later keeps its known value when a frame cannot read it. Students released after the
   bundled student data are not listed.
+- A shop's goods are told by their icon and their name; goods Aoi cannot tell for sure
+  are left out. How many more times one can be bought is taken once three frames in a
+  row read alike; a price Aoi cannot read shows ? until a frame reads it.
 
 ### What is kept
 
-Whenever something read changes, Aoi writes everything read so far (students, items and
-equipment) to `Documents\Aoi\aoi.yaml`, headed by when each list was last read, and keeps
+Whenever something read changes, Aoi writes everything read so far (students, items,
+equipment and shops) to `Documents\Aoi\aoi.yaml`, headed by when each list was last read, and keeps
 it for its next run: a list read again replaces what it showed, entry by entry. Hand the
 file to an agent or a tool to check what Aoi read or to plan with it. **書き出す**, at the
 right of the tabs, writes the same as `Documents\Aoi\aoi-<date>-<time>.yaml`, to keep how
@@ -133,6 +146,15 @@ equipment:
   - id: 501000
     name: "帽子の万能設計図"
     count: 51K  # thousands: 50,500 to 51,499
+shops:
+  - name: "総力戦"
+    read_at: "2026-10-12 22:10:00"
+    offers:
+      - id: 9000
+        name: "秘伝ノート"
+        coin: 1  # the coins at the top of the shop from the left, 0 in a shop with one
+        left: 0  # how many more times it can be bought
+        price: 500  # null until read
 ```
 
 `null` marks a field Aoi could not read, apart from what the student lacks. A student

@@ -1,7 +1,8 @@
 //! What Aoi read, written as YAML for the user to hand to an agent or another
-//! tool: the students' training and the counts of the item and equipment lists.
+//! tool: the students' training, the counts of the item and equipment lists
+//! and the shops' offers.
 
-use crate::{Row, keep::ReadAt, watch::StudentRow};
+use crate::{Row, keep::ReadAt, shop::ShopRow, watch::StudentRow};
 
 /// The YAML of everything read, headed by when it was written (`stamp`) and
 /// when each list was last read.
@@ -12,6 +13,7 @@ pub fn yaml(
     students: &[StudentRow],
     items: &[Row],
     equipment: &[Row],
+    shops: &[ShopRow],
 ) -> String {
     let when = |at: &Option<String>| at.as_deref().unwrap_or("なし").to_owned();
     let mut out = format!(
@@ -25,6 +27,8 @@ pub fn yaml(
     out += "# skills は EX・ノーマル・パッシブ・サブ、ability は HP・攻撃力・治癒力の能力解放。\n";
     out += "# count の K は千単位（51K は 50,500〜51,499）。\n";
     out += "# id: null の生徒は SchaleDB に未登録（名前だけで照合）。\n";
+    out += "# shops の left はあと何回買えるか、coin はショップ上部のコインの左から 0・1（1 種の店は 0）。\n";
+    out += "# カケラ(文字) 以外のショップは月が替わると戻る（read_at が前の月なら前の月の値）。\n";
     out += "credits: ";
     out += &credits.map_or("null".to_owned(), |c| c.to_string());
     out += "\n";
@@ -61,6 +65,26 @@ pub fn yaml(
     });
     out += &list("items", items, counted);
     out += &list("equipment", equipment, counted);
+    out += &list("shops", shops, |shop| {
+        let offers = list("offers", &shop.offers, |o| {
+            vec![
+                format!("id: {}", o.id),
+                format!("name: {}", quoted(&o.name)),
+                format!("coin: {}", o.coin),
+                format!("left: {}", o.left),
+                format!(
+                    "price: {}",
+                    o.price.map_or("null".to_owned(), |p| p.to_string())
+                ),
+            ]
+        });
+        vec![
+            format!("name: {}", quoted(&shop.name)),
+            format!("read_at: {}", quoted(&shop.read_at)),
+            // The offers, nested under their shop.
+            offers.trim_end().replace('\n', "\n    "),
+        ]
+    });
     out
 }
 
@@ -108,6 +132,7 @@ mod tests {
     use crate::{
         keep::ReadAt,
         quantity::Count,
+        shop::{OfferRow, ShopRow},
         student::{Gear, Training, Weapon},
     };
 
@@ -157,6 +182,7 @@ mod tests {
             &[mika()],
             &items,
             &equipment,
+            &[],
         );
         assert!(text.starts_with("# Aoi の読み取り結果 2026-10-12 15:30:00\n"));
         let body: String = text
@@ -190,6 +216,7 @@ equipment:
   - id: 501000
     name: "帽子の万能設計図"
     count: 51K
+shops: []
 "#
         );
     }
@@ -207,7 +234,15 @@ equipment:
             ability: [Some(0), None, Some(0)],
             ..student.training
         };
-        let text = yaml("", &ReadAt::default(), None, &[student.clone()], &[], &[]);
+        let text = yaml(
+            "",
+            &ReadAt::default(),
+            None,
+            &[student.clone()],
+            &[],
+            &[],
+            &[],
+        );
         for line in [
             "    level: null",
             "    bond: null",
@@ -220,7 +255,7 @@ equipment:
             assert!(text.lines().any(|l| l == line), "{line}\n{text}");
         }
         student.training.weapon = None;
-        let text = yaml("", &ReadAt::default(), None, &[student], &[], &[]);
+        let text = yaml("", &ReadAt::default(), None, &[student], &[], &[], &[]);
         assert!(text.lines().any(|l| l == "    weapon: null"), "{text}");
     }
 
@@ -229,7 +264,7 @@ equipment:
         let mut student = mika();
         student.id = -1;
         student.name = "ツムギ".to_owned();
-        let text = yaml("", &ReadAt::default(), None, &[student], &[], &[]);
+        let text = yaml("", &ReadAt::default(), None, &[student], &[], &[], &[]);
         assert!(text.lines().any(|l| l == "  - id: null"), "{text}");
         assert!(text.lines().any(|l| l == r#"    name: "ツムギ""#), "{text}");
     }
@@ -242,23 +277,81 @@ equipment:
             students: Some("2026-10-12 16:00:00".to_owned()),
             credits: None,
         };
-        let text = yaml("2026-10-12 16:05:00", &read_at, None, &[], &[], &[]);
+        let text = yaml("2026-10-12 16:05:00", &read_at, None, &[], &[], &[], &[]);
         let line = "# 最終読み取り: アイテム 2026-10-12 15:30:00 / 装備 なし / 生徒 2026-10-12 16:00:00 / クレジット なし";
         assert!(text.lines().any(|l| l == line), "{text}");
     }
 
     #[test]
     fn writes_the_credits_or_null() {
-        let text = yaml("", &ReadAt::default(), Some(244_213_276), &[], &[], &[]);
+        let text = yaml(
+            "",
+            &ReadAt::default(),
+            Some(244_213_276),
+            &[],
+            &[],
+            &[],
+            &[],
+        );
         assert!(text.lines().any(|l| l == "credits: 244213276"), "{text}");
-        let text = yaml("", &ReadAt::default(), None, &[], &[], &[]);
+        let text = yaml("", &ReadAt::default(), None, &[], &[], &[], &[]);
         assert!(text.lines().any(|l| l == "credits: null"), "{text}");
     }
 
     #[test]
+    fn writes_each_shop_with_its_offers() {
+        let shops = [ShopRow {
+            name: "総力戦".to_owned(),
+            read_at: "2026-10-12 22:00:00".to_owned(),
+            resets: true,
+            coins: 2,
+            offers: vec![
+                OfferRow {
+                    id: 9000,
+                    name: "秘伝ノート".to_owned(),
+                    coin: 1,
+                    left: 0,
+                    price: Some(500),
+                },
+                OfferRow {
+                    id: 3000,
+                    name: "初級戦術教育BD（百鬼夜行）".to_owned(),
+                    coin: 0,
+                    left: 40,
+                    price: None,
+                },
+            ],
+        }];
+        let text = yaml("", &ReadAt::default(), None, &[], &[], &[], &shops);
+        let tail: String = text
+            .lines()
+            .skip_while(|l| !l.starts_with("shops:"))
+            .flat_map(|l| [l, "\n"])
+            .collect();
+        assert_eq!(
+            tail,
+            r#"shops:
+  - name: "総力戦"
+    read_at: "2026-10-12 22:00:00"
+    offers:
+      - id: 9000
+        name: "秘伝ノート"
+        coin: 1
+        left: 0
+        price: 500
+      - id: 3000
+        name: "初級戦術教育BD（百鬼夜行）"
+        coin: 0
+        left: 40
+        price: null
+"#
+        );
+    }
+
+    #[test]
     fn writes_empty_lists_as_such() {
-        let text = yaml("", &ReadAt::default(), None, &[], &[], &[]);
-        for line in ["students: []", "items: []", "equipment: []"] {
+        let text = yaml("", &ReadAt::default(), None, &[], &[], &[], &[]);
+        for line in ["students: []", "items: []", "equipment: []", "shops: []"] {
             assert!(text.lines().any(|l| l == line), "{line}\n{text}");
         }
     }
@@ -266,7 +359,7 @@ equipment:
     #[test]
     fn quotes_names_the_yaml_would_misread() {
         let items = [row(7, "Lv: \"MAX\" #1", None, Count::Exact(1))];
-        let text = yaml("", &ReadAt::default(), None, &[], &items, &[]);
+        let text = yaml("", &ReadAt::default(), None, &[], &items, &[], &[]);
         assert!(
             text.lines().any(|l| l == r#"    name: "Lv: \"MAX\" #1""#),
             "{text}"

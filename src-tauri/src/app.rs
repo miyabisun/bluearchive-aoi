@@ -10,7 +10,8 @@ use tauri::{Emitter, Manager};
 
 use crate::{
     List, Recognizer, Row, export,
-    keep::{self, Kept, ReadAt},
+    keep::{self, Kept, ReadAt, now},
+    shop::ShopRow,
     tally::Tally,
     watch::{self, Status, StudentRow, Update},
 };
@@ -23,6 +24,7 @@ pub struct Snapshot {
     equipment: Vec<Row>,
     students: Vec<StudentRow>,
     credits: Option<u64>,
+    shops: Vec<ShopRow>,
     read_at: ReadAt,
     /// Why what was read could not be kept or brought back, while it lasts.
     keep_error: Option<String>,
@@ -33,11 +35,6 @@ pub struct Snapshot {
 struct Places {
     state: PathBuf,
     latest: PathBuf,
-}
-
-/// The local time, as the kept data and the exports write it.
-fn now() -> String {
-    chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
 impl Snapshot {
@@ -52,6 +49,7 @@ impl Snapshot {
             equipment: rows(List::Equipment, &kept.equipment),
             students: watch::student_rows(recognizer, &kept.students),
             credits: kept.credits,
+            shops: recognizer.shop_rows(&kept.shops),
             read_at: kept.read_at.clone(),
             keep_error,
         }
@@ -65,6 +63,11 @@ impl Snapshot {
             equipment: counts(&self.equipment),
             students: self.students.iter().map(|s| (s.id, s.training)).collect(),
             credits: self.credits,
+            shops: self
+                .shops
+                .iter()
+                .map(|s| (s.name.clone(), s.shelf()))
+                .collect(),
             read_at: self.read_at.clone(),
         }
     }
@@ -78,6 +81,7 @@ impl Snapshot {
             &self.students,
             &self.items,
             &self.equipment,
+            &self.shops,
         )
     }
 }
@@ -171,6 +175,8 @@ pub fn run(context: tauri::Context) {
                             snapshot.credits = Some(credits);
                             snapshot.read_at.credits = read;
                         }
+                        // Each shop carries when it was read.
+                        Update::Shops(rows) => snapshot.shops = rows,
                     }
                     snapshot.keep_error = keep_in(&places, &snapshot)
                         .err()

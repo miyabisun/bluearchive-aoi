@@ -19,6 +19,7 @@ pub mod ocr;
 mod order;
 pub mod quantity;
 pub mod screen;
+pub mod shop;
 pub mod student;
 pub mod tally;
 pub mod watch;
@@ -26,7 +27,7 @@ mod embedded {
     include!(concat!(env!("OUT_DIR"), "/embedded.rs"));
 }
 
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 
 use image::{RgbImage, RgbaImage};
 use serde::{Deserialize, Serialize};
@@ -77,6 +78,8 @@ pub enum Frame {
     /// The student screen: the student (`None` when the name could not be
     /// told) and the training shown.
     Student(Option<i64>, student::Training),
+    /// A shop and its offers.
+    Shop(shop::Seen),
 }
 
 /// A student of the SchaleDB snapshot (`data/schaledb/students.json`).
@@ -118,6 +121,8 @@ fn picture(read: &Read, path: &str) -> Result<RgbaImage, String> {
 
 pub struct Recognizer {
     items: Catalog,
+    /// The items again, as the shops' goods.
+    goods: shop::Goods,
     equipment: Catalog,
     digits: Digits,
     /// The sort buttons in the default order (`data/sort-default.png`).
@@ -163,6 +168,7 @@ impl Recognizer {
             |path: &str| picture(read, path).map(|p| image::DynamicImage::from(p).to_rgb8());
         Ok(Self {
             items: items::catalog(read)?,
+            goods: items::goods(read)?,
             equipment: equipment::catalog(read)?,
             digits: json(read, "digits.json")?,
             sort_template: template("sort-default.png")?,
@@ -190,18 +196,62 @@ impl Recognizer {
         })
     }
 
+    /// The shelves in the menu's order, their offers' items named.
+    pub fn shop_rows(&self, shelves: &BTreeMap<String, shop::Shelf>) -> Vec<shop::ShopRow> {
+        let items = self.items.entries();
+        shop::SHOPS
+            .iter()
+            .filter_map(|&name| {
+                let kept = shelves.get(name)?;
+                Some(shop::ShopRow {
+                    name: name.to_owned(),
+                    read_at: kept.read_at.clone(),
+                    resets: name != shop::LASTING,
+                    coins: if shop::TWO_COINS.contains(&name) {
+                        2
+                    } else {
+                        1
+                    },
+                    offers: kept
+                        .offers
+                        .iter()
+                        .map(|o| shop::OfferRow {
+                            id: o.id,
+                            name: items
+                                .iter()
+                                .find(|i| i.id == o.id)
+                                .map(|i| i.name.clone())
+                                .unwrap_or_default(),
+                            coin: o.coin,
+                            left: o.left,
+                            price: o.price,
+                        })
+                        .collect(),
+                })
+            })
+            .collect()
+    }
+
+    /// The shop screen (see `shop::Goods::read`); `None` on any other screen,
+    /// and without the OCR.
+    pub fn read_shop(&self, image: &RgbImage) -> Option<shop::Seen> {
+        self.goods.read(image, self.ocr.as_ref()?)
+    }
+
     pub fn students(&self) -> &[(i64, String)] {
         &self.students
     }
 
     /// Reads whatever the frame shows that can be read: a list in its default
-    /// order, or the student screen's 基本情報 tab.
+    /// order, the student screen's 基本情報 tab, or a shop.
     pub fn read_frame(&self, image: &RgbImage) -> Option<Frame> {
         if let Some((list, cells, start)) = self.read_list(image) {
             return Some(Frame::List(list, cells, start));
         }
-        self.read_student(image)
-            .map(|(id, training)| Frame::Student(id, training))
+        if let Some((id, training)) = self.read_student(image) {
+            return Some(Frame::Student(id, training));
+        }
+        self.read_shop(image).map(Frame::Shop)
     }
 
     /// The credits the top bar shows; `None` where there is no bar, or its

@@ -15,6 +15,7 @@ export const LISTS = [
   { id: "items", name: "アイテム" },
   { id: "equipment", name: "装備" },
   { id: "students", name: "生徒" },
+  { id: "shops", name: "ショップ" },
 ];
 
 const listName = (id) => LISTS.find((l) => l.id === id)?.name ?? id;
@@ -121,4 +122,32 @@ export function sortStudents(rows, column = "level") {
         0,
       ) || a.id - b.id,
   );
+}
+
+/** The year and month of a time as "2026-10". */
+const month = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+
+/** Whether `shop` resets as the month changes and was read in a month before `now`'s. */
+export function shopStale(shop, now = new Date()) {
+  return shop.resets && shop.read_at.slice(0, 7) < month(now);
+}
+
+/**
+ * An offer as table cells: the times it can still be bought ("買い切り" at
+ * none), and its price, "?" unread, after "左" or "右" for the coin of a shop
+ * that takes two (`coins`).
+ */
+export function offerCells(offer, coins) {
+  const price = known(offer.price) ? exact.format(offer.price) : "?";
+  return {
+    left: offer.left === 0 ? "買い切り" : String(offer.left),
+    price: coins > 1 ? `${offer.coin === 0 ? "左" : "右"} ${price}` : price,
+  };
+}
+
+/** Each shop with its offers narrowed by `query` (see `filterRows`); shops left with none go. */
+export function filterShops(shops, query) {
+  return shops
+    .map((shop) => ({ ...shop, offers: filterRows(shop.offers, query) }))
+    .filter((shop) => shop.offers.length > 0);
 }

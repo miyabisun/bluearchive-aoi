@@ -5,7 +5,8 @@
 //! `cargo run --release --example mask_fixture -- <screenshot.png> <fixture.png>`
 //! With `level` after them it keeps the name plate's level alone, for a level
 //! sample taken on any tab (`tests/fixtures/levels.json`); with `credit`, the
-//! top bar's credits alone (`tests/fixtures/credits.json`).
+//! top bar's credits alone (`tests/fixtures/credits.json`); with `shop`, what
+//! the shop screen is read from (`tests/fixtures/shops.json`).
 
 use std::path::Path;
 
@@ -14,6 +15,7 @@ use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use aoi::{
     Recognizer, credit,
     screen::{self, Region},
+    shop,
     student::{self, Area, glyph::Fonts},
 };
 
@@ -27,13 +29,16 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (from, to, only) = match &args[..] {
         [from, to] => (from, to, None),
-        [from, to, only] if only == "level" || only == "credit" => (from, to, Some(only.as_str())),
-        _ => panic!("usage: mask_fixture <screenshot.png> <fixture.png> [level|credit]"),
+        [from, to, only] if ["level", "credit", "shop"].contains(&only.as_str()) => {
+            (from, to, Some(only.as_str()))
+        }
+        _ => panic!("usage: mask_fixture <screenshot.png> <fixture.png> [level|credit|shop]"),
     };
     let image = image::open(from).unwrap().to_rgb8();
     let (w, h) = (image.width() as f32, image.height() as f32);
     let areas = match only {
         Some("level") => vec![student::LEVEL],
+        Some("shop") => shop::areas(),
         Some(_) => vec![credit::NUMBER, credit::ICON],
         None => student::areas(),
     };
@@ -53,6 +58,14 @@ fn main() {
             )
         })
         .collect();
+    if only == Some("shop") {
+        // The cards read whole, each with a little room.
+        let room = 0.005 * h;
+        kept.extend(shop::bars(&image).iter().filter_map(|bar| {
+            let (x0, y0, x1, y1) = shop::card_area(&image, bar)?;
+            Some((x0 - room, y0 - room, x1 + room, y1 + room))
+        }));
+    }
     let unit = screen::STUDENT_UNIT * h;
     let screens: &[Region] = if only.is_some() {
         &[]
@@ -92,6 +105,12 @@ fn main() {
         return save(&masked, to);
     }
     let recognizer = Recognizer::load(&data).unwrap();
+    if only == Some("shop") {
+        let (whole, part) = (recognizer.read_shop(&image), recognizer.read_shop(&masked));
+        assert!(whole.is_some(), "{from} is no shop screen");
+        assert_eq!(whole, part, "{from} reads otherwise once masked");
+        return save(&masked, to);
+    }
     if only == Some("credit") {
         let (whole, part) = (
             recognizer.read_credits(&image),

@@ -2,11 +2,14 @@
 //! cut from screenshots), consumables first, the time-limited event items left
 //! out.
 
+use image::RgbaImage;
+
 use crate::{
     Item, Read,
     catalog::{Catalog, ListKey, Rules},
     icon::Mask,
     json, picture,
+    shop::Goods,
 };
 
 /// Whether the user keeps track of an item. On 2026-10-11 they dropped, from the
@@ -40,6 +43,21 @@ pub const RULES: Rules = Rules {
 };
 
 pub fn catalog(read: &Read) -> Result<Catalog, String> {
+    let (items, icon) = with_icons(read)?;
+    Catalog::new(items, RULES, icon)
+}
+
+/// The items as the shops' goods.
+pub fn goods(read: &Read) -> Result<Goods, String> {
+    let (items, icon) = with_icons(read)?;
+    Goods::new(&items, icon)
+}
+
+/// An icon's picture, or why it could not be read.
+type Picture = Result<RgbaImage, String>;
+
+/// SchaleDB's items and those it lacks, and their icons by name.
+fn with_icons<'a>(read: &'a Read) -> Result<(Vec<Item>, impl Fn(&str) -> Picture + 'a), String> {
     let mut items: Vec<Item> = json(read, "schaledb/items.json")?;
     let extras: Vec<Item> = json(read, "extra/items.json")?;
     if let Some(both) = extras.iter().find(|e| items.iter().any(|i| i.id == e.id)) {
@@ -50,11 +68,11 @@ pub fn catalog(read: &Read) -> Result<Catalog, String> {
     }
     let extra_icons: Vec<String> = extras.iter().map(|e| e.icon.clone()).collect();
     items.extend(extras);
-    Catalog::new(items, RULES, |name| {
+    Ok((items, move |name: &str| {
         if extra_icons.iter().any(|e| e == name) {
             picture(read, &format!("extra/icons/{name}.png"))
         } else {
             picture(read, &format!("schaledb/icons/{name}.webp"))
         }
-    })
+    }))
 }

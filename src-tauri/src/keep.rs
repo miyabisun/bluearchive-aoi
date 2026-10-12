@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, path::Path};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{quantity::Count, student::Training};
+use crate::{quantity::Count, shop::Shelf, student::Training};
 
 /// When each list was last read (local time, "2026-10-12 15:30:00").
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,7 +27,14 @@ pub struct Kept {
     pub equipment: BTreeMap<i64, Count>,
     pub students: BTreeMap<i64, Training>,
     pub credits: Option<u64>,
+    /// The shops' shelves by shop.
+    pub shops: BTreeMap<String, Shelf>,
     pub read_at: ReadAt,
+}
+
+/// The local time, as the kept data and the exports write it.
+pub fn now() -> String {
+    chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
 /// What `path` keeps; nothing yet when there is no such file.
@@ -59,7 +66,10 @@ pub fn write(path: &Path, bytes: &[u8]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::student::{Gear, Weapon};
+    use crate::{
+        shop::Offer,
+        student::{Gear, Weapon},
+    };
 
     /// A folder of its own under the temporary one, emptied.
     fn folder(name: &str) -> std::path::PathBuf {
@@ -96,6 +106,18 @@ mod tests {
                 },
             )]),
             credits: Some(244_213_276),
+            shops: BTreeMap::from([(
+                "総力戦".to_owned(),
+                Shelf {
+                    read_at: "2026-10-12 22:00:00".to_owned(),
+                    offers: vec![Offer {
+                        id: 9000,
+                        coin: 1,
+                        left: 0,
+                        price: None,
+                    }],
+                },
+            )]),
             read_at: ReadAt {
                 items: Some("2026-10-12 15:30:00".to_owned()),
                 equipment: None,

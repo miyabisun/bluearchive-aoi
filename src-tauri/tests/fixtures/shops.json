@@ -1,0 +1,63 @@
+[
+  {
+    "image": "shops/souryokusen-end.png",
+    "shop": "総力戦",
+    "note": "2026-10-12 capture, 2222x1250, the end of the list: cards bought up, darkened. Left coin purple (530), right gold (5,940); the two 秘伝ノート differ only in their coin. The top row's names are cut off. Labels by eye.",
+    "offers": [
+      { "name": "ミドリの神名文字", "coin": 0, "left": 0, "price": 50 },
+      { "name": "秘伝ノート", "coin": 1, "left": 0, "price": 500 },
+      { "name": "秘伝ノート", "coin": 0, "left": 0, "price": 500 }
+    ]
+  },
+  {
+    "image": "shops/daikessen.png",
+    "shop": "大決戦",
+    "note": "2026-10-12 capture, 2222x1250. Left coin blue (440), right silver (155): the Odyssey books take silver, the Hyakkiyako ones blue. Labels by eye.",
+    "offers": [
+      { "name": "初級戦術教育BD（オデュッセイア）", "coin": 1, "left": 40, "price": 10 },
+      { "name": "中級戦術教育BD（オデュッセイア）", "coin": 1, "left": 30, "price": 20 },
+      { "name": "上級戦術教育BD（オデュッセイア）", "coin": 1, "left": 25, "price": 50 },
+      { "name": "最上級戦術教育BD（オデュッセイア）", "coin": 1, "left": 6, "price": 100 },
+      { "name": "初級戦術教育BD（百鬼夜行）", "coin": 0, "left": 12, "price": 10 },
+      { "name": "中級戦術教育BD（百鬼夜行）", "coin": 0, "left": 10, "price": 20 },
+      { "name": "上級戦術教育BD（百鬼夜行）", "coin": 0, "left": 8, "price": 50 },
+      { "name": "最上級戦術教育BD（百鬼夜行）", "coin": 0, "left": 2, "price": 100 }
+    ]
+  },
+  {
+    "image": "shops/goudou-end.png",
+    "shop": "合同火力演習",
+    "note": "2026-10-12 capture, 2222x1250, the end of the list: cards bought up. One coin. The top row's names are cut off. Labels by eye.",
+    "offers": [
+      { "name": "初級テイラーストーン", "coin": 0, "left": 0, "price": 1 },
+      { "name": "最上級テイラーストーン", "coin": 0, "left": 0, "price": 16 },
+      { "name": "完全な古代文明のメダル", "coin": 0, "left": 0, "price": 25 }
+    ]
+  },
+  {
+    "image": "shops/shimeitehai.png",
+    "shop": "指名手配",
+    "note": "2026-10-12 capture, 2222x1250. One coin. The bottom row's buttons are cut off, its prices shown. Labels by eye.",
+    "offers": [
+      { "name": "編集済みのレヒニッツ写本", "coin": 0, "left": 8, "price": 80 },
+      { "name": "完全なレヒニッツ写本", "coin": 0, "left": 5, "price": 200 },
+      { "name": "エーテルの粉", "coin": 0, "left": 25, "price": 24 },
+      { "name": "エーテルの欠片", "coin": 0, "left": 15, "price": 40 },
+      { "name": "エーテルの結晶", "coin": 0, "left": 8, "price": 80 },
+      { "name": "エーテルのエッセンス", "coin": 0, "left": 5, "price": 200 },
+      { "name": "アンティキティラ装置の欠片", "coin": 0, "left": 25, "price": 24 },
+      { "name": "壊れたアンティキティラ装置", "coin": 0, "left": 15, "price": 40 }
+    ]
+  },
+  {
+    "image": "shops/jukutatsu-end.png",
+    "shop": "熟達証書",
+    "note": "2026-10-12 capture, 2222x1250, the end of the list: cards bought up. One coin. The top row's names are cut off. Labels by eye.",
+    "offers": [
+      { "name": "ムツキ（正月）の神名文字", "coin": 0, "left": 0, "price": 1800 },
+      { "name": "ヒナ（水着）の神名文字", "coin": 0, "left": 0, "price": 1800 },
+      { "name": "イオリ（水着）の神名文字", "coin": 0, "left": 0, "price": 1800 },
+      { "name": "神名のカケラ", "coin": 0, "left": 0, "price": 600 }
+    ]
+  }
+]

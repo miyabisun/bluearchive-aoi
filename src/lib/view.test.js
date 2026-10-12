@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   filterRows,
+  filterShops,
+  offerCells,
+  shopStale,
   followTab,
   formatCount,
   sortStudents,
@@ -209,5 +212,47 @@ describe("sortStudents", () => {
     expect(ids(sortStudents(geared, "equipment"))).toEqual([3, 2, 1]);
     const released = [student(1, { ability: [25, 0, 0] }), student(2, { ability: [25, 0, 25] })];
     expect(ids(sortStudents(released, "ability"))).toEqual([2, 1]);
+  });
+});
+
+describe("shops", () => {
+  const shop = (name, readAt, resets, offers) => ({
+    name,
+    read_at: readAt,
+    resets,
+    coins: 1,
+    offers,
+  });
+  const offer = (id, name, left, price, coin = 0) => ({ id, name, coin, left, price });
+
+  it("tells a shop that resets read in an earlier month", () => {
+    const now = new Date(2026, 10, 1, 9, 0);
+    expect(shopStale(shop("総力戦", "2026-10-31 23:00:00", true, []), now)).toBe(true);
+    expect(shopStale(shop("総力戦", "2026-11-01 08:00:00", true, []), now)).toBe(false);
+    expect(shopStale(shop("カケラ(文字)", "2026-09-01 08:00:00", false, []), now)).toBe(false);
+  });
+
+  it("writes an offer bought up, an unread price and the coin of a shop with two", () => {
+    expect(offerCells(offer(1, "秘伝ノート", 0, 500, 1), 2)).toEqual({
+      left: "買い切り",
+      price: "右 500",
+    });
+    expect(offerCells(offer(1, "初級戦術教育BD（百鬼夜行）", 40, null), 2)).toEqual({
+      left: "40",
+      price: "左 ?",
+    });
+    expect(offerCells(offer(1, "エーテルの粉", 25, 1800), 1)).toEqual({
+      left: "25",
+      price: "1,800",
+    });
+  });
+
+  it("narrows each shop's offers by name and leaves out a shop with none", () => {
+    const shops = [
+      shop("総力戦", "", true, [offer(1, "秘伝ノート", 0, 500), offer(2, "エーテルの粉", 3, 24)]),
+      shop("指名手配", "", true, [offer(3, "エーテルの欠片", 15, 40)]),
+    ];
+    expect(filterShops(shops, "秘伝")).toEqual([{ ...shops[0], offers: [shops[0].offers[0]] }]);
+    expect(filterShops(shops, "")).toEqual(shops);
   });
 });

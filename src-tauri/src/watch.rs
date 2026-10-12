@@ -26,7 +26,8 @@ use windows_capture::{
 
 use crate::{
     Frame as Shown, List, Recognizer, Row,
-    keep::Kept,
+    keep::{Kept, now},
+    shop::{Shelves, ShopRow},
     student::{Training, roster::Roster},
     tally::{CONFIRM, Tally},
 };
@@ -56,13 +57,14 @@ pub enum Status {
     Failed { message: String },
 }
 
-/// What can be read: a list, or the student screen.
+/// What can be read: a list, the student screen or the shop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Screen {
     Items,
     Equipment,
     Students,
+    Shops,
 }
 
 /// A student seen, for the window.
@@ -79,6 +81,7 @@ pub enum Update {
     List(List, Vec<Row>),
     Students(Vec<StudentRow>),
     Credits(u64),
+    Shops(Vec<ShopRow>),
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -424,6 +427,7 @@ pub fn start(
                 known: kept.credits,
                 streak: None,
             };
+            let mut shelves = Shelves::seeded(kept.shops);
             loop {
                 let shot = latest.take();
                 let read = recognizer.read_frame(&shot);
@@ -438,6 +442,7 @@ pub fn start(
                         Shown::List(List::Items, ..) => Screen::Items,
                         Shown::List(List::Equipment, ..) => Screen::Equipment,
                         Shown::Student(..) => Screen::Students,
+                        Shown::Shop(_) => Screen::Shops,
                     });
                 });
                 match read {
@@ -451,6 +456,10 @@ pub fn start(
                     Some(Shown::Student(Some(id), training)) if roster.observe(id, training) => {
                         let rows = student_rows(&recognizer, roster.students());
                         board.changed(Update::Students(rows));
+                    }
+                    Some(Shown::Shop(seen)) if shelves.observe(&seen, &now()) => {
+                        let rows = recognizer.shop_rows(shelves.shelves());
+                        board.changed(Update::Shops(rows));
                     }
                     _ => {}
                 }
