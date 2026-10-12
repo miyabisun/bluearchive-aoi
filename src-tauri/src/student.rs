@@ -81,7 +81,8 @@ const fn right(x: (f32, f32), y: (f32, f32)) -> Area {
 pub const NAME: Area = left((0.04, 0.48), (0.76, 0.83));
 const BOND: Area = left((0.0624, 0.0944), (0.786, 0.807));
 const RARITY: Area = left((0.364, 0.474), (0.789, 0.818));
-const LEVEL: Area = left((0.048, 0.116), (0.827, 0.856));
+/// The level on the name plate, which every tab of the student screen shows.
+pub const LEVEL: Area = left((0.048, 0.116), (0.827, 0.856));
 /// HP and attack on the first row, healing on the second, each with its
 /// ability release ("Lv.25") after the value.
 /// Below the "MAX" tag that tops a fully released badge.
@@ -154,8 +155,11 @@ fn luminance(c: [u8; 3]) -> f32 {
     0.299 * f32::from(c[0]) + 0.587 * f32::from(c[1]) + 0.114 * f32::from(c[2])
 }
 
-/// The light text on the dark name plate ("Lv.65").
-const LIGHT: Ink = |c| c.iter().all(|&v| v > 150);
+/// The light text on the dark name plate ("Lv.65"). Its soft edges are left
+/// out, or neighbours of the italic font touch more ("21", "22"). Measured on
+/// 2026-10-12 over the level samples: above 150 "21" reads as nothing, above
+/// 220 no character is cut out at all; 200 reads every sample.
+const LIGHT: Ink = |c| c.iter().all(|&v| v > 200);
 /// The dark digits in the bond heart.
 const DARK: Ink = |c| luminance(c) < 100.0;
 /// The navy skill levels ("Lv.7").
@@ -335,15 +339,42 @@ pub fn read(image: &RgbImage, fonts: &Fonts) -> Training {
         None => None,
     };
     Training {
-        level: number(image, fonts, "level", "Lv", LEVEL),
-        rarity: stars(image, RARITY, STAR, RARITY_PITCH).filter(|n| (1..=5).contains(n)),
-        bond: number(image, fonts, "bond", "", BOND),
         skills: [skill(0), skill(1), skill(2), skill(3)],
         weapon,
         equipment: [equipment(0), equipment(1), equipment(2)],
         gear,
         ability: [ability(0), ability(1), ability(2)],
+        ..plate(image, fonts)
     }
+}
+
+/// What the name plate shows, which every tab of the student screen has: the
+/// level, the rarity and the bond, the rest unknown.
+pub fn plate(image: &RgbImage, fonts: &Fonts) -> Training {
+    Training {
+        level: level(image, fonts),
+        rarity: stars(image, RARITY, STAR, RARITY_PITCH).filter(|n| (1..=5).contains(n)),
+        bond: number(image, fonts, "bond", "", BOND),
+        skills: [None; 4],
+        weapon: None,
+        equipment: [None; 3],
+        gear: None,
+        ability: [None; 3],
+    }
+}
+
+/// The level on the name plate.
+pub fn level(image: &RgbImage, fonts: &Fonts) -> Option<u8> {
+    number(image, fonts, "level", "Lv", LEVEL)
+}
+
+/// A screen of the student screen, on any tab, whose level is labeled by eye
+/// (`tests/fixtures/levels.json`): samples of the level's digits.
+#[derive(Debug, Deserialize)]
+pub struct LevelLabel {
+    pub image: String,
+    pub role: String,
+    pub level: u8,
 }
 
 /// A student screen labeled by eye (`tests/fixtures/students.json`).
@@ -358,8 +389,10 @@ pub struct Label {
     pub skills: [u8; 4],
     /// `None` while the unique weapon is locked.
     pub weapon: Option<Weapon>,
-    /// Tier and level of each equipment slot.
-    pub equipment: [[u8; 2]; 3],
+    /// Tier and level of each equipment slot; `None` where the slot holds
+    /// nothing (nothing equipped, or locked below the level that opens it),
+    /// which the screen is not read for yet.
+    pub equipment: [Option<[u8; 2]>; 3],
     pub gear: u8,
     pub ability: [u8; 3],
 }
@@ -374,7 +407,7 @@ impl Label {
             weapon: Some(self.weapon),
             equipment: self
                 .equipment
-                .map(|[tier, level]| Some(Gear { tier, level })),
+                .map(|slot| slot.map(|[tier, level]| Gear { tier, level })),
             gear: Some(self.gear),
             ability: self.ability.map(Some),
         }
@@ -395,7 +428,12 @@ impl Label {
         if let Some(weapon) = self.weapon {
             out.push(("weapon", WEAPON_LEVEL, format!("Lv{}", weapon.level)));
         }
-        for (i, [tier, level]) in self.equipment.iter().enumerate() {
+        for (i, [tier, level]) in self
+            .equipment
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| Some((i, (*s)?)))
+        {
             out.push(("tier", EQUIPMENT_TIER[i], format!("T{tier}")));
             out.push(("equipment", EQUIPMENT_LEVEL[i], format!("Lv{level}")));
         }

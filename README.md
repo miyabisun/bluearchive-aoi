@@ -52,7 +52,9 @@ student appears under the 生徒 tab with their training:
 | 能力解放 | The levels of the three ability release rows.                               |
 | 絆       | Bond rank.                                                                  |
 
-A field Aoi cannot read for sure shows ?.
+A field Aoi cannot read for sure shows ?. On the student screen's other tabs (レベルアップ,
+神秘解放) Aoi reads the name plate alone, so a student levelled up there shows the new
+level without going back to 基本情報.
 
 The 生徒 tab tells how many students have been read (生徒 42). Compare it with how many
 students you have in the game to see whether any were missed; a student whose name could
@@ -147,6 +149,8 @@ git config core.hooksPath .githooks   # run verify before pushing main or a tag
 Recognition is tested against labeled screenshots in `src-tauri/tests/fixtures`.
 A student screenshot is added there with only the areas Aoi reads kept, a tenth of its
 size: `cargo run --release --example mask_fixture -- <screenshot.png> <fixture.png>`.
+Level samples (`levels.json`), taken on any tab of the student screen, keep the level
+alone: add `level` after the two paths.
 To measure against the running game, run `cargo run --release --example watch -- 60` in
 `src-tauri`. It watches for 60 seconds and prints the frame rate and dropped frames.
 

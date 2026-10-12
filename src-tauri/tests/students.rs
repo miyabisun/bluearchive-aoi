@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use aoi::student::{self, Label, Training, glyph::Fonts};
+use aoi::student::{self, Label, LevelLabel, Training, glyph::Fonts};
 
 fn root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -208,4 +208,49 @@ fn a_fifth_weapon_star_counts() {
             stars: 5
         }))
     );
+}
+
+/// Every level sample (`levels.json`) reads its level, or nothing.
+#[test]
+fn every_level_sample_reads_right_or_unknown() {
+    let fonts = fonts();
+    let levels: Vec<LevelLabel> = serde_json::from_str(
+        &std::fs::read_to_string(root().join("tests/fixtures/levels.json")).unwrap(),
+    )
+    .unwrap();
+    let mut unknown = Vec::new();
+    for label in &levels {
+        let image = image::open(root().join("tests/fixtures").join(&label.image))
+            .unwrap()
+            .to_rgb8();
+        match student::level(&image, &fonts) {
+            None => unknown.push(label.image.as_str()),
+            Some(read) => assert_eq!(read, label.level, "{}", label.image),
+        }
+    }
+    eprintln!(
+        "{} of {} levels unknown: {unknown:?}",
+        unknown.len(),
+        levels.len()
+    );
+}
+
+/// On the other tabs of the student screen, where a student is levelled up,
+/// the name plate is read and nothing else.
+#[test]
+fn the_level_up_tab_reads_the_name_plate() {
+    let image = image::open(root().join("tests/fixtures/students/koyuki-pajama-levelup.png"))
+        .unwrap()
+        .to_rgb8();
+    let (id, read) = recognizer().read_student(&image).expect("a student screen");
+    assert_eq!(id, Some(20056));
+    assert_eq!(
+        (read.level, read.rarity, read.bond),
+        (Some(22), Some(3), Some(12))
+    );
+    assert_eq!(read.skills, [None; 4]);
+    assert_eq!(read.weapon, None);
+    assert_eq!(read.equipment, [None; 3]);
+    assert_eq!(read.gear, None);
+    assert_eq!(read.ability, [None; 3]);
 }

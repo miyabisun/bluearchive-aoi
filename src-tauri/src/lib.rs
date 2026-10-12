@@ -116,7 +116,9 @@ pub struct Recognizer {
     titles: Vec<(List, RgbImage)>,
     students: Vec<(i64, String)>,
     /// The student screen's title and its selected "基本情報" tab.
-    student_screen: (RgbImage, RgbImage),
+    /// The student screen's title, its selected 基本情報 tab, and the same tab
+    /// while another is selected.
+    student_screen: (RgbImage, RgbImage, RgbImage),
     /// References for the short texts of the student screen.
     fonts: student::glyph::Fonts,
     /// The OCR reading students' names; without it (no Japanese OCR on this
@@ -165,6 +167,7 @@ impl Recognizer {
             student_screen: (
                 template("title-students.png")?,
                 template("student-tab.png")?,
+                template("student-tab-other.png")?,
             ),
             fonts: json(read, "student-fonts.json")?,
             ocr: ocr::Ocr::japanese().ok(),
@@ -185,13 +188,16 @@ impl Recognizer {
             .map(|(id, training)| Frame::Student(id, training))
     }
 
-    /// Reads the student screen's 基本情報 tab; any other screen gives `None`.
+    /// Reads the student screen: all of its 基本情報 tab, and the name plate
+    /// (level, rarity, bond) on its other tabs, where a student is levelled up;
+    /// any other screen gives `None`.
     pub fn read_student(&self, image: &RgbImage) -> Option<(Option<i64>, student::Training)> {
         let ocr = self.ocr.as_ref()?;
-        let (title, tab) = &self.student_screen;
+        let (title, tab, other_tab) = &self.student_screen;
         let unit = (image.height() as f32 * screen::STUDENT_UNIT).round() as u32;
         screen::title(image, unit, std::slice::from_ref(title))?;
-        if !screen::student_tab(image, tab) {
+        let basic = screen::student_tab(image, tab);
+        if !basic && !screen::student_tab(image, other_tab) {
             return None;
         }
         let (x0, y0, x1, y1) = student::rect(image, student::NAME)?;
@@ -203,7 +209,12 @@ impl Recognizer {
                 let text = ocr.read(picture).ok()?;
                 student::name::find(&text, &self.students)
             });
-        Some((id, student::read(image, &self.fonts)))
+        let training = if basic {
+            student::read(image, &self.fonts)
+        } else {
+            student::plate(image, &self.fonts)
+        };
+        Some((id, training))
     }
 
     pub fn catalog(&self, list: List) -> &Catalog {

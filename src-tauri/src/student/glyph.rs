@@ -24,7 +24,7 @@ pub struct Style {
     /// No character is wider than this share of its height; wider blobs are
     /// the edge of a card or a piece of a picture.
     pub widest: f32,
-    /// A character's usual width as a share of its height. The italic fonts
+    /// A character's usual width as a share of the tallest one's height. The italic fonts
     /// draw neighbours touching ("Lv", "90"); such a blob is cut into as many
     /// equal parts as characters of this width fit in it.
     pub width: f32,
@@ -192,8 +192,10 @@ pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
     let blobs: Vec<Blob> = blobs
         .into_iter()
         .flat_map(|b| {
-            let (w, h) = ((b.right - b.left + 1) as f32, (b.bottom - b.top + 1) as f32);
-            let parts = (w / (h * style.width)).round().max(1.0) as u32;
+            // Measured against the tallest character: a short one ("v")
+            // standing alone is no wider for it.
+            let w = (b.right - b.left + 1) as f32;
+            let parts = (w / (tallest as f32 * style.width)).round().max(1.0) as u32;
             let step = w / parts as f32;
             (0..parts).map(move |i| Blob {
                 left: b.left + (i as f32 * step) as u32,

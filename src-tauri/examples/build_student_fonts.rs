@@ -1,6 +1,7 @@
 //! Writes `data/student-fonts.json`: the references of each text style of the
 //! student screen, taken from the fixtures labeled `"role": "tune"` in
-//! `tests/fixtures/students.json`. Evaluation fixtures are never used here.
+//! `tests/fixtures/students.json`, and the level samples labeled so in
+//! `tests/fixtures/levels.json`. Evaluation fixtures are never used here.
 //! The cuts of a character are grouped by likeness and each group averaged, so
 //! a character drawn in more than one way keeps a reference for each.
 //! Run with `cargo run --example build_student_fonts`.
@@ -8,7 +9,7 @@
 use std::{collections::BTreeMap, path::Path};
 
 use aoi::student::{
-    self, Label,
+    self, Label, LevelLabel,
     glyph::{self, Fonts},
 };
 
@@ -24,20 +25,46 @@ impl Group {
     }
 }
 
+/// Adds a cut to the nearest group of its character, or starts a group.
+fn join(groups: &mut Vec<Group>, shape: Vec<f32>) {
+    let nearest = groups
+        .iter_mut()
+        .map(|g| (glyph::distance(&g.mean(), &shape), g))
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .filter(|(d, _)| *d <= JOIN);
+    match nearest {
+        Some((_, group)) => {
+            group.0.iter_mut().zip(&shape).for_each(|(s, v)| *s += v);
+            group.1 += 1;
+        }
+        None => groups.push(Group(shape, 1)),
+    }
+}
+
 fn main() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let dir = root.join("tests/fixtures");
     let labels: Vec<Label> =
         serde_json::from_str(&std::fs::read_to_string(dir.join("students.json")).unwrap()).unwrap();
+    let levels: Vec<LevelLabel> =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("levels.json")).unwrap()).unwrap();
+    // Each tuning screen with the texts it shows in each style.
+    let samples = labels
+        .iter()
+        .filter(|l| l.role == "tune")
+        .map(|l| (&l.image, l.texts()))
+        .chain(levels.iter().filter(|l| l.role == "tune").map(|l| {
+            let texts = vec![("level", student::LEVEL, format!("Lv{}", l.level))];
+            (&l.image, texts)
+        }));
     let mut groups: BTreeMap<String, BTreeMap<char, Vec<Group>>> = BTreeMap::new();
-    for label in labels.iter().filter(|l| l.role == "tune") {
-        let image = image::open(dir.join(&label.image)).unwrap().to_rgb8();
-        for (style, area, text) in label.texts() {
+    for (path, texts) in samples {
+        let image = image::open(dir.join(path)).unwrap().to_rgb8();
+        for (style, area, text) in texts {
             let shapes = student::shapes(&image, style, area).unwrap();
             if shapes.len() != text.chars().count() {
                 println!(
-                    "{} {style} {text:?}: {} characters cut out",
-                    label.image,
+                    "{path} {style} {text:?}: {} characters cut out",
                     shapes.len()
                 );
                 continue;
@@ -48,18 +75,7 @@ fn main() {
                     .or_default()
                     .entry(c)
                     .or_default();
-                let nearest = found
-                    .iter_mut()
-                    .map(|g| (glyph::distance(&g.mean(), &shape), g))
-                    .min_by(|a, b| a.0.total_cmp(&b.0))
-                    .filter(|(d, _)| *d <= JOIN);
-                match nearest {
-                    Some((_, group)) => {
-                        group.0.iter_mut().zip(&shape).for_each(|(s, v)| *s += v);
-                        group.1 += 1;
-                    }
-                    None => found.push(Group(shape, 1)),
-                }
+                join(found, shape);
             }
         }
     }
