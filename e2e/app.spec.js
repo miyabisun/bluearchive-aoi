@@ -110,6 +110,8 @@ test("the tabs and the search field take focus from the keyboard", async ({ page
   await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "生徒" })).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "書き出す" })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByLabel("名前で検索")).toBeFocused();
   await page.screenshot({ path: "test-results/wide-dark.png" });
 });
@@ -184,4 +186,30 @@ test("keeps a narrow window from scrolling sideways with the student table", asy
   await open(page, { status: reading("students"), items, equipment, students });
   expect(await overflow(page)).toBe(0);
   await page.screenshot({ path: "test-results/narrow-students.png" });
+});
+
+const written = String.raw`C:\Users\me\Documents\Aoi\aoi-20261012-153000.yaml`;
+
+test("writes everything read to a file and tells where", async ({ page }) => {
+  await open(page, { status: reading("students"), items, equipment, students, export: written });
+  await page.getByRole("button", { name: "書き出す" }).click();
+  await expect(page.getByText(`書き出しました: ${written}`)).toBeVisible();
+});
+
+test("tells why an export failed", async ({ page }) => {
+  await open(page, {
+    status: reading("items"),
+    items,
+    equipment,
+    export: { error: "アクセスが拒否されました。" },
+  });
+  await page.getByRole("button", { name: "書き出す" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "書き出せませんでした: アクセスが拒否されました。",
+  );
+});
+
+test("has nothing to export before anything is read", async ({ page }) => {
+  await open(page, { status: { state: "no_game" }, items: [], equipment: [], students: [] });
+  await expect(page.getByRole("button", { name: "書き出す" })).toBeDisabled();
 });

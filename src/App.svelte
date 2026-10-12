@@ -1,6 +1,6 @@
 <script>
   import { onMount } from "svelte";
-  import { follow } from "./lib/snapshot.js";
+  import { exportAll, follow } from "./lib/snapshot.js";
   import {
     LISTS,
     filterRows,
@@ -28,11 +28,22 @@
   });
   let view = $state({ tab: "items", lastRead: null });
   let query = $state("");
+  /** The last export: `{ path }` or `{ error }`. */
+  let exported = $state(null);
 
   const status = $derived(statusView(snapshot.status));
   const rows = $derived(snapshot[view.tab]);
   const shown = $derived(filterRows(rows, query));
   const heading = $derived(LISTS.find((l) => l.id === view.tab).name);
+  const nothingRead = $derived(LISTS.every((l) => (snapshot[l.id] ?? []).length === 0));
+
+  async function save() {
+    try {
+      exported = { path: await exportAll() };
+    } catch (error) {
+      exported = { error: String(error) };
+    }
+  }
 
   onMount(() => {
     follow((next) => {
@@ -49,17 +60,20 @@
       <span class="dot" aria-hidden="true"></span>{status.label}
     </p>
   </header>
-  <div class="tabs" role="tablist">
-    {#each LISTS as list (list.id)}
-      <button
-        type="button"
-        role="tab"
-        id="tab-{list.id}"
-        aria-selected={view.tab === list.id}
-        aria-controls="list"
-        onclick={() => (view = { ...view, tab: list.id })}>{list.name}</button
-      >
-    {/each}
+  <div class="bar">
+    <div class="tabs" role="tablist">
+      {#each LISTS as list (list.id)}
+        <button
+          type="button"
+          role="tab"
+          id="tab-{list.id}"
+          aria-selected={view.tab === list.id}
+          aria-controls="list"
+          onclick={() => (view = { ...view, tab: list.id })}>{list.name}</button
+        >
+      {/each}
+    </div>
+    <button type="button" class="export" disabled={nothingRead} onclick={save}>書き出す</button>
   </div>
 </div>
 
@@ -67,6 +81,11 @@
   <div id="list" role="tabpanel" aria-labelledby="tab-{view.tab}">
     {#if snapshot.status.state === "failed"}
       <p class="error" role="alert">{snapshot.status.message}</p>
+    {/if}
+    {#if exported?.error}
+      <p class="error" role="alert">書き出せませんでした: {exported.error}</p>
+    {:else if exported}
+      <p class="exported" aria-live="polite">書き出しました: {exported.path}</p>
     {/if}
 
     {#if rows.length === 0}
@@ -148,6 +167,11 @@
     height: 48px
     padding: 0 var(--sp-3)
 
+  .bar
+    display: flex
+    align-items: center
+    padding-right: var(--sp-3)
+
   .tabs
     display: flex
     padding: 0 var(--sp-1)
@@ -165,6 +189,28 @@
         border-bottom-color: var(--c-accent)
         color: var(--c-on-surface)
         font-weight: 600
+
+  .export
+    margin-left: auto
+    height: 28px
+    padding: 0 var(--sp-3)
+    border: 1px solid var(--c-border)
+    border-radius: var(--radius-sm)
+    background: none
+    color: var(--c-on-surface)
+    font: inherit
+    font-size: var(--fs-sm)
+    white-space: nowrap
+    cursor: pointer
+    &:disabled
+      color: var(--c-muted)
+      cursor: default
+
+  .exported
+    margin: 0 0 var(--sp-4)
+    font-size: var(--fs-sm)
+    color: var(--c-muted)
+    overflow-wrap: anywhere
 
   .tier
     margin-right: var(--sp-2)

@@ -5,8 +5,8 @@ trained. Keep it open next to the game and scroll through the item list or the
 equipment list, or step through your students' screens. Aoi reads what the game's
 window shows, up to 30 times a second, and lists what it has seen by name.
 
-It only looks: it sends no input to the game and saves nothing. The list lasts until
-you close Aoi.
+It only looks: it sends no input to the game, and saves nothing unless you export what
+it read. The lists last until you close Aoi.
 
 ## Requirements
 
@@ -86,6 +86,37 @@ Other windows may cover the game; Aoi reads the game window itself, not the scre
 - A student's training is taken once three frames in a row read alike, and a field read
   later keeps its known value when a frame cannot read it. Students released after the
   bundled student data are not listed.
+
+### Exporting
+
+**書き出す**, at the right of the tabs, writes everything read so far (students, items and
+equipment) to `Documents\Aoi\aoi-<date>-<time>.yaml` and shows the file's path. Hand the
+file to an agent or a tool to check what Aoi read or to plan with it:
+
+<!-- prettier-ignore -->
+```yaml
+students:
+  - id: 10059
+    name: "ミカ"
+    level: 90
+    rarity: 5
+    bond: 43
+    skills: [5, 10, 10, 10]  # EX, normal, passive, sub
+    weapon: {stars: 3, level: 50}  # `locked` before it is unlocked
+    equipment: [{tier: 10, level: 70}, {tier: 10, level: 70}, null]
+    gear: 0  # the favorite item's tier, 0 without one
+    ability: [25, 25, 0]  # HP, attack, healing
+items:
+  - id: 1
+    name: "初級強化珠"
+    count: 1383
+equipment:
+  - id: 501000
+    name: "帽子の万能設計図"
+    count: 51K  # thousands: 50,500 to 51,499
+```
+
+`null` marks a field Aoi could not read, apart from what the student lacks.
 
 ## Item data
 

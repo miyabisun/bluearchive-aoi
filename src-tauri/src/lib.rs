@@ -9,6 +9,7 @@
 pub mod app;
 pub mod catalog;
 pub mod equipment;
+pub mod export;
 pub mod grid;
 pub mod icon;
 pub mod items;

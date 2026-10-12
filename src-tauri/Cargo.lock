@@ -152,6 +152,7 @@ dependencies = [
 name = "bluearchive-aoi"
 version = "0.1.4"
 dependencies = [
+ "chrono",
  "image",
  "serde",
  "serde_json",

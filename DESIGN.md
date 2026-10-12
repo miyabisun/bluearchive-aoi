@@ -102,6 +102,8 @@ Sumi family の共通原本（rust-svelte-template の DESIGN.md、2026-10-11 �
   その下に一覧のタブ（高さ 40px）を並べ、header とタブをまとめて sticky にし、wash-base と 1px の下境界を使う。
 - タブは文字だけのボタンで、選択中は 2px の accent の下線・600・on-surface、他は muted。面を塗らない。
   ゲームが別の一覧を映し始めたら、そのタブへ移る（手で選んだタブは、次に一覧が変わるまで保つ）。
+- タブの行の右端に「書き出す」を置く（2026-10-12 の user の依頼「YAML書き出し」）。高さ 28px、1px の border の枠だけで面を塗らず、
+  文字は on-surface（押せないときは muted）。結果は本文の先頭に body-sm・muted で示し、失敗は error-banner で原因を書く。
 - 装備の名前の前にティア（T1〜T10）を body-sm・muted で添える。設計図は名前だけではティアが分からないため。
 - 本文は中央配置で最大 720px、左右 12px、上下 16px の余白。ページは縦スクロールだけを使い、固定見出しは持ち込まない。
 - 生徒の表だけは 9 列あり 720px にも収まらないため、表の枠内に横スクロールを持たせる。数値の列は折り返さず、
@@ -114,4 +116,4 @@ Sumi family の共通原本（rust-svelte-template の DESIGN.md、2026-10-11 �
 
 ## Shapes
 
-角丸は入力欄と error-banner に 6px、状態バッジに 9999px。影は使わない。
+角丸は入力欄・ボタン・error-banner に 6px、状態バッジに 9999px。影は使わない。
