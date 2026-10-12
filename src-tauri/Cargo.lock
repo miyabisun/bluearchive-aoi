@@ -150,7 +150,7 @@ dependencies = [
 
 [[package]]
 name = "bluearchive-aoi"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "chrono",
  "image",
