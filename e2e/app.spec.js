@@ -495,7 +495,8 @@ test("shows each shop's goods, shop by shop, when the game shows a shop", async 
       .locator("img")
       .evaluateAll((imgs) => imgs.map((i) => i.alt)),
   ).toEqual(["総力戦コイン", "総力戦レアコイン"]);
-  // Each shop opens and closes; closed, its goods are out of sight.
+  // Each shop opens and closes as the work tab's sections do, its marker turned when open.
+  await expect(page.locator("details.shop summary .chevron")).toHaveCount(2);
   const first = page.locator("details").first();
   const tiles = first.locator(".tiles li");
   await expect(tiles.first()).toBeHidden();
@@ -642,18 +643,9 @@ test("shows the targets and what they take against what is held", async ({ page 
   await open(page, snapshot);
   await page.getByRole("tab", { name: "育成" }).click();
   const row = page.locator("table.targets tbody tr");
-  await expect(row.locator("td").first()).toHaveText("アカネ（バニーガール）");
-  await expect(row.locator(".now")).toHaveText([
-    "?→",
-    "★3→",
-    "2→",
-    "3→",
-    "3→",
-    "6→",
-    "4→",
-    "?→",
-    "3→",
-  ]);
+  await expect(row.locator("td.name")).toHaveText("アカネ（バニーガール）");
+  // The value read over each target, without an arrow.
+  await expect(row.locator(".now")).toHaveText(["?", "★3", "2", "3", "3", "6", "4", "?", "3"]);
   await expect(page.getByText("アカネ（バニーガール）: Lv・装備2 は数えられません")).toBeVisible();
   await expect(page.locator("table.plan tbody tr")).toHaveText([
     "クレジット1.5M244.7M足りる",
@@ -759,6 +751,11 @@ test("shows the targets and what they take against what is held", async ({ page 
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([
     { id: 20019, target: { ...target, skills: [4, 10, 10, 10] } },
   ]);
+
+  // The cross before a student takes them off training.
+  await page.evaluate(() => (window.__AOI_CALLS__ = []));
+  await page.getByRole("button", { name: "アカネ（バニーガール）を育成対象から外す" }).click();
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ id: 20019, target: null }]);
 });
 
 test("a target being typed is kept while the game is read", async ({ page }) => {
@@ -922,6 +919,7 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   // Each section folds as a shop does, closed until opened.
   const sections = page.locator(".work summary");
   await expect(sections).toHaveText(["任務", "指名手配", "学園交流会", "特別依頼"]);
+  await expect(page.locator(".work summary .chevron")).toHaveCount(4);
   await expect(page.locator(".slots")).toBeHidden();
   for (const section of await sections.all()) await section.click();
   // A slot: how many pieces its T10 blueprints and its universal ones make,

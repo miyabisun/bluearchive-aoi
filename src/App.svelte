@@ -276,6 +276,12 @@
   }}
 />
 
+{#snippet chevron()}
+  <svg class="chevron" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"
+    ><path d="M4 2l5 4-5 4z" fill="currentColor" /></svg
+  >
+{/snippet}
+
 <!-- One row: the tabs, then the status and the menu at the right end. The window's
      title bar names the app. -->
 <header class="top">
@@ -403,6 +409,7 @@
           <table class="students targets">
             <thead>
               <tr>
+                <th scope="col" class="mark"><span class="hidden">外す</span></th>
                 <th scope="col">生徒</th>
                 {#each TARGET_COLUMNS as column (column.label)}
                   <th scope="col">{column.label}</th>
@@ -412,13 +419,30 @@
             <tbody>
               {#each targetRows as row (row.id)}
                 <tr>
+                  <td class="mark">
+                    <button
+                      type="button"
+                      class="remove"
+                      aria-label="{row.name}を育成対象から外す"
+                      title="育成対象から外す"
+                      onclick={() => setTarget(row.id, null)}
+                      ><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"
+                        ><path
+                          d="M4 4l8 8M12 4l-8 8"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        /></svg
+                      ></button
+                    >
+                  </td>
                   <td class="name">{row.name}</td>
                   {#each TARGET_COLUMNS as column (column.label)}
                     {#if column.star}
                       {@const now = row.training ? starOf(row.training) : null}
                       {@const to = row.target.star ?? now}
                       <td>
-                        <span class="now">{now === null ? "?" : starName(now)}→</span><select
+                        <span class="now">{now === null ? "?" : starName(now)}</span><select
                           value={to ?? ""}
                           aria-label="{row.name}の星の目標"
                           onchange={(event) => restar(row, event.currentTarget.value)}
@@ -434,7 +458,7 @@
                     {:else}
                       <td>
                         <span class="now"
-                          >{row.training ? valueAt(row.training, column.at) : "?"}→</span
+                          >{row.training ? valueAt(row.training, column.at) : "?"}</span
                         ><input
                           type="number"
                           min="1"
@@ -628,7 +652,10 @@
         {@const commission = commissionCells(work.commissions)}
         <div class="table-scroll work" data-state="success">
           <details class="fold" open={opened.has("work:任務")}>
-            <summary onclick={(event) => toggle(event, "work:任務")}><h2>任務</h2></summary>
+            <summary onclick={(event) => toggle(event, "work:任務")}
+              >{@render chevron()}
+              <h2>任務</h2></summary
+            >
             <!-- A slot's T10 blueprints, and apart its universal ones with those of T9 and below. -->
             <table class="slots">
               <thead>
@@ -694,7 +721,8 @@
           {#each [{ title: "指名手配", places: work.bounties }, { title: "学園交流会", places: work.scrimmages }] as group (group.title)}
             <details class="fold" open={opened.has(`work:${group.title}`)}>
               <summary onclick={(event) => toggle(event, `work:${group.title}`)}
-                ><h2>{group.title}</h2></summary
+                >{@render chevron()}
+                <h2>{group.title}</h2></summary
               >
               {#each group.places as place (place.name)}
                 <h3>{placeName(place.name)}</h3>
@@ -723,7 +751,10 @@
             </details>
           {/each}
           <details class="fold" open={opened.has("work:特別依頼")}>
-            <summary onclick={(event) => toggle(event, "work:特別依頼")}><h2>特別依頼</h2></summary>
+            <summary onclick={(event) => toggle(event, "work:特別依頼")}
+              >{@render chevron()}
+              <h2>特別依頼</h2></summary
+            >
             <!-- Each commission's haul held, in students raised from Lv1: the more green, the fewer orange. -->
             <table class="commissions">
               <tbody>
@@ -765,6 +796,7 @@
                   else event.preventDefault();
                 }}
               >
+                {@render chevron()}
                 <h2>
                   {shop.name}<span class="read-at"
                     >{shop.read_at.slice(5, 16).replace("-", "/")}</span
@@ -1152,6 +1184,33 @@
   .code
     font-variant-numeric: tabular-nums
 
+  // A fold's marker: a triangle, turned down while open.
+  summary
+    list-style: none
+    &::-webkit-details-marker
+      display: none
+  .chevron
+    flex: none
+    color: var(--c-muted)
+    transition: transform 0.15s
+  details[open] > summary .chevron
+    transform: rotate(90deg)
+
+  // Takes a student off training: a small red cross.
+  .remove
+    display: grid
+    place-items: center
+    width: 24px
+    height: 24px
+    padding: 0
+    border: 0
+    border-radius: var(--radius-sm)
+    background: none
+    color: var(--c-danger)
+    cursor: pointer
+    &:hover
+      background: var(--c-danger-subtle)
+
   .shop
     border-bottom: 1px solid var(--c-border)
     &[open]
@@ -1420,6 +1479,9 @@
       &[open]
         padding-bottom: var(--sp-4)
       summary
+        display: flex
+        align-items: center
+        gap: var(--sp-2)
         padding: var(--sp-2) 0
         cursor: pointer
 
