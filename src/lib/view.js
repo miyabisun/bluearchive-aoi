@@ -307,9 +307,10 @@ function sourceTitle(source) {
 
 /**
  * The settled procurement (see `settle`) as text: each line's shortfall and
- * what it still lacks ("補えた" when nothing; credits in millions), its chips
- * (the resource left after, "?" not read, and what the chip gives, "+20"), and
- * each resource paid from, held and left after.
+ * what it still lacks (credits in millions), its chips (the resource left
+ * after, "?" not read, "売切れ" once a shop sells no more, and what the chip
+ * gives, "+20"), and each resource paid
+ * from: held, spent ("-30") and left after, above none "plus", below "minus".
  */
 export function procureCells(settled) {
   const amount = (kind, n) => (kind === "credits" ? millions(n) : exact.format(n));
@@ -320,16 +321,21 @@ export function procureCells(settled) {
       name: PLAN_KINDS[l.line.kind] ?? l.line.name,
       icon: l.line.icon,
       short: amount(l.line.kind, l.line.short),
-      left: l.left === 0 ? "補えた" : amount(l.line.kind, l.left),
+      left: amount(l.line.kind, l.left),
       done: l.left === 0,
-      chips: l.chips.map((c) => ({
-        key: c.key,
-        icon: c.source.icon,
-        text: count(c.after),
-        negative: c.after != null && c.after < 0,
-        given: c.n > 0 ? `+${amount(l.line.kind, c.gives)}` : "",
-        title: sourceTitle(c.source),
-      })),
+      chips: l.chips.map((c) => {
+        // A shop's purchases this month, or the fragments' exchanges, all paid.
+        const out = c.source.type !== "box" && c.n >= c.source.left;
+        return {
+          key: c.key,
+          icon: c.source.icon,
+          text: out ? "売切れ" : count(c.after),
+          negative: !out && c.after != null && c.after < 0,
+          given: c.n > 0 ? `+${amount(l.line.kind, c.gives)}` : "",
+          out,
+          title: sourceTitle(c.source),
+        };
+      }),
     })),
     resources: settled.resources
       .filter((r) => r.spent > 0)
@@ -338,8 +344,9 @@ export function procureCells(settled) {
         name: r.name,
         icon: r.icon,
         held: count(r.held),
+        spent: `-${exact.format(r.spent)}`,
         after: count(r.after),
-        negative: r.after != null && r.after < 0,
+        tone: r.after == null || r.after === 0 ? "" : r.after > 0 ? "plus" : "minus",
       })),
   };
 }

@@ -544,7 +544,7 @@ describe("procure", () => {
         name: "最上級技術ノート（ゲヘナ）",
         icon: "n",
         short: "29",
-        left: "補えた",
+        left: "0",
         done: true,
       },
     ]);
@@ -555,6 +555,7 @@ describe("procure", () => {
         text: "3,509",
         negative: false,
         given: "+5M",
+        out: false,
         title: "熟達証書: 熟達証書 1,500 で ×5,000,000、今月あと 4 回",
       },
     ]);
@@ -564,25 +565,35 @@ describe("procure", () => {
       given: "+30",
       title: "最上級技術ノート選択ボックス（12 種から 1 つ）",
     });
-    // The settlement lists what is paid from, the resources left untouched aside.
+    // The settlement lists what is paid from, the resources left untouched aside:
+    // held, spent and what is left, above none green and below red.
     expect(cells.resources).toEqual([
       {
         key: "coin:熟達証書",
         name: "熟達証書",
         icon: "j",
         held: "5,009",
+        spent: "-1,500",
         after: "3,509",
-        negative: false,
+        tone: "plus",
       },
       {
         key: "box:150003",
         name: "最上級技術ノート選択ボックス",
         icon: "b",
         held: "24",
+        spent: "-30",
         after: "-6",
-        negative: true,
+        tone: "minus",
       },
     ]);
+    // A shop that sells no more this month says so; a box never runs out.
+    const out = procureCells(settle([credits], { "credits-0|shop:熟達証書:熟達証書": 4 })).lines[0]
+      .chips[0];
+    expect(out).toMatchObject({ text: "売切れ", out: true, given: "+20M" });
+    expect(cells.lines[1].chips[0].out).toBe(false);
+    const even = settle([notes], { "item-4033|box:150003": 24 });
+    expect(procureCells(even).resources[0]).toMatchObject({ after: "0", tone: "" });
   });
 });
 

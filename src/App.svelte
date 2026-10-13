@@ -228,6 +228,30 @@
     payments = { ...payments, [key]: step(chip.source, chip.n, line.left, { shift, right }) };
   }
 
+  /** Held down, a chip pays (or takes back) again and again, as a key held down types. */
+  const REPEAT_AFTER = 400;
+  const REPEAT_EVERY = 60;
+  let repeating = /** @type {ReturnType<typeof setTimeout> | undefined} */ (undefined);
+
+  /** A chip pressed with the main button pays one, with the second takes one back. */
+  function press(event, at, i) {
+    if (event.button !== 0 && event.button !== 2) return;
+    const [shift, right] = [event.shiftKey, event.button === 2];
+    pay(at, i, shift, right);
+    release();
+    if (shift) return;
+    const again = () => {
+      pay(at, i, false, right);
+      repeating = setTimeout(again, REPEAT_EVERY);
+    };
+    repeating = setTimeout(again, REPEAT_AFTER);
+  }
+
+  function release() {
+    clearTimeout(repeating);
+    repeating = undefined;
+  }
+
   async function save() {
     try {
       exported = { path: await exportAll() };
@@ -530,12 +554,17 @@
                             type="button"
                             class="source"
                             class:paid={chip.given !== ""}
+                            class:out={chip.out}
                             title={chip.title}
-                            onclick={(event) => pay(at, i, event.shiftKey, false)}
-                            oncontextmenu={(event) => {
-                              event.preventDefault();
-                              pay(at, i, event.shiftKey, true);
+                            onpointerdown={(event) => press(event, at, i)}
+                            onpointerup={release}
+                            onpointerleave={release}
+                            onpointercancel={release}
+                            onclick={(event) => {
+                              // A pointer pays as it is pressed; Enter and Space click.
+                              if (event.detail === 0) pay(at, i, event.shiftKey, false);
                             }}
+                            oncontextmenu={(event) => event.preventDefault()}
                             onkeydown={(event) => {
                               if (event.key === "Delete" || event.key === "Backspace") {
                                 event.preventDefault();
@@ -559,6 +588,14 @@
                 <h3>精算</h3>
               {/if}
               <table class="settle">
+                <thead>
+                  <tr>
+                    <th scope="col">使ったもの</th>
+                    <th scope="col" class="fit">所持</th>
+                    <th scope="col" class="fit">消費</th>
+                    <th scope="col" class="fit">残り</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {#each procure.resources as resource (resource.key)}
                     <tr>
@@ -571,7 +608,12 @@
                         />{resource.name}</td
                       >
                       <td class="fit">{resource.held}</td>
-                      <td class="fit" class:short={resource.negative}>→ {resource.after}</td>
+                      <td class="fit short">{resource.spent}</td>
+                      <td
+                        class="fit"
+                        class:enough={resource.tone === "plus"}
+                        class:short={resource.tone === "minus"}>{resource.after}</td
+                      >
                     </tr>
                   {/each}
                 </tbody>
@@ -1289,6 +1331,13 @@
         object-fit: contain
       &.paid
         border-color: var(--c-accent)
+      // Bought up this month: greyed, its "売切れ" in words.
+      &.out
+        border-color: var(--c-border)
+        color: var(--c-muted)
+        img
+          filter: grayscale(1)
+          opacity: 0.6
       .given
         color: var(--c-accent)
         font-weight: 600

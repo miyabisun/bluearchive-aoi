@@ -667,19 +667,30 @@ test("shows the targets and what they take against what is held", async ({ page 
   await chips.first().click({ button: "right" });
   await expect(chips.first()).toHaveText("3+1");
   await chips.nth(1).click({ modifiers: ["Shift"] });
-  // The shop sells 20 more this month: 21 of 29 made up.
-  await expect(chips.nth(1)).toHaveText("5,440+20");
+  // The shop sells 20 more this month: 21 of 29 made up, and it says it is bought up.
+  await expect(chips.nth(1)).toHaveText("売切れ+20");
+  await expect(chips.nth(1)).toHaveClass(/out/);
   await expect(page.locator("table.procure tr.line")).toHaveText(["最上級技術ノート（ゲヘナ）298"]);
   // Boxes past those held: the rest can be tailor-made.
   await chips.first().click({ modifiers: ["Shift"] });
   await expect(chips.first()).toHaveText("-5+9");
-  await expect(page.locator("table.procure tr.line .enough")).toHaveText("補えた");
+  await expect(page.locator("table.procure tr.line .enough")).toHaveText("0");
   // What it all comes to.
-  await expect(page.locator("table.settle tr")).toHaveText([
-    "最上級技術ノート選択ボックス4→ -5",
-    "総力戦コイン5,940→ 5,440",
+  // What it all comes to: held, spent, and what is left, red below none, green above.
+  await expect(page.locator("table.settle thead th")).toHaveText([
+    "使ったもの",
+    "所持",
+    "消費",
+    "残り",
   ]);
-  await expect(page.locator("table.settle tr").first().locator(".short")).toHaveCount(1);
+  await expect(page.locator("table.settle tbody tr")).toHaveText([
+    "最上級技術ノート選択ボックス4-9-5",
+    "総力戦コイン5,940-5005,440",
+  ]);
+  const settleRows = page.locator("table.settle tbody tr");
+  await expect(settleRows.first().locator("td").last()).toHaveClass(/short/);
+  await expect(settleRows.last().locator("td").last()).toHaveClass(/enough/);
+  await expect(settleRows.last().locator("td").nth(2)).toHaveClass(/short/);
 
   // A new reading of the game keeps the payments while the plan is the same.
   await page.evaluate(
@@ -687,6 +698,19 @@ test("shows the targets and what they take against what is held", async ({ page 
     snapshot,
   );
   await expect(chips.first()).toHaveText("-5+9");
+  // Held down, a chip pays again and again until let go.
+  await chips.nth(1).click({ button: "right", modifiers: ["Shift"] });
+  await expect(chips.nth(1)).toHaveText("5,940");
+  const box = await chips.nth(1).boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(1000);
+  await page.mouse.up();
+  const held = Number((await chips.nth(1).locator(".given").innerText()).slice(1));
+  expect(held).toBeGreaterThan(3);
+  await page.waitForTimeout(300);
+  await expect(chips.nth(1).locator(".given")).toHaveText(`+${held}`);
+
   // Shift with a right click takes them all back; リセット, every payment.
   await chips.first().click({ button: "right", modifiers: ["Shift"] });
   await expect(chips.first()).toHaveText("4");

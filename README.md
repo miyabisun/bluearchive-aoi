@@ -107,10 +107,12 @@ telling how many it chooses among), for elephs the 神名のカケラ at the stu
 カケラ(文字) shop showed (20 at that rate, 20 at each next rate up to 4, then 5 each), and
 the goods this month's shops sell, each coin of each shop. Which to use is yours: a click
 pays one, a right click takes one back, shift with a click pays all the line lacks, shift
-with a right click takes all back (Delete takes one back from the keyboard). A box may be
-opened past those held (the rest can be tailor-made) and a coin spent past those held, but
-a shop sells no more than it has left this month. 精算 tells what each box, coin and the
-fragments come to after the payments; リセット clears them. Tailor-made boxes and what the
+with a right click takes all back (Delete takes one back from the keyboard); held down, a
+chip pays (or takes back) again and again. A box may be opened past those held (the rest
+can be tailor-made) and a coin spent past those held, but a shop sells no more than it has
+left this month: its chip then reads 売切れ, greyed. A line made up shows 残り 0 in green.
+精算 lists what is paid from: held, spent (red) and what is left (green above none, red
+below); リセット clears the payments. Tailor-made boxes and what the
 daily plays bring are not counted.
 
 The 育成 tab counts from what was read when Aoi started or 再読込 (by 既存の生徒一覧) was
