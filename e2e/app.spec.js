@@ -42,8 +42,11 @@ const ICONS = ["src-tauri/data/schaledb/icons", "src-tauri/data/schaledb/equipme
 
 const reading = (list, fps = 27.4) => ({ state: "reading", list, fps, dropped: 0 });
 
-/** Opens the page showing `snapshot` as the watcher's, with the app's icons. */
-async function open(page, snapshot) {
+/**
+ * Opens the page showing `snapshot` as the watcher's, with the app's icons,
+ * and the `tab` named, if any, chosen.
+ */
+async function open(page, snapshot, tab) {
   await page.route("**/icon/*", (route) => {
     const name = new URL(route.request().url()).pathname.slice("/icon/".length);
     const file = ICONS.map((dir) => `${dir}/${name}.webp`).find(existsSync);
@@ -51,6 +54,7 @@ async function open(page, snapshot) {
   });
   await page.addInitScript((demo) => (window.__AOI_DEMO__ = demo), snapshot);
   await page.goto("/");
+  if (tab) await page.getByRole("tab", { name: tab }).click();
 }
 
 /** The names of the tiles shown, as their hover tells them. */
@@ -84,11 +88,17 @@ test("lists the item tally in order and narrows it by name", async ({ page }) =>
   await expect(page.getByText("一致する項目がありません")).toBeVisible();
 });
 
-test("shows the equipment tab when the game shows the equipment list", async ({ page }) => {
+test("shows the equipment by tile, each piece's tier at its corner", async ({ page }) => {
   await open(page, { status: reading("equipment"), items, equipment });
   await expect(page.getByRole("status")).toHaveText("装備を集計中 27 fps");
-  await expect(page.getByRole("tab", { name: "装備" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.locator(".tiles li")).toHaveText(["1,383", "249", "17", "51K"]);
+  // The tab stays where it was: the game's screen does not choose it.
+  await expect(page.getByRole("tab", { name: "アイテム" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.getByRole("tab", { name: "装備" }).click();
+  await expect(page.locator(".tiles li")).toHaveText(["1,383", "T1249", "T1017", "51K"]);
+  await expect(page.locator(".tiles li .badge")).toHaveText(["T1", "T10"]);
   expect(await tileNames(page)).toEqual([
     "初級強化珠",
     "無地のキャップ",
@@ -141,6 +151,8 @@ for (const scheme of ["dark", "light"]) {
 test("the tabs and the search field take focus from the keyboard", async ({ page }) => {
   await open(page, { status: reading("items", 20), items, equipment });
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "メニュー" })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "アイテム" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "装備" })).toBeFocused();
@@ -154,8 +166,6 @@ test("the tabs and the search field take focus from the keyboard", async ({ page
   await expect(page.getByRole("tab", { name: "育成" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "お仕事" })).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "書き出す" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByLabel("名前で検索")).toBeFocused();
   await page.screenshot({ path: "test-results/wide-dark.png" });
@@ -197,7 +207,7 @@ const students = [
 ];
 
 test("shows the students read from the student screen", async ({ page }) => {
-  await open(page, { status: reading("students"), items, equipment, students });
+  await open(page, { status: reading("students"), items, equipment, students }, "生徒");
   await expect(page.getByRole("status")).toHaveText("生徒を集計中 27 fps");
   await expect(page.getByRole("tab", { name: "生徒" })).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("tbody tr").first().locator("td")).toHaveText([
@@ -230,7 +240,7 @@ test("shows the students read from the student screen", async ({ page }) => {
 
 test("keeps a narrow window from scrolling sideways with the student table", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 640 });
-  await open(page, { status: reading("students"), items, equipment, students });
+  await open(page, { status: reading("students"), items, equipment, students }, "生徒");
   expect(await overflow(page)).toBe(0);
   await page.screenshot({ path: "test-results/narrow-students.png" });
 });
@@ -238,8 +248,13 @@ test("keeps a narrow window from scrolling sideways with the student table", asy
 const written = String.raw`C:\Users\me\Documents\Aoi\aoi-20261012-153000.yaml`;
 
 test("writes everything read to a file and tells where", async ({ page }) => {
-  await open(page, { status: reading("students"), items, equipment, students, export: written });
-  await page.getByRole("button", { name: "書き出す" }).click();
+  await open(
+    page,
+    { status: reading("students"), items, equipment, students, export: written },
+    "生徒",
+  );
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await page.getByRole("menuitem", { name: "YAMLを書き出す" }).click();
   await expect(page.getByText(`書き出しました: ${written}`)).toBeVisible();
 });
 
@@ -250,7 +265,8 @@ test("tells why an export failed", async ({ page }) => {
     equipment,
     export: { error: "アクセスが拒否されました。" },
   });
-  await page.getByRole("button", { name: "書き出す" }).click();
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await page.getByRole("menuitem", { name: "YAMLを書き出す" }).click();
   await expect(page.getByRole("alert")).toHaveText(
     "書き出せませんでした: アクセスが拒否されました。",
   );
@@ -258,7 +274,8 @@ test("tells why an export failed", async ({ page }) => {
 
 test("has nothing to export before anything is read", async ({ page }) => {
   await open(page, { status: { state: "no_game" }, items: [], equipment: [], students: [] });
-  await expect(page.getByRole("button", { name: "書き出す" })).toBeDisabled();
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await expect(page.getByRole("menuitem", { name: "YAMLを書き出す" })).toBeDisabled();
 });
 
 test("keeps the search field in sight down to the last tile", async ({ page }) => {
@@ -271,7 +288,7 @@ test("keeps the search field in sight down to the last tile", async ({ page }) =
 
 test("keeps the student headings over their columns when scrolled sideways", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 480 });
-  await open(page, { status: reading("students"), items, equipment, students });
+  await open(page, { status: reading("students"), items, equipment, students }, "生徒");
   const last = page.locator("tbody tr").first().locator("td").last();
   await last.scrollIntoViewIfNeeded();
   const cell = await last.boundingBox();
@@ -308,7 +325,7 @@ test("orders students by level, rarity and bond, or by the column chosen", async
     trained(3, "ヒナ", { rarity: 4, bond: 50 }),
     trained(4, "ホシノ", { bond: 34 }),
   ];
-  await open(page, { status: reading("students"), items, equipment, students: roster });
+  await open(page, { status: reading("students"), items, equipment, students: roster }, "生徒");
   const names = page.locator("tbody td:nth-child(2)");
   await expect(names).toHaveText(["ミカ", "ホシノ", "ヒナ", "アル"]);
   await expect(page.locator("th", { hasText: "Lv" })).toHaveAttribute("aria-sort", "descending");
@@ -334,11 +351,11 @@ test("counts the students read on their tab", async ({ page }) => {
   await open(page, { status: { state: "no_game" }, items, equipment, students: [] });
   await expect(tab).toHaveText("生徒");
 
-  await open(page, { status: reading("students"), items, equipment, students });
+  await open(page, { status: reading("students"), items, equipment, students }, "生徒");
   await expect(tab).toHaveText("生徒 2");
 
   const roster = Array.from({ length: 42 }, (_, i) => trained(i + 1, `生徒${i + 1}`, {}));
-  await open(page, { status: reading("students"), items, equipment, students: roster });
+  await open(page, { status: reading("students"), items, equipment, students: roster }, "生徒");
   await expect(tab).toHaveText("生徒 42");
   await expect(page.getByRole("tab", { name: "生徒 42" })).toHaveAttribute("aria-selected", "true");
 });
@@ -411,7 +428,7 @@ const shops = [
 ];
 
 test("shows each shop's goods, shop by shop, when the game shows a shop", async ({ page }) => {
-  await open(page, { status: reading("shops"), items, equipment, shops });
+  await open(page, { status: reading("shops"), items, equipment, shops }, "ショップ");
   await expect(page.getByRole("status")).toHaveText("ショップを集計中 27 fps");
   await expect(page.getByRole("tab", { name: "ショップ" })).toHaveAttribute(
     "aria-selected",
@@ -462,7 +479,7 @@ test("shows each shop's goods, shop by shop, when the game shows a shop", async 
 
 test("a shop opened stays open while the game is read", async ({ page }) => {
   const snapshot = { status: reading("shops"), items, equipment, shops };
-  await open(page, snapshot);
+  await open(page, snapshot, "ショップ");
   await page.locator("summary").first().click();
   await expect(page.locator("details").first()).toHaveAttribute("open", "");
   // Every frame read sends a new snapshot; what the user opened stays open.
@@ -485,7 +502,11 @@ test("guides to the shop before any is read", async ({ page }) => {
 });
 
 test("marks a student for training from the student tab", async ({ page }) => {
-  await open(page, { status: reading("students"), items, equipment, students, targets: [] });
+  await open(
+    page,
+    { status: reading("students"), items, equipment, students, targets: [] },
+    "生徒",
+  );
   await page.getByLabel("ホシノを育成対象にする").check();
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ id: 10005, target: {} }]);
 });
@@ -708,12 +729,11 @@ const work = {
 test("tells what the daily plays give against what is held", async ({ page }) => {
   await open(page, { status: { state: "other_screen" }, items, equipment, work });
   await page.getByRole("tab", { name: "お仕事" }).click();
-  await expect(page.locator("section h2")).toHaveText([
-    "任務",
-    "指名手配",
-    "学園交流会",
-    "特別依頼",
-  ]);
+  // Each section folds as a shop does, closed until opened.
+  const sections = page.locator(".work summary");
+  await expect(sections).toHaveText(["任務", "指名手配", "学園交流会", "特別依頼"]);
+  await expect(page.locator(".slots")).toBeHidden();
+  for (const section of await sections.all()) await section.click();
   // A slot: how many pieces its T10 blueprints and its universal ones make.
   await expect(page.locator(".slots tbody tr")).toHaveText([
     "帽子4.5個分 270 / 60 29-5で0.26個/回5.0個分 約2,150 / 430 25-1で13個/回",
@@ -722,9 +742,48 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   await expect(page.locator(".work h3")).toHaveText(["ハイウェイ", "トリニティ"]);
   await expect(page.locator(".work .tiers td.tier-1")).toHaveText(["51", "—"]);
   await expect(page.getByRole("img", { name: "ファイストス円盤の欠片" })).toBeVisible();
-  // The commission raising fewer students is the one to play.
+  // The commission raising more students is green, the fewer orange.
   await expect(page.locator(".commissions tr")).toHaveText([
     "クレジット回収6.0人分249M ÷ 41.5M",
-    "拠点防衛5.0人分6.2M EXP ÷ 1.2M EXP少ない方",
+    "拠点防衛5.0人分6.2M EXP ÷ 1.2M EXP",
   ]);
+  await expect(page.locator(".commissions tr.more")).toContainText("クレジット回収");
+  await expect(page.locator(".commissions tr.fewer")).toContainText("拠点防衛");
+});
+
+test("keeps the tab chosen when the game shows another list", async ({ page }) => {
+  const snapshot = { status: reading("items"), items, equipment, students };
+  await open(page, snapshot, "生徒");
+  await page.evaluate(
+    (s) => window.__AOI_PUSH__({ ...s, status: { ...s.status, list: "equipment" } }),
+    snapshot,
+  );
+  await expect(page.getByRole("status")).toHaveText("装備を集計中 27 fps");
+  await expect(page.getByRole("tab", { name: "生徒" })).toHaveAttribute("aria-selected", "true");
+});
+
+test("the menu chooses the theme, kept for the next start", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await open(page, { status: { state: "no_game" }, items, equipment });
+  const body = page.locator("body");
+  await expect(body).toHaveCSS("background-color", "rgb(25, 25, 25)");
+  const choose = async (name) => {
+    await page.getByRole("button", { name: "メニュー" }).click();
+    await page.getByRole("menuitemradio", { name }).click();
+  };
+  await choose("ライト");
+  await expect(body).toHaveCSS("background-color", "rgb(250, 246, 239)");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await page.reload();
+  await expect(body).toHaveCSS("background-color", "rgb(250, 246, 239)");
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await expect(page.getByRole("menuitemradio", { name: "ライト" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  // 自動 follows the OS again.
+  await choose("自動");
+  await expect(body).toHaveCSS("background-color", "rgb(25, 25, 25)");
 });

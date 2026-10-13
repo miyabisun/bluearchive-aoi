@@ -53,15 +53,6 @@ export function formatCount(count) {
   return "thousands" in count ? `${count.thousands}K` : exact.format(count.exact);
 }
 
-/**
- * The tab to show after a new status: when the game starts showing another list,
- * its tab; otherwise the current one, so a tab chosen by hand stays.
- */
-export function followTab(view, status) {
-  if (status.state !== "reading" || status.list === view.lastRead) return view;
-  return { tab: status.list, lastRead: status.list };
-}
-
 const known = (v) => v !== null && v !== undefined;
 const show = (v) => (known(v) ? String(v) : "?");
 

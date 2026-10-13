@@ -2,12 +2,12 @@
   import { onMount } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { exportAll, follow, iconUrl, setTarget } from "./lib/snapshot.js";
+  import { THEMES, applyTheme, storedTheme } from "./lib/theme.js";
   import {
     LISTS,
     commissionCells,
     filterRows,
     filterShops,
-    followTab,
     formatCount,
     goodTile,
     groupPlan,
@@ -107,7 +107,10 @@
     /** Why what was read could not be kept or brought back. */
     keep_error: /** @type {string | null} */ (null),
   });
-  let view = $state({ tab: "items", lastRead: null });
+  let view = $state({ tab: "items" });
+  /** Whether the menu is open, and the theme chosen in it. */
+  let menuOpen = $state(false);
+  let theme = $state(storedTheme());
   let query = $state("");
   /** The student column the table is ordered by. */
   let sortBy = $state("level");
@@ -118,6 +121,17 @@
    * read brings a new snapshot, which would close them again.
    */
   const opened = new SvelteSet();
+
+  /**
+   * Opens or closes a section kept in `opened` (by `key`), here rather than by
+   * the page: the snapshot of the next frame may come before the page's toggle
+   * event.
+   */
+  function toggle(event, key) {
+    event.preventDefault();
+    if (opened.has(key)) opened.delete(key);
+    else opened.add(key);
+  }
 
   const status = $derived(statusView(snapshot.status));
   /** The lists of rows (the work tab has sections instead). */
@@ -151,10 +165,18 @@
   onMount(() => {
     follow((next) => {
       snapshot = next;
-      view = followTab(view, next.status);
     });
   });
 </script>
+
+<svelte:window
+  onclick={(event) => {
+    if (menuOpen && !(/** @type {Element} */ (event.target).closest(".menu"))) menuOpen = false;
+  }}
+  onkeydown={(event) => {
+    if (menuOpen && event.key === "Escape") menuOpen = false;
+  }}
+/>
 
 <div class="top">
   <header class="app-header">
@@ -162,6 +184,53 @@
     <p class="status" data-tone={status.tone} role="status">
       <span class="dot" aria-hidden="true"></span>{status.label}
     </p>
+    <div class="menu">
+      <button
+        type="button"
+        class="menu-button"
+        aria-label="メニュー"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onclick={() => (menuOpen = !menuOpen)}
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+          ><path
+            d="M4 7h16M4 12h16M4 17h16"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          /></svg
+        >
+      </button>
+      {#if menuOpen}
+        <div class="menu-list" role="menu" aria-label="メニュー">
+          <button
+            type="button"
+            role="menuitem"
+            disabled={nothingRead}
+            onclick={() => {
+              menuOpen = false;
+              save();
+            }}>YAMLを書き出す</button
+          >
+          <div role="group" aria-labelledby="theme-heading">
+            <span class="menu-heading" id="theme-heading">テーマ</span>
+            {#each THEMES as choice (choice.id)}
+              <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={theme === choice.id}
+                onclick={() => {
+                  theme = choice.id;
+                  applyTheme(choice.id);
+                  menuOpen = false;
+                }}>{choice.name}</button
+              >
+            {/each}
+          </div>
+        </div>
+      {/if}
+    </div>
   </header>
   <div class="bar">
     <div class="tabs" role="tablist">
@@ -179,7 +248,6 @@
         >
       {/each}
     </div>
-    <button type="button" class="export" disabled={nothingRead} onclick={save}>書き出す</button>
   </div>
 </div>
 
@@ -330,8 +398,8 @@
         {@const work = snapshot.work}
         {@const commission = commissionCells(work.commissions)}
         <div class="table-scroll work" data-state="success">
-          <section>
-            <h2>任務</h2>
+          <details class="fold" open={opened.has("work:任務")}>
+            <summary onclick={(event) => toggle(event, "work:任務")}><h2>任務</h2></summary>
             <!-- A slot's T10 blueprints, and apart its universal ones with those of T9 and below. -->
             <table class="slots">
               <thead>
@@ -359,10 +427,12 @@
                 {/each}
               </tbody>
             </table>
-          </section>
+          </details>
           {#each [{ title: "指名手配", places: work.bounties }, { title: "学園交流会", places: work.scrimmages }] as group (group.title)}
-            <section>
-              <h2>{group.title}</h2>
+            <details class="fold" open={opened.has(`work:${group.title}`)}>
+              <summary onclick={(event) => toggle(event, `work:${group.title}`)}
+                ><h2>{group.title}</h2></summary
+              >
               {#each group.places as place (place.name)}
                 <h3>{placeName(place.name)}</h3>
                 <table class="tiers">
@@ -385,28 +455,27 @@
                   </tbody>
                 </table>
               {/each}
-            </section>
+            </details>
           {/each}
-          <section>
-            <h2>特別依頼</h2>
-            <!-- Each commission's haul held, in students raised from Lv1; the fewer is the one to play. -->
+          <details class="fold" open={opened.has("work:特別依頼")}>
+            <summary onclick={(event) => toggle(event, "work:特別依頼")}><h2>特別依頼</h2></summary>
+            <!-- Each commission's haul held, in students raised from Lv1: the more green, the fewer orange. -->
             <table class="commissions">
               <tbody>
                 {#each [{ key: "credits", ...commission.credits }, { key: "reports", ...commission.reports }] as cell (cell.key)}
-                  <tr class:fewer={commission.fewer === cell.key}>
+                  <tr
+                    class:fewer={commission.fewer === cell.key}
+                    class:more={commission.fewer != null && commission.fewer !== cell.key}
+                  >
                     <td>{cell.name}</td>
                     <td class="fit"
                       ><strong>{cell.students}</strong><span class="detail">{cell.detail}</span></td
-                    >
-                    <td class="fit"
-                      >{#if commission.fewer === cell.key}<span class="pick">少ない方</span
-                        >{/if}</td
                     >
                   </tr>
                 {/each}
               </tbody>
             </table>
-          </section>
+          </details>
         </div>
       {/if}
     {:else if rows.length === 0}
@@ -427,10 +496,8 @@
                    next frame may come before the page's toggle event. -->
               <summary
                 onclick={(event) => {
-                  event.preventDefault();
-                  if (query.trim() !== "") return;
-                  if (opened.has(shop.name)) opened.delete(shop.name);
-                  else opened.add(shop.name);
+                  if (query.trim() === "") toggle(event, shop.name);
+                  else event.preventDefault();
                 }}
               >
                 <h2>
@@ -544,7 +611,9 @@
                   width="64"
                   height="64"
                   loading="lazy"
-                /><span class="count">{formatCount(row.count)}</span>
+                />{#if row.tier}<span class="badge">T{row.tier}</span>{/if}<span class="count"
+                  >{formatCount(row.count)}</span
+                >
               </li>
             {/each}
           </ul>
@@ -565,7 +634,6 @@
   .app-header
     display: flex
     align-items: center
-    justify-content: space-between
     gap: var(--sp-3)
     height: 48px
     padding: 0 var(--sp-3)
@@ -604,21 +672,64 @@
     font-weight: 400
     font-variant-numeric: tabular-nums
 
-  .export
-    margin-left: auto
-    height: 28px
-    padding: 0 var(--sp-3)
-    border: 1px solid var(--c-border)
+  // The menu at the header's right end: an icon button over a short list.
+  .menu
+    position: relative
+  .menu-button
+    display: grid
+    place-items: center
+    width: 32px
+    height: 32px
+    padding: 0
+    border: 0
     border-radius: var(--radius-sm)
     background: none
     color: var(--c-on-surface)
-    font: inherit
-    font-size: var(--fs-sm)
-    white-space: nowrap
     cursor: pointer
-    &:disabled
-      color: var(--c-muted)
-      cursor: default
+  .menu-list
+    position: absolute
+    right: 0
+    top: calc(100% + var(--sp-1))
+    z-index: 2
+    display: flex
+    flex-direction: column
+    min-width: 11em
+    padding: var(--sp-1) 0
+    border: 1px solid var(--c-border)
+    border-radius: var(--radius-sm)
+    background: var(--c-surface)
+    [role="group"]
+      display: flex
+      flex-direction: column
+      margin-top: var(--sp-1)
+      padding-top: var(--sp-1)
+      border-top: 1px solid var(--c-border)
+    button
+      padding: var(--sp-2) var(--sp-3)
+      border: 0
+      background: none
+      color: var(--c-on-surface)
+      font: inherit
+      font-size: var(--fs-sm)
+      text-align: left
+      cursor: pointer
+      &:hover
+        background: var(--c-wash-base)
+      &:disabled
+        color: var(--c-muted)
+        cursor: default
+      // A tick before the theme chosen, its room kept before the others.
+      &[role="menuitemradio"]::before
+        content: "✓"
+        display: inline-block
+        width: 1.4em
+        visibility: hidden
+      &[aria-checked="true"]::before
+        visibility: visible
+  .menu-heading
+    padding: var(--sp-1) var(--sp-3) 0
+    font-size: var(--fs-caption)
+    color: var(--c-muted)
 
   .credits
     margin: 0 0 var(--sp-3)
@@ -640,6 +751,7 @@
     font-weight: 600
 
   .status
+    margin-left: auto !important
     display: inline-flex
     align-items: center
     gap: var(--sp-2)
@@ -904,8 +1016,6 @@
 
   // The work tab: a section a kind of play, each count with its terms under it.
   .work
-    section + section
-      margin-top: var(--sp-5)
     h3
       margin: var(--sp-3) 0 var(--sp-1)
       font-size: var(--fs-sm)
@@ -928,12 +1038,17 @@
         vertical-align: middle
         margin-right: var(--sp-2)
         object-fit: contain
+    .more strong
+      color: var(--c-ok)
     .fewer strong
-      color: var(--c-accent)
-    .pick
-      font-size: var(--fs-caption)
-      color: var(--c-accent)
-      font-weight: 600
+      color: var(--c-warn)
+    .fold
+      border-bottom: 1px solid var(--c-border)
+      &[open]
+        padding-bottom: var(--sp-4)
+      summary
+        padding: var(--sp-2) 0
+        cursor: pointer
 
   .hidden
     position: absolute
@@ -969,6 +1084,16 @@
       width: 64px
       height: 64px
       object-fit: contain
+    .badge
+      position: absolute
+      left: 2px
+      bottom: 2px
+      padding: 0 var(--sp-1)
+      border-radius: var(--radius-sm)
+      background: var(--c-surface)
+      color: var(--c-muted)
+      font-size: var(--fs-caption)
+      font-variant-numeric: tabular-nums
     .count
       position: absolute
       right: 2px

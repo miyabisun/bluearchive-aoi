@@ -35,6 +35,7 @@ fn key(item: &Item) -> ListKey {
 pub const RULES: Rules = Rules {
     tracked,
     key,
+    shown: key,
     // The "xN" count covers the bottom right of the icon.
     mask: Mask {
         left: 0.25,

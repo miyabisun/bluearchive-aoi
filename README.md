@@ -105,14 +105,20 @@ lists and the credits read:
   that gives the most of each per AP by SchaleDB's drop rates.
 - 指名手配 and 学園交流会: what each place drops, tier by tier, with how many are held.
 - 特別依頼: how many students raised from Lv1 to Lv90, skills 5/10/10/10, equipment
-  T10 and the unique weapon's ★4 at Lv60 the credits held pay for, and how many Lv1 to 90 the reports held level; the fewer
-  is marked 少ない方, the commission to play.
+  T10 and the unique weapon's ★4 at Lv60 the credits held pay for, and how many Lv1 to 90 the reports held level; the more
+  shows green, the fewer, the commission to play, orange.
+
+Each of these opens and closes as a shop does.
 
 The stages come from SchaleDB as `src-tauri/data/schaledb/stages.json`
 (`tools/schaledb/stages.ps1`, run by `update.ps1`).
 
-Aoi switches to the tab of what the game starts showing; a tab you pick stays until the
-game shows another list or the student screen.
+A tab stays as you pick it, whatever the game shows. The menu (☰) at the top right
+writes the YAML export (below) and chooses the theme: ライト, ダーク, or 自動, which
+follows Windows.
+
+Under the 装備 tab each slot's pieces T1 to T10 come first, then its blueprints T2 to T10
+and its universal blueprint, each tile with its tier at the bottom left.
 
 The credits on the game's top bar are read on any screen that shows the bar (a dialog
 dimming the screen pauses it) and appear at the top of the ショップ tab.
@@ -159,8 +165,8 @@ Whenever something read changes, Aoi writes everything read so far (students, it
 equipment and shops) to `Documents\Aoi\aoi.yaml`, headed by when each list was last read, and keeps
 it for its next run with the students marked for training and their targets: a list read
 again replaces what it showed, entry by entry. Hand the
-file to an agent or a tool to check what Aoi read or to plan with it. **書き出す**, at the
-right of the tabs, writes the same as `Documents\Aoi\aoi-<date>-<time>.yaml`, to keep how
+file to an agent or a tool to check what Aoi read or to plan with it. **YAMLを書き出す**,
+in the menu, writes the same as `Documents\Aoi\aoi-<date>-<time>.yaml`, to keep how
 things stood at that moment:
 
 <!-- prettier-ignore -->

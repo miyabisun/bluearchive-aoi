@@ -23,6 +23,8 @@ pub struct Rules {
     pub tracked: fn(&Item) -> bool,
     /// The entry's place in the default order.
     pub key: fn(&Item) -> ListKey,
+    /// The entry's place in the window.
+    pub shown: fn(&Item) -> ListKey,
     /// The icon part that other drawings of the list's cards cover.
     pub mask: Mask,
 }
@@ -193,7 +195,7 @@ fn rows(entries: &[Item], rules: &Rules, counts: &HashMap<i64, Count>) -> Vec<Ro
         .filter(|e| (rules.tracked)(e))
         .filter_map(|e| counts.get(&e.id).map(|&count| (e, count)))
         .collect();
-    found.sort_unstable_by_key(|(e, _)| (rules.key)(e));
+    found.sort_unstable_by_key(|(e, _)| (rules.shown)(e));
     found
         .into_iter()
         .map(|(e, count)| Row {
