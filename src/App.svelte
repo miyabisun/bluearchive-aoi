@@ -9,7 +9,9 @@
     filterRows,
     filterShops,
     formatCount,
+    farmCells,
     goodTile,
+    heldTone,
     groupPlan,
     needCells,
     placeName,
@@ -413,20 +415,47 @@
                 {#each work.slots as slot (slot.name)}
                   <tr>
                     <td class="slot"
-                      ><img src={iconUrl(slot.icon)} alt="" width="32" height="32" />{slot.name}</td
+                      ><img
+                        src={iconUrl(slot.icon)}
+                        alt=""
+                        width="32"
+                        height="32"
+                      />{slot.name}<span class="detail">黄金比 {slot.golden}人</span></td
                     >
                     {#each [slot.top, slot.universal] as stock, i (i)}
-                      {@const cells = stockCells(stock)}
+                      {@const cells = stockCells(stock, slot.golden)}
                       <td>
-                        <strong>{cells.pieces}</strong>
+                        <strong class={cells.tone}>{cells.pieces}</strong>
                         <span class="detail">{cells.held}</span>
-                        {#if cells.best}<span class="detail">{cells.best}</span>{/if}
                       </td>
                     {/each}
                   </tr>
                 {/each}
               </tbody>
             </table>
+            {#if work.farm}
+              {@const farm = farmCells(work.farm)}
+              <!-- The normal missions to play in a week of the campaign to reach the golden ratio. -->
+              <h3>黄金比まで（2倍キャンペーンの1週間）</h3>
+              <p class="detail">手持ちの万能設計図で作れる設計図は作る前提の周回です</p>
+              {#if farm.lines.length === 0}
+                <p class="detail">どの部位も黄金比に届いています</p>
+              {:else}
+                <table class="farm">
+                  <tbody>
+                    {#each farm.lines as line (line.name)}
+                      <tr>
+                        <td>{line.name}</td>
+                        <td class="fit">{line.runs}</td>
+                        <td class="fit">{line.ap}</td>
+                        <td class="detail">{line.slots}</td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+                <p class="total">{farm.total}</p>
+              {/if}
+            {/if}
           </details>
           {#each [{ title: "指名手配", places: work.bounties }, { title: "学園交流会", places: work.scrimmages }] as group (group.title)}
             <details class="fold" open={opened.has(`work:${group.title}`)}>
@@ -447,7 +476,9 @@
                                 title={cell.name}
                                 width="40"
                                 height="40"
-                              />{cell.held == null ? "—" : formatCount(cell.held)}{/if}
+                              /><span class={heldTone(cell.held, cell.need)}
+                                >{cell.held == null ? "—" : formatCount(cell.held)}</span
+                              >{/if}
                           </td>
                         {/each}
                       </tr>
@@ -1042,6 +1073,22 @@
       color: var(--c-ok)
     .fewer strong
       color: var(--c-warn)
+    // Short of one student red, of the golden ratio or of two students orange.
+    .short
+      color: var(--c-danger)
+      font-weight: 600
+    .low
+      color: var(--c-warn)
+      font-weight: 600
+    .slot .detail
+      margin-left: 40px
+    .farm td
+      padding: var(--sp-1) var(--sp-2)
+    .total
+      margin: var(--sp-2) 0 0
+      font-size: var(--fs-sm)
+      font-weight: 600
+      font-variant-numeric: tabular-nums
     .fold
       border-bottom: 1px solid var(--c-border)
       &[open]

@@ -9,7 +9,9 @@ import {
   tierCell,
   unknownText,
   commissionCells,
+  farmCells,
   goodTile,
+  heldTone,
   placeName,
   stockCells,
   shopStale,
@@ -355,17 +357,40 @@ describe("plan", () => {
 });
 
 describe("work", () => {
-  it("writes how many pieces a slot's blueprints make, and where to get more", () => {
-    const best = { name: "29-5", per_run: 0.258, ap: 10 };
-    expect(stockCells({ held: 270, about: false, need: 60, pieces: 4.5, best })).toEqual({
-      pieces: "4.5個分",
-      held: "270 / 60",
-      best: "29-5で0.26個/回",
-    });
-    expect(stockCells({ held: 2150, about: true, need: 430, pieces: 5.0, best: null })).toEqual({
-      pieces: "5.0個分",
-      held: "約2,150 / 430",
-      best: "",
+  it("writes how many pieces a slot's blueprints make, short of one red, of the golden ratio orange", () => {
+    const stock = (pieces) => ({ held: 270, about: false, need: 60, pieces });
+    expect(stockCells(stock(4.5), 3)).toEqual({ pieces: "4.5個分", held: "270 / 60", tone: "" });
+    expect(stockCells(stock(2.96), 3).tone).toBe("low");
+    expect(stockCells(stock(0.9), 3).tone).toBe("short");
+    expect(stockCells({ held: 2150, about: true, need: 430, pieces: 5.0 }, 4).held).toBe(
+      "約2,150 / 430",
+    );
+  });
+
+  it("tells a drop held short of one student's need red, of two orange", () => {
+    expect(heldTone({ exact: 30 }, 75)).toBe("short");
+    expect(heldTone({ exact: 100 }, 75)).toBe("low");
+    expect(heldTone({ thousands: 2 }, 75)).toBe("");
+    expect(heldTone(null, 75)).toBe("short");
+    expect(heldTone({ exact: 3 }, null)).toBe("");
+  });
+
+  it("writes the farm to the golden ratio, a line a mission", () => {
+    const farm = {
+      multiplier: 2,
+      runs: 71,
+      ap: 710,
+      stages: [
+        { name: "29-1", runs: 60, ap: 600, slots: ["お守り", "時計"] },
+        { name: "25-1", runs: 11, ap: 110, slots: ["帽子"] },
+      ],
+    };
+    expect(farmCells(farm)).toEqual({
+      lines: [
+        { name: "29-1", runs: "60回", ap: "600AP", slots: "お守り・時計" },
+        { name: "25-1", runs: "11回", ap: "110AP", slots: "帽子" },
+      ],
+      total: "計 71回 710AP（1日 102AP）",
     });
   });
 

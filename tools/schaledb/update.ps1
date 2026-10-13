@@ -123,6 +123,8 @@ Update-List 'students' $null $null {
     limited = [int]$student.IsLimited[0]
     ex = Pairs $student.SkillExMaterial $student.SkillExMaterialAmount
     skills = Pairs $student.SkillMaterial $student.SkillMaterialAmount
+    # The ooparts (their first tier) the student's potential takes.
+    potential = if ($student.PotentialMaterial) { [int64]$student.PotentialMaterial } else { $null }
   }
 } | Out-Null
 
@@ -132,6 +134,7 @@ $gameData = 'https://raw.githubusercontent.com/electricgoat/ba-data/jp/Excel'
 $levels = (Get-Json "$gameData/CharacterLevelExcelTable.json").DataList
 $gearLevels = (Get-Json "$gameData/EquipmentLevelExcelTable.json").DataList
 $const = (Get-Json "$gameData/ConstCommonExcelTable.json").DataList[0]
+$config = Get-Json 'https://schaledb.com/data/config.min.json'
 $weaponLevels = (Get-Json "$gameData/CharacterWeaponLevelExcelTable.json").DataList
 # The exp from Lv1 to each level: 0 for Lv1, then the totals the table gives.
 $toLevel = @(0) + @($levels | Sort-Object { $_.Level } | Select-Object -First ($levels.Count - 1) | ForEach-Object { [int64]$_.TotalExp })
@@ -161,6 +164,9 @@ $growth = [ordered]@{
   # The unique weapon's exp from Lv1 to each level and the credits each exp costs.
   weapon_exp = $weaponToLevel
   weapon_credits = [int]$const.WeaponLvUpCoefficient
+  # Each level of a potential (HP, attack or healing, 1 to 25): the tier of its
+  # ooparts (0 the first) and how many.
+  potential = @($config.PotentialMaterial | ForEach-Object { , @([int]$_.ArtifactGrade, [int]$_.ArtifactAmount) })
   # A skill's Lv10 also takes one Secret Technique Note.
   secret_note = [int64]($items | Where-Object { $_.Icon -eq 'item_icon_skillbook_ultimate' }).Id
 }

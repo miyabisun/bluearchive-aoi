@@ -264,19 +264,44 @@ const tenths = new Intl.NumberFormat("ja-JP", {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
 });
-const hundredths = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 });
 
 /**
  * What a slot's blueprints make: how many pieces from T1 to T10, to a tenth
  * ("4.5個分"), what is held against what one piece takes ("約" where it is
- * about), and the mission that gives the most per AP ("29-5で0.26個/回").
+ * about), and how short it falls: of one piece "short", of the slot's
+ * `golden` ratio "low".
  */
-export function stockCells(stock) {
-  const best = stock.best;
+export function stockCells(stock, golden) {
   return {
     pieces: `${tenths.format(stock.pieces)}個分`,
     held: `${stock.about ? "約" : ""}${exact.format(stock.held)} / ${exact.format(stock.need)}`,
-    best: best ? `${best.name}で${hundredths.format(best.per_run)}個/回` : "",
+    tone: stock.pieces < 1 ? "short" : stock.pieces < golden ? "low" : "",
+  };
+}
+
+/** How many a count holds ("51K" about 51,000; none 0). */
+const amountOf = (count) => (count == null ? 0 : (count.exact ?? count.thousands * 1000));
+
+/** How short a drop held falls of what students need: of one "short", of two "low". */
+export function heldTone(held, need) {
+  if (need == null) return "";
+  const n = amountOf(held);
+  return n < need ? "short" : n < 2 * need ? "low" : "";
+}
+
+/**
+ * The farm to the golden ratio: each mission's runs, AP and the slots it
+ * serves, and the whole with its AP a day over a week.
+ */
+export function farmCells(farm) {
+  return {
+    lines: farm.stages.map((s) => ({
+      name: s.name,
+      runs: `${exact.format(s.runs)}回`,
+      ap: `${exact.format(s.ap)}AP`,
+      slots: s.slots.join("・"),
+    })),
+    total: `計 ${exact.format(farm.runs)}回 ${exact.format(farm.ap)}AP（1日 ${exact.format(Math.ceil(farm.ap / 7))}AP）`,
   };
 }
 

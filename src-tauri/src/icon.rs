@@ -79,9 +79,9 @@ const SOLE: f32 = 0.75;
 /// then the winner needs at least `DETAIL.0` overall and, on the pixels where
 /// the two icons differ, at least `DETAIL.1` (a gloves universal blueprint
 /// measures 0.898) and a lead of `DETAIL.2` over the runner-up (a school's
-/// logo, small on a shop's card, leads another school's by 0.16 to 0.46;
-/// measured on 2026-10-13).
-const DETAIL: (f32, f32, f32) = (0.9, 0.88, 0.15);
+/// logo, small on a shop's card or on gold, leads another school's by 0.106 to
+/// 0.46; measured on 2026-10-13).
+const DETAIL: (f32, f32, f32) = (0.9, 0.88, 0.08);
 /// Most difference in average tint (`Template::tint`) for a match. Matches measure
 /// up to about 0.03; a green ticket against the blue one 0.05 and more.
 const MAX_TINT: f32 = 0.04;

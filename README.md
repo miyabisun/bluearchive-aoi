@@ -101,9 +101,15 @@ lists and the credits read:
 
 - 任務: for each equipment slot, how many pieces from T1 to T10 the blueprints held make,
   the T10 blueprints apart from the universal ones (those of T9 and below counted in the
-  universal ones they are made from: 2 for a T2 … 30 for a T9), and the normal mission
-  that gives the most of each per AP by SchaleDB's drop rates.
-- 指名手配 and 学園交流会: what each place drops, tier by tier, with how many are held.
+  universal ones they are made from: 2 for a T2 … 30 for a T9), red short of one piece
+  and orange short of the golden ratio (オニア先生の黄金比: 帽子 3, 手袋 2, 靴 4, バッグ 2,
+  バッジ 2, ヘアピン 4, お守り 1, 腕時計 4, ネックレス 2 students). Under them, the normal
+  missions to play in a week of the doubled-drop campaign to reach the golden ratio with
+  the fewest AP, by SchaleDB's drop rates (a linear program; blueprints the universal ones
+  held make count).
+- 指名手配 and 学園交流会: what each place drops, tier by tier, with how many are held; in
+  指名手配, red short of what one student takes (skills and potential raised fully; the
+  median over the students that take it) and orange short of two.
 - 特別依頼: how many students raised from Lv1 to Lv90, skills 5/10/10/10, equipment
   T10 and the unique weapon's ★4 at Lv60 the credits held pay for, and how many Lv1 to 90 the reports held level; the more
   shows green, the fewer, the commission to play, orange.

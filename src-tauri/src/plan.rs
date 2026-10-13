@@ -44,6 +44,9 @@ pub struct Grower {
     pub ex: Vec<Vec<(i64, u64)>>,
     #[serde(default)]
     pub skills: Vec<Vec<(i64, u64)>>,
+    /// The ooparts (their first tier) the student's potential takes.
+    #[serde(default)]
+    pub potential: Option<i64>,
 }
 
 /// A piece of equipment of the snapshot: what it is made from (blueprints and
@@ -83,6 +86,10 @@ pub struct Growth {
     /// exp costs.
     pub weapon_exp: Vec<u64>,
     pub weapon_credits: u64,
+    /// Each level of a potential (HP, attack or healing, Lv1 to 25): the tier
+    /// of its ooparts (0 the first) and how many.
+    #[serde(default)]
+    pub potential: Vec<(u8, u64)>,
 }
 
 /// A part of a student's training.
@@ -349,12 +356,12 @@ fn equipment_needs(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::student::{Gear, Weapon};
 
     /// Small tables: Lv1 to 4, two equipment tiers of three levels.
-    fn growth() -> Growth {
+    pub(crate) fn growth() -> Growth {
         Growth {
             level_exp: vec![0, 10, 30, 60],
             level_credits: 7,
@@ -369,6 +376,7 @@ mod tests {
             weapon_up: vec![(120, 1500), (180, 2000), (200, 2500)],
             weapon_exp: Vec::new(),
             weapon_credits: 0,
+            potential: Vec::new(),
         }
     }
 
@@ -383,6 +391,7 @@ mod tests {
                 vec![(3033, 5), (150, 1)],
             ],
             skills: (2..=9).map(|lv| vec![(4030, lv)]).collect(),
+            potential: None,
         }
     }
 

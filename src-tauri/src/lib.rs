@@ -165,6 +165,8 @@ pub struct Recognizer {
     prices: price::Prices,
     currency: Vec<Currency>,
     stages: work::Stages,
+    /// What one student takes of each item (see `work::person_needs`).
+    person_needs: HashMap<i64, u64>,
     /// The growth data training plans are counted with.
     planner: plan::Planner,
     equipment: Catalog,
@@ -210,7 +212,14 @@ impl Recognizer {
     fn build(read: &Read) -> Result<Self, String> {
         let template =
             |path: &str| picture(read, path).map(|p| image::DynamicImage::from(p).to_rgb8());
+        let planner = plan::Planner {
+            growth: json(read, "schaledb/growth.json")?,
+            growers: json(read, "schaledb/students.json")?,
+            pieces: json(read, "schaledb/equipment.json")?,
+        };
         Ok(Self {
+            person_needs: work::person_needs(&planner.growers, &planner.growth),
+            planner,
             items: items::catalog(read)?,
             goods: items::goods(read)?,
             prices: price::Prices::new(
@@ -221,11 +230,6 @@ impl Recognizer {
             ),
             currency: json(read, "schaledb/currency.json")?,
             stages: json(read, "schaledb/stages.json")?,
-            planner: plan::Planner {
-                growth: json(read, "schaledb/growth.json")?,
-                growers: json(read, "schaledb/students.json")?,
-                pieces: json(read, "schaledb/equipment.json")?,
-            },
             equipment: equipment::catalog(read)?,
             digits: json(read, "digits.json")?,
             sort_template: template("sort-default.png")?,
@@ -267,11 +271,14 @@ impl Recognizer {
         let (goods, pieces) = (self.items.entries(), self.equipment.entries());
         let stages = &self.stages;
         work::WorkRows {
-            slots: work::slots(
+            slots: work::slots(&self.planner.pieces, pieces, &equipment_held),
+            // A normal mission campaign doubles the drops for a week.
+            farm: work::farm(
                 &self.planner.pieces,
                 pieces,
                 &stages.missions,
                 &equipment_held,
+                2,
             ),
             bounties: work::places(
                 &stages.bounties,
@@ -282,12 +289,14 @@ impl Recognizer {
                         .map(|(family, _)| family.to_string())
                 },
                 &items_held,
+                &self.person_needs,
             ),
             scrimmages: work::places(
                 &stages.scrimmages,
                 pieces,
                 |e| Some(e.category.clone()),
                 &equipment_held,
+                &HashMap::<i64, u64>::new(),
             ),
             commissions: work::commissions(
                 &stages.commissions,

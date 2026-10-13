@@ -661,22 +661,20 @@ const work = {
     {
       name: "帽子",
       icon: "equipment_icon_hat_tier10",
-      top: {
-        held: 270,
-        about: false,
-        need: 60,
-        pieces: 4.5,
-        best: { name: "29-5", per_run: 0.258, ap: 10 },
-      },
-      universal: {
-        held: 2150,
-        about: true,
-        need: 430,
-        pieces: 5.0,
-        best: { name: "25-1", per_run: 13, ap: 10 },
-      },
+      golden: 3,
+      top: { held: 150, about: false, need: 60, pieces: 2.5 },
+      universal: { held: 2150, about: true, need: 430, pieces: 5.0 },
     },
   ],
+  farm: {
+    multiplier: 2,
+    runs: 71,
+    ap: 710,
+    stages: [
+      { name: "29-1", runs: 60, ap: 600, slots: ["お守り", "時計"] },
+      { name: "25-1", runs: 11, ap: 110, slots: ["帽子"] },
+    ],
+  },
   bounties: [
     {
       name: "指名手配：ハイウェイ",
@@ -687,6 +685,7 @@ const work = {
             name: "ファイストス円盤の欠片",
             icon: "item_icon_material_phaistos_0",
             held: { exact: 51 },
+            need: 75,
           },
           null,
           null,
@@ -734,13 +733,27 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   await expect(sections).toHaveText(["任務", "指名手配", "学園交流会", "特別依頼"]);
   await expect(page.locator(".slots")).toBeHidden();
   for (const section of await sections.all()) await section.click();
-  // A slot: how many pieces its T10 blueprints and its universal ones make.
+  // A slot: how many pieces its T10 blueprints and its universal ones make,
+  // short of its golden ratio orange.
   await expect(page.locator(".slots tbody tr")).toHaveText([
-    "帽子4.5個分 270 / 60 29-5で0.26個/回5.0個分 約2,150 / 430 25-1で13個/回",
+    "帽子黄金比 3人2.5個分 150 / 605.0個分 約2,150 / 430",
   ]);
-  // Each place's drops by tier with what is held, "—" where none is counted.
-  await expect(page.locator(".work h3")).toHaveText(["ハイウェイ", "トリニティ"]);
+  await expect(page.locator(".slots strong.low")).toHaveText(["2.5個分"]);
+  // The missions to play to the golden ratio in a week of the campaign.
+  await expect(page.locator(".farm tr")).toHaveText([
+    "29-160回600APお守り・時計",
+    "25-111回110AP帽子",
+  ]);
+  await expect(page.locator(".work .total")).toHaveText("計 71回 710AP（1日 102AP）");
+  // Each place's drops by tier with what is held, "—" where none is counted;
+  // short of one student's need red.
+  await expect(page.locator(".work h3")).toHaveText([
+    "黄金比まで（2倍キャンペーンの1週間）",
+    "ハイウェイ",
+    "トリニティ",
+  ]);
   await expect(page.locator(".work .tiers td.tier-1")).toHaveText(["51", "—"]);
+  await expect(page.locator(".work .tiers .short")).toHaveText(["51"]);
   await expect(page.getByRole("img", { name: "ファイストス円盤の欠片" })).toBeVisible();
   // The commission raising more students is green, the fewer orange.
   await expect(page.locator(".commissions tr")).toHaveText([

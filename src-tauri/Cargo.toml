@@ -22,6 +22,7 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphic
 # The same version windows-capture uses; the OCR built into Windows reads names.
 windows = { version = "0.61.3", features = ["Foundation", "Globalization", "Graphics_Imaging", "Media_Ocr", "Storage_Streams"] }
 serde_yaml = "0.9"
+microlp = "0.6"
 
 [lints.clippy]
 missing_errors_doc = "allow"

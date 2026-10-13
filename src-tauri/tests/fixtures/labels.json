@@ -1029,5 +1029,93 @@
         "quantity": "251"
       }
     ]
+  },
+  {
+    "image": "items-16x9-tactical-bd.png",
+    "list": "items",
+    "role": "eval",
+    "note": "2026-10-13 capture, 2222x1250, the item detail panel painted black. The gold (third tier) BDs of each school differ only in their logo. Labels by eye.",
+    "cells": [
+      {
+        "id": 3011,
+        "quantity": "151"
+      },
+      {
+        "id": 3012,
+        "quantity": "79"
+      },
+      {
+        "id": 3013,
+        "quantity": "26"
+      },
+      {
+        "id": 3020,
+        "quantity": "290"
+      },
+      {
+        "id": 3021,
+        "quantity": "69"
+      },
+      {
+        "id": 3022,
+        "quantity": "45"
+      },
+      {
+        "id": 3023,
+        "quantity": "9"
+      },
+      {
+        "id": 3030,
+        "quantity": "622"
+      },
+      {
+        "id": 3031,
+        "quantity": "9"
+      },
+      {
+        "id": 3032,
+        "quantity": "6"
+      },
+      {
+        "id": 3033,
+        "quantity": "3"
+      },
+      {
+        "id": 3040,
+        "quantity": "916"
+      },
+      {
+        "id": 3041,
+        "quantity": "206"
+      },
+      {
+        "id": 3042,
+        "quantity": "162"
+      },
+      {
+        "id": 3043,
+        "quantity": "73"
+      },
+      {
+        "id": 3050,
+        "quantity": "398"
+      },
+      {
+        "id": 3051,
+        "quantity": "36"
+      },
+      {
+        "id": 3052,
+        "quantity": "45"
+      },
+      {
+        "id": 3053,
+        "quantity": "16"
+      },
+      {
+        "id": 3060,
+        "quantity": "605"
+      }
+    ]
   }
 ]

@@ -31,7 +31,41 @@ fn each_slot_counts_pieces_from_its_blueprints() {
     // 5,175 universal ones (schale-calc's equipment-upgrade.md).
     assert_eq!((hat.top.need, hat.top.pieces), (60, 4.5));
     assert_eq!((hat.universal.held, hat.universal.need), (9700, 5175));
-    assert!(hat.top.best.is_some() && hat.universal.best.is_some());
+    assert_eq!(hat.golden, 3);
+}
+
+#[test]
+fn the_farm_reaches_the_golden_ratio_from_nothing_in_normal_missions() {
+    let work = recognizer().work_rows(&[], &[], None);
+    let farm = work.farm.unwrap();
+    assert_eq!(farm.multiplier, 2);
+    assert!(farm.runs > 0 && farm.ap == farm.runs * 10, "{farm:?}");
+    // Every slot is served by some mission of the farm.
+    for slot in &work.slots {
+        assert!(
+            farm.stages.iter().any(|s| s.slots.contains(&slot.name)),
+            "{}",
+            slot.name
+        );
+    }
+}
+
+#[test]
+fn a_student_takes_their_school_notes_and_their_ooparts_with_the_potential() {
+    let work = recognizer().work_rows(&[], &[], None);
+    let need = |id: i64| {
+        work.bounties
+            .iter()
+            .flat_map(|p| &p.kinds)
+            .flatten()
+            .flatten()
+            .find(|c| c.id == id)
+            .and_then(|c| c.need)
+    };
+    // Gehenna's first notes: 5 + 8 + 12 a skill, three skills.
+    assert_eq!(need(4030), Some(75));
+    // Phaistos: a potential takes 225 of the first tier a stat, three stats.
+    assert!(need(110).unwrap() >= 675, "{:?}", need(110));
 }
 
 #[test]
