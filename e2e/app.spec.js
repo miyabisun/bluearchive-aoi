@@ -647,6 +647,9 @@ test("shows the targets and what they take against what is held", async ({ page 
     "/icon/item_icon_skillbook_gehenna_3",
   );
 
+  // Nothing paid yet: no settlement.
+  await expect(page.getByRole("heading", { name: "精算" })).toHaveCount(0);
+  await expect(page.locator("table.settle")).toHaveCount(0);
   // The sections: the students, what they take, and how to make up what is short.
   await expect(page.locator(".section")).toHaveText(["既存の生徒一覧", "必要素材", "不足分の調達"]);
   await expect(page.locator("table.procure tr.line")).toHaveText([
@@ -716,6 +719,7 @@ test("shows the targets and what they take against what is held", async ({ page 
   await expect(chips.first()).toHaveText("4");
   await page.getByRole("button", { name: "リセット" }).click();
   await expect(chips.nth(1)).toHaveText("5,940");
+  await expect(page.locator("table.settle")).toHaveCount(0);
 
   // 再読込 counts the plan again from what is read now; the payments start over.
   await chips.first().click();

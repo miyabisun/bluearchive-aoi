@@ -584,40 +584,41 @@
                 {/each}
               </table>
               <button type="button" class="reset" onclick={() => (payments = {})}>リセット</button>
+              <!-- Nothing paid, no settlement. -->
               {#if procure.resources.length > 0}
                 <h3>精算</h3>
-              {/if}
-              <table class="settle">
-                <thead>
-                  <tr>
-                    <th scope="col">使ったもの</th>
-                    <th scope="col" class="fit">所持</th>
-                    <th scope="col" class="fit">消費</th>
-                    <th scope="col" class="fit">残り</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each procure.resources as resource (resource.key)}
+                <table class="settle">
+                  <thead>
                     <tr>
-                      <td class="what"
-                        ><img
-                          src={iconUrl(resource.icon)}
-                          alt=""
-                          width="22"
-                          height="22"
-                        />{resource.name}</td
-                      >
-                      <td class="fit">{resource.held}</td>
-                      <td class="fit short">{resource.spent}</td>
-                      <td
-                        class="fit"
-                        class:enough={resource.tone === "plus"}
-                        class:short={resource.tone === "minus"}>{resource.after}</td
-                      >
+                      <th scope="col">使ったもの</th>
+                      <th scope="col" class="fit">所持</th>
+                      <th scope="col" class="fit">消費</th>
+                      <th scope="col" class="fit">残り</th>
                     </tr>
-                  {/each}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {#each procure.resources as resource (resource.key)}
+                      <tr>
+                        <td class="what"
+                          ><img
+                            src={iconUrl(resource.icon)}
+                            alt=""
+                            width="22"
+                            height="22"
+                          />{resource.name}</td
+                        >
+                        <td class="fit">{resource.held}</td>
+                        <td class="fit short">{resource.spent}</td>
+                        <td
+                          class="fit"
+                          class:enough={resource.tone === "plus"}
+                          class:short={resource.tone === "minus"}>{resource.after}</td
+                        >
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              {/if}
             {/if}
           {/if}
         </div>
