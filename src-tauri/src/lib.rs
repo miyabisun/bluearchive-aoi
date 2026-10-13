@@ -334,8 +334,20 @@ impl Recognizer {
         (rows, unknown)
     }
 
-    /// The shelves in the menu's order, their offers' items named.
-    pub fn shop_rows(&self, shelves: &BTreeMap<String, shop::Shelf>) -> Vec<shop::ShopRow> {
+    /// The item a shop's coin is (as `shop::Seen::held` tells it), where it is one.
+    pub fn coin_item(&self, shop: &str, coin: usize) -> Option<i64> {
+        let name = self.prices.coins(shop).get(coin)?;
+        let items = self.items.entries();
+        items.iter().find(|i| &i.name == name).map(|i| i.id)
+    }
+
+    /// The shelves in the menu's order, their offers' items named; a coin that
+    /// is an item held as `items` count it.
+    pub fn shop_rows(
+        &self,
+        shelves: &BTreeMap<String, shop::Shelf>,
+        items_held: &HashMap<i64, Count>,
+    ) -> Vec<shop::ShopRow> {
         let items = self.items.entries();
         let named = |id: i64| {
             items
@@ -357,7 +369,16 @@ impl Recognizer {
                 let coin_rows = order
                     .iter()
                     .map(|&i| shop::CoinRow {
-                        held: kept.held.get(i).copied().flatten(),
+                        held: match item(&coins[i]) {
+                            Some(e) => items_held.get(&e.id).copied(),
+                            None => kept
+                                .held
+                                .get(i)
+                                .copied()
+                                .flatten()
+                                .and_then(|n| u32::try_from(n).ok())
+                                .map(Count::Exact),
+                        },
                         at: u8::try_from(i).unwrap_or_default(),
                         name: coins[i].clone(),
                         icon: item(&coins[i])

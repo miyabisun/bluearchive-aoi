@@ -27,6 +27,7 @@ use windows_capture::{
 use crate::{
     Frame as Shown, List, Recognizer, Row,
     keep::{Kept, now},
+    quantity::Count,
     shop::{Shelves, ShopRow},
     student::{Training, roster::Roster},
     tally::{CONFIRM, Tally},
@@ -349,6 +350,26 @@ fn capture(
     Capture::start_free_threaded(settings).map_err(|err| err.to_string())
 }
 
+/// Reports the shops after a frame changed them. A coin that is an item takes
+/// the count its shop shows, and the item list with it.
+fn shops_changed(recognizer: &Recognizer, shelves: &mut Shelves, items: &mut Tally, board: &Board) {
+    let mut taken = false;
+    for (shop, coin, count) in shelves.fresh_held() {
+        if let (Some(id), Ok(count)) = (recognizer.coin_item(shop, coin), u32::try_from(count)) {
+            taken |= items.take(id, Count::Exact(count));
+        }
+    }
+    if taken {
+        board.changed(Update::List(
+            List::Items,
+            recognizer.rows(List::Items, items),
+        ));
+    }
+    board.changed(Update::Shops(
+        recognizer.shop_rows(shelves.shelves(), items.counts()),
+    ));
+}
+
 /// Frames between two readings of the credits (about two a second).
 const CREDITS_EVERY: u32 = 15;
 
@@ -451,6 +472,11 @@ pub fn start(
                         let gone = recognizer.catalog(list).gaps(&cells, start);
                         if tally.observe(&cells, &gone) {
                             board.changed(Update::List(list, recognizer.rows(list, tally)));
+                            // The shops show the coins held as the item list counts them.
+                            if list == List::Items {
+                                let rows = recognizer.shop_rows(shelves.shelves(), tally.counts());
+                                board.changed(Update::Shops(rows));
+                            }
                         }
                     }
                     Some(Shown::Student(Some(id), training)) if roster.observe(id, training) => {
@@ -458,8 +484,8 @@ pub fn start(
                         board.changed(Update::Students(rows));
                     }
                     Some(Shown::Shop(seen)) if shelves.observe(&seen, &now()) => {
-                        let rows = recognizer.shop_rows(shelves.shelves());
-                        board.changed(Update::Shops(rows));
+                        let items = tallies.entry(List::Items).or_default();
+                        shops_changed(&recognizer, &mut shelves, items, &board);
                     }
                     _ => {}
                 }

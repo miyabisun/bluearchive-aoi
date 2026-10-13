@@ -356,13 +356,13 @@
                         alt={coin.name}
                         width="20"
                         height="20"
-                      />{coin.held == null ? "?" : formatCount({ exact: coin.held })}</span
+                      />{coin.held == null ? "?" : formatCount(coin.held)}</span
                     >
                   {/each}
                 </span>
               </summary>
-              <!-- Each good by its icon; under it, what each coin buys, the plain coin left. -->
-              <ul class="tiles goods" class:pair={shop.coins.length > 1} data-state="success">
+              <!-- Each good by its icon; under it, what each coin buys, the plain coin first. -->
+              <ul class="tiles goods" data-state="success">
                 {#each shop.goods as good (good.id)}
                   {@const tile = goodTile(good)}
                   <li title={good.name}>
@@ -702,11 +702,9 @@
     img
       object-fit: contain
 
-  // A good's tile: its icon over what each coin buys, two coins side by side.
+  // A good's tile: its icon over what each coin buys, a line a coin.
   .tiles.goods
     grid-template-columns: repeat(auto-fill, minmax(112px, 1fr))
-    &.pair
-      grid-template-columns: repeat(auto-fill, minmax(176px, 1fr))
     li
       flex-direction: column
       align-items: center
@@ -715,12 +713,12 @@
       position: relative
     .offers
       display: flex
-      gap: var(--sp-2)
+      flex-direction: column
+      gap: 2px
       width: 100%
-      justify-content: center
     .offer
       display: inline-flex
-      flex: 1
+      min-height: 18px
       justify-content: center
       align-items: center
       gap: 2px

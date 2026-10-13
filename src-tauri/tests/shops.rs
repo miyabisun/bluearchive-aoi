@@ -117,7 +117,10 @@ fn the_terms_price_every_labeled_offer_as_its_card() {
                 }],
                 held: Vec::new(),
             };
-            let rows = recognizer.shop_rows(&BTreeMap::from([(fixture.shop.clone(), shelf)]));
+            let rows = recognizer.shop_rows(
+                &BTreeMap::from([(fixture.shop.clone(), shelf)]),
+                &std::collections::HashMap::new(),
+            );
             let price = rows[0].goods[0]
                 .offers
                 .iter()

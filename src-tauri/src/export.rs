@@ -348,7 +348,7 @@ shops: []
                 .map(|(name, at)| CoinRow {
                     name: name.to_owned(),
                     icon: String::new(),
-                    held: (at == 0).then_some(530),
+                    held: (at == 0).then_some(Count::Exact(530)),
                     at,
                 })
                 .collect(),

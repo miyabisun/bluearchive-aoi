@@ -369,10 +369,10 @@ const shops = [
     name: "総力戦",
     read_at: "2026-09-30 22:00:00",
     resets: true,
-    // The plain coin left, the rare right.
+    // The plain coin first, the rare under it.
     coins: [
-      { name: "総力戦コイン", icon: "item_icon_raidcoin", held: 5940 },
-      { name: "総力戦レアコイン", icon: "item_icon_raidcoin_high", held: 530 },
+      { name: "総力戦コイン", icon: "item_icon_raidcoin", held: { exact: 5940 } },
+      { name: "総力戦レアコイン", icon: "item_icon_raidcoin_high", held: { exact: 530 } },
     ],
     goods: [
       {
@@ -433,7 +433,7 @@ test("shows each shop's goods, shop by shop, when the game shows a shop", async 
   await expect(tiles.first()).toBeHidden();
   await page.locator("summary").first().click();
   // A good by its icon and how many come, then each coin's times left at its
-  // price, the plain coin left; a good bought up is sold out.
+  // price, the plain coin first; a good bought up is sold out.
   await expect(tiles).toHaveText(["×1 40回@1012回@10", "×5 売切れ"]);
   await expect(tiles.first()).toHaveAttribute("title", "初級戦術教育BD（百鬼夜行）");
   expect(

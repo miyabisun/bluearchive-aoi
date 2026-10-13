@@ -13,6 +13,7 @@ use crate::{
     icon::{IconMatcher, Mask},
     ocr::Ocr,
     price::{Price, Prices},
+    quantity::Count,
     student::Area,
     tally::CONFIRM,
 };
@@ -600,6 +601,8 @@ pub struct Shelves {
     streaks: HashMap<(&'static str, i64, u8), (u32, u8)>,
     /// The same for the coins held, by shop and coin.
     held: HashMap<(&'static str, usize), (u64, u8)>,
+    /// The coins held taken since last asked (see `fresh_held`).
+    fresh: Vec<(&'static str, usize, u64)>,
 }
 
 impl Shelves {
@@ -609,6 +612,7 @@ impl Shelves {
             by_shop: shelves,
             streaks: HashMap::new(),
             held: HashMap::new(),
+            fresh: Vec::new(),
         }
     }
 
@@ -624,6 +628,9 @@ impl Shelves {
                 streak.1 = streak.1.saturating_add(1);
             } else {
                 *streak = (count, 1);
+            }
+            if streak.1 == CONFIRM {
+                self.fresh.push((seen.shop, coin, count));
             }
             let stock = self.by_shop.entry(seen.shop.to_owned()).or_default();
             if streak.1 >= CONFIRM && stock.held.get(coin) != Some(&Some(count)) {
@@ -666,6 +673,12 @@ impl Shelves {
         changed
     }
 
+    /// The coins held taken since this was last asked, each once as its
+    /// reading is confirmed: the shop, the coin (as `Seen::held`) and the count.
+    pub fn fresh_held(&mut self) -> Vec<(&'static str, usize, u64)> {
+        std::mem::take(&mut self.fresh)
+    }
+
     /// The shelves by shop.
     pub fn shelves(&self) -> &BTreeMap<String, Shelf> {
         &self.by_shop
@@ -685,12 +698,12 @@ pub struct ShopRow {
 }
 
 /// A coin of a shop: its name, its icon's (empty where SchaleDB has none) and
-/// how many are held.
+/// how many are held, the item list's count where the coin is an item.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CoinRow {
     pub name: String,
     pub icon: String,
-    pub held: Option<u64>,
+    pub held: Option<Count>,
     /// The coin as the screen tells it (see `Offer::coin`).
     #[serde(skip)]
     pub at: u8,
@@ -725,7 +738,10 @@ impl ShopRow {
     pub fn shelf(&self) -> Shelf {
         let mut held = vec![None; self.coins.len()];
         for coin in &self.coins {
-            held[usize::from(coin.at)] = coin.held;
+            held[usize::from(coin.at)] = match coin.held {
+                Some(Count::Exact(n)) => Some(u64::from(n)),
+                _ => None,
+            };
         }
         Shelf {
             held,
@@ -940,6 +956,10 @@ mod tests {
         }
         assert!(shelves.observe(&held(&[Some(530), Some(5940)]), NOW));
         assert_eq!(shelves.shelves()["総力戦"].held, [Some(530), None]);
+        // Each count is given out once, as it is taken.
+        assert_eq!(shelves.fresh_held(), [("総力戦", 0, 530)]);
+        shelves.observe(&held(&[Some(530), Some(5940)]), NOW);
+        assert_eq!(shelves.fresh_held(), []);
     }
 
     fn offer(id: i64, coin: u8, left: u32) -> Offer {

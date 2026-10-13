@@ -57,6 +57,12 @@ impl Tally {
         changed
     }
 
+    /// Takes a count read elsewhere and confirmed there (a coin's held, shown
+    /// over a shop's cards); returns whether it changed.
+    pub fn take(&mut self, id: i64, count: Count) -> bool {
+        self.counts.insert(id, count) != Some(count)
+    }
+
     /// The taken counts by item id.
     pub fn counts(&self) -> &HashMap<i64, Count> {
         &self.counts
@@ -80,6 +86,14 @@ mod tests {
 
     fn frames(tally: &mut Tally, cells: &[Cell], n: u8) -> Vec<bool> {
         (0..n).map(|_| tally.observe(cells, &[])).collect()
+    }
+
+    #[test]
+    fn a_count_confirmed_elsewhere_is_taken_at_once() {
+        let mut tally = Tally::seeded(HashMap::from([(7, Count::Exact(5000))]));
+        assert!(tally.take(7, Count::Exact(5940)));
+        assert!(!tally.take(7, Count::Exact(5940)));
+        assert_eq!(tally.counts().get(&7), Some(&Count::Exact(5940)));
     }
 
     #[test]

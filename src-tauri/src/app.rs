@@ -64,7 +64,7 @@ impl Snapshot {
             equipment: rows(List::Equipment, &kept.equipment),
             students: watch::student_rows(recognizer, &kept.students),
             credits: kept.credits,
-            shops: recognizer.shop_rows(&kept.shops),
+            shops: recognizer.shop_rows(&kept.shops, &kept.items.clone().into_iter().collect()),
             targets: kept
                 .targets
                 .iter()

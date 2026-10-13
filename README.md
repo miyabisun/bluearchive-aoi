@@ -68,11 +68,12 @@ the equipment's tiers by their total); ties keep the default order, and ? comes 
 For the shops, open ショップ, choose 総力戦, 大決戦, カケラ(文字), 合同火力演習, 指名手配 or
 熟達証書, and scroll its goods to the bottom, where those bought up go. Each shop is listed
 under the ショップ tab, closed until you open it (a search opens them all), headed by the
-coins held as the shop shows them (the only place the 熟達証書 held shows). Its goods go in
+coins held: a coin that is an item counts as under the アイテム tab, whichever was read
+last, and the 熟達証書, which only its shop shows, as read there. Its goods go in
 id order, each as its icon with how many come with a purchase (`×5`; hover for its
 name), and under it, for each coin that buys it, the coin's icon with the times left at
 its price, `40回@10`, or 売切れ once bought up. 総力戦 and 大決戦 take two coins: the
-plain one left, the rare one right. The prices are the shops' own, written in
+plain one on the first line, the rare one under it. The prices are the shops' own, written in
 `src-tauri/data/shops.yaml` from the [Blue Archive wiki](https://bluearchive.wiki/wiki/Shop);
 a good they do not cover shows `@?`. In カケラ(文字) an eleph costs its student's rate,
 read off the card (1 to 5 fragments).
