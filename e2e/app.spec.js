@@ -739,16 +739,16 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
     "帽子黄金比 3人2.5個分 150 / 605.0個分 約2,150 / 430",
   ]);
   await expect(page.locator(".slots strong.low")).toHaveText(["2.5個分"]);
-  // The missions to play to the golden ratio in a week of the campaign.
+  // How many times to play each mission, in the campaign, to the golden ratio.
   await expect(page.locator(".farm tr")).toHaveText([
     "29-160回600APお守り・時計",
     "25-111回110AP帽子",
   ]);
-  await expect(page.locator(".work .total")).toHaveText("計 71回 710AP（1日 102AP）");
+  await expect(page.locator(".work .total")).toHaveText("計 71回 710AP");
   // Each place's drops by tier with what is held, "—" where none is counted;
   // short of one student's need red.
   await expect(page.locator(".work h3")).toHaveText([
-    "黄金比まで（2倍キャンペーンの1週間）",
+    "黄金比までの周回（2倍キャンペーン中）",
     "ハイウェイ",
     "トリニティ",
   ]);

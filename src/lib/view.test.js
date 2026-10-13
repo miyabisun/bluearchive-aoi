@@ -390,7 +390,7 @@ describe("work", () => {
         { name: "29-1", runs: "60回", ap: "600AP", slots: "お守り・時計" },
         { name: "25-1", runs: "11回", ap: "110AP", slots: "帽子" },
       ],
-      total: "計 71回 710AP（1日 102AP）",
+      total: "計 71回 710AP",
     });
   });
 

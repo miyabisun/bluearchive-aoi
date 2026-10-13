@@ -103,9 +103,9 @@ lists and the credits read:
   the T10 blueprints apart from the universal ones (those of T9 and below counted in the
   universal ones they are made from: 2 for a T2 … 30 for a T9), red short of one piece
   and orange short of the golden ratio (オニア先生の黄金比: 帽子 3, 手袋 2, 靴 4, バッグ 2,
-  バッジ 2, ヘアピン 4, お守り 1, 腕時計 4, ネックレス 2 students). Under them, the normal
-  missions to play in a week of the doubled-drop campaign to reach the golden ratio with
-  the fewest AP, by SchaleDB's drop rates (a linear program; blueprints the universal ones
+  バッジ 2, ヘアピン 4, お守り 1, 腕時計 4, ネックレス 2 students). Under them, how many times
+  to play each normal mission, in the doubled-drop campaign, to stock the golden ratio
+  with the fewest AP, by SchaleDB's drop rates (a linear program; blueprints the universal ones
   held make count).
 - 指名手配 and 学園交流会: what each place drops, tier by tier, with how many are held; in
   指名手配, red short of what one student takes (skills and potential raised fully; the

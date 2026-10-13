@@ -435,8 +435,8 @@
             </table>
             {#if work.farm}
               {@const farm = farmCells(work.farm)}
-              <!-- The normal missions to play in a week of the campaign to reach the golden ratio. -->
-              <h3>黄金比まで（2倍キャンペーンの1週間）</h3>
+              <!-- How many times to play each normal mission, in a doubled-drop campaign, to stock the golden ratio. -->
+              <h3>黄金比までの周回（2倍キャンペーン中）</h3>
               <p class="detail">手持ちの万能設計図で作れる設計図は作る前提の周回です</p>
               {#if farm.lines.length === 0}
                 <p class="detail">どの部位も黄金比に届いています</p>

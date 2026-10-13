@@ -289,10 +289,7 @@ export function heldTone(held, need) {
   return n < need ? "short" : n < 2 * need ? "low" : "";
 }
 
-/**
- * The farm to the golden ratio: each mission's runs, AP and the slots it
- * serves, and the whole with its AP a day over a week.
- */
+/** The farm to the golden ratio: each mission's runs, AP and the slots it serves, and the whole. */
 export function farmCells(farm) {
   return {
     lines: farm.stages.map((s) => ({
@@ -301,7 +298,7 @@ export function farmCells(farm) {
       ap: `${exact.format(s.ap)}AP`,
       slots: s.slots.join("・"),
     })),
-    total: `計 ${exact.format(farm.runs)}回 ${exact.format(farm.ap)}AP（1日 ${exact.format(Math.ceil(farm.ap / 7))}AP）`,
+    total: `計 ${exact.format(farm.runs)}回 ${exact.format(farm.ap)}AP`,
   };
 }
 

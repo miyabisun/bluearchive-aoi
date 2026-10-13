@@ -272,7 +272,7 @@ impl Recognizer {
         let stages = &self.stages;
         work::WorkRows {
             slots: work::slots(&self.planner.pieces, pieces, &equipment_held),
-            // A normal mission campaign doubles the drops for a week.
+            // The missions are played in a campaign, which doubles the drops.
             farm: work::farm(
                 &self.planner.pieces,
                 pieces,
