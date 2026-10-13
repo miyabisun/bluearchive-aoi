@@ -22,6 +22,7 @@
     heldTone,
     groupPlan,
     needCells,
+    buyCells,
     placeName,
     shortCells,
     shopStale,
@@ -115,6 +116,8 @@
     plan_unknown: [],
     /** What falls short and what is held to make it up. */
     shorts: [],
+    /** What to buy in the shops for what is still short. */
+    buy: { shops: [], left: [], unread: [] },
     /** The daily plays against what is held (none before the app sends it). */
     work: /** @type {any} */ (null),
     credits: /** @type {number | null} */ (null),
@@ -173,9 +176,11 @@
 
   const status = $derived(statusView(snapshot.status));
   const paused = $derived(snapshot.status.state === "paused");
-  /** The lists of rows (the work tab has sections instead). */
-  const lists = LISTS.filter((l) => l.id !== "work");
-  const rows = $derived(view.tab === "work" ? [] : (snapshot[view.tab] ?? []));
+  /** The tabs with sections instead of a list of rows. */
+  const SECTIONED = ["buy", "work"];
+  /** The lists of rows. */
+  const lists = LISTS.filter((l) => !SECTIONED.includes(l.id));
+  const rows = $derived(SECTIONED.includes(view.tab) ? [] : (snapshot[view.tab] ?? []));
   const shown = $derived.by(() => {
     if (view.tab === "shops") return filterShops(rows, query);
     const found = filterRows(rows, query);
@@ -499,6 +504,83 @@
           {/if}
         </div>
       {/if}
+    {:else if view.tab === "buy"}
+      {@const buy = buyCells(snapshot.buy ?? { shops: [], left: [], unread: [] })}
+      <div class="table-scroll buy" data-state="success">
+        {#if snapshot.credits != null}
+          <p class="credits">
+            クレジット <span class="amount">{formatCount({ exact: snapshot.credits })}</span>
+          </p>
+        {/if}
+        {#if (snapshot.shorts ?? []).every((s) => s.left === 0)}
+          <p class="empty" data-state="empty">
+            育成タブの「不足」に手持ちで補えないものが出ると、ショップで買うものがここに並びます。
+          </p>
+        {:else}
+          <!-- Shop by shop, in the order bought from: the coins held and left after, and the goods to buy. -->
+          {#each buy.shops as shop (shop.name)}
+            <h2>
+              {shop.name}<span class="held"
+                >{#each shop.coins as coin (coin.name)}<span title={coin.name}
+                    ><img
+                      src={iconUrl(coin.icon)}
+                      alt={coin.name}
+                      width="20"
+                      height="20"
+                    />{coin.text}</span
+                  >{/each}</span
+              >
+            </h2>
+            <table class="buys">
+              <tbody>
+                {#each shop.goods as good, i (i)}
+                  <tr>
+                    <td class="what"
+                      ><img src={iconUrl(good.icon)} alt="" width="28" height="28" />{good.name}</td
+                    >
+                    <td class="fit">{good.times}</td>
+                    <td class="fit"
+                      ><img
+                        src={iconUrl(good.coin.icon)}
+                        alt={good.coin.name}
+                        title={good.coin.name}
+                        width="18"
+                        height="18"
+                      />{good.cost}</td
+                    >
+                    <td class="fit">{good.gives}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {:else}
+            <p class="detail">今月読んだショップには、補えるものがありません</p>
+          {/each}
+          {#if buy.left.length > 0}
+            <h2>それでも足りないもの</h2>
+            <table class="buys">
+              <tbody>
+                {#each buy.left as line (line.name)}
+                  <tr>
+                    <td class="what"
+                      >{#if line.icon}<img
+                          src={iconUrl(line.icon)}
+                          alt=""
+                          width="28"
+                          height="28"
+                        />{/if}{line.name}</td
+                    >
+                    <td class="fit short">{line.left}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {:else}
+            <p class="enough">ショップで買えば足ります</p>
+          {/if}
+          {#if buy.unread}<p class="detail">{buy.unread}</p>{/if}
+        {/if}
+      </div>
     {:else if view.tab === "work"}
       {#if snapshot.work}
         {@const work = snapshot.work}
@@ -1160,6 +1242,40 @@
   .short
     color: var(--c-danger)
     font-weight: 600
+
+  // The purchases: a shop a heading with its coins, a good a row; then what is still short.
+  .buy
+    h2
+      display: flex
+      align-items: center
+      gap: var(--sp-3)
+      margin: var(--sp-4) 0 var(--sp-1)
+    .held img
+      vertical-align: middle
+    .buys
+      td
+        padding: var(--sp-1) var(--sp-2)
+      .what
+        white-space: normal
+        img
+          vertical-align: middle
+          margin-right: var(--sp-2)
+          object-fit: contain
+      .fit img
+        vertical-align: middle
+        margin-right: 2px
+    .detail
+      color: var(--c-muted)
+      font-size: var(--fs-sm)
+    .enough
+      margin: var(--sp-3) 0
+  .credits
+    margin: 0
+    font-size: var(--fs-sm)
+    color: var(--c-muted)
+    .amount
+      color: var(--c-on-surface)
+      font-variant-numeric: tabular-nums
 
   // What falls short: the thing, the boxes to open for it by icon, and what is left.
   .shorts-heading

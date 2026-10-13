@@ -4,6 +4,7 @@ import {
   filterShops,
   groupPlan,
   needCells,
+  buyCells,
   shortCells,
   starName,
   starOf,
@@ -386,6 +387,62 @@ describe("plan", () => {
         { id: 10, name: "アル", part: "fragments" },
       ]),
     ).toEqual(["ツムギ: EX・装備3", "アル: Lv・カケラ(文字)のレート"]);
+  });
+});
+
+describe("buy", () => {
+  it("writes what to buy shop by shop, the coins it leaves and what is still short", () => {
+    const coin = (name, held, spent) => ({ name, icon: `icon_${name}`, held, spent });
+    const good = (name, coinAt, times, cost, gives, kind = "item") => ({
+      name,
+      icon: `icon_${name}`,
+      coin: coinAt,
+      times,
+      cost,
+      gives,
+      kind,
+    });
+    const plan = {
+      shops: [
+        {
+          name: "総力戦",
+          coins: [coin("総力戦コイン", 5940, 700), coin("総力戦レアコイン", null, 0)],
+          goods: [good("上級戦術教育BD（ゲヘナ）", 0, 6, 300, 6)],
+        },
+        {
+          name: "熟達証書",
+          coins: [coin("熟達証書", 5009, 3000)],
+          goods: [
+            good("クレジットポイント", 0, 1, 1500, 5_000_000, "credits"),
+            good("最上級レポート", 0, 1, 1500, 200_000, "report_exp"),
+          ],
+        },
+      ],
+      left: [
+        { kind: "item", name: "最上級技術ノート（ゲヘナ）", icon: "n", left: 7 },
+        { kind: "credits", name: "", icon: "", left: 1_200_000 },
+      ],
+      unread: ["大決戦", "指名手配"],
+    };
+    const cells = buyCells(plan);
+    expect(cells.shops[0].coins.map((c) => c.text)).toEqual(["5,940 → 5,240", "?"]);
+    expect(cells.shops[0].goods).toEqual([
+      {
+        name: "上級戦術教育BD（ゲヘナ）",
+        icon: "icon_上級戦術教育BD（ゲヘナ）",
+        coin: plan.shops[0].coins[0],
+        times: "6回",
+        cost: "300",
+        gives: "×6",
+      },
+    ]);
+    expect(cells.shops[1].goods.map((g) => g.gives)).toEqual(["+5M", "+200,000 EXP"]);
+    expect(cells.left).toEqual([
+      { name: "最上級技術ノート（ゲヘナ）", icon: "n", left: "7" },
+      { name: "クレジット", icon: "", left: "1.2M" },
+    ]);
+    expect(cells.unread).toBe("今月まだ読んでいないショップ: 大決戦・指名手配");
+    expect(buyCells({ shops: [], left: [], unread: [] }).unread).toBe("");
   });
 });
 

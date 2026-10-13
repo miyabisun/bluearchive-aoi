@@ -199,6 +199,8 @@ test("the tabs and the search field take focus from the keyboard", async ({ page
   await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "育成" })).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("tab", { name: "購買戦略" })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "お仕事" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByLabel("名前で検索")).toBeFocused();
@@ -856,6 +858,77 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   ]);
   await expect(page.locator(".commissions tr.more")).toContainText("クレジット回収");
   await expect(page.locator(".commissions tr.fewer")).toContainText("拠点防衛");
+});
+
+test("tells what to buy shop by shop for what is still short", async ({ page }) => {
+  const coin = (name, icon, held, spent) => ({ name, icon, held, spent });
+  const snapshot = {
+    status: { state: "other_screen" },
+    items,
+    equipment,
+    credits: 249330855,
+    shorts: [{ kind: "item", id: 4033, name: "最上級技術ノート（ゲヘナ）", left: 29 }],
+    buy: {
+      shops: [
+        {
+          name: "総力戦",
+          coins: [
+            coin("総力戦コイン", "item_icon_raidcoin", 5940, 500),
+            coin("総力戦レアコイン", "item_icon_raidcoin_high", 530, 150),
+          ],
+          goods: [
+            {
+              name: "最上級技術ノート（ゲヘナ）",
+              icon: "item_icon_skillbook_gehenna_3",
+              coin: 0,
+              times: 20,
+              cost: 500,
+              gives: 20,
+              kind: "item",
+            },
+            {
+              name: "最上級技術ノート（ゲヘナ）",
+              icon: "item_icon_skillbook_gehenna_3",
+              coin: 1,
+              times: 6,
+              cost: 150,
+              gives: 6,
+              kind: "item",
+            },
+          ],
+        },
+      ],
+      left: [{ kind: "item", name: "最上級技術ノート（ゲヘナ）", icon: "", left: 3 }],
+      unread: ["大決戦"],
+    },
+  };
+  await open(page, snapshot, "購買戦略");
+  await expect(page.getByText("クレジット 249,330,855")).toBeVisible();
+  // A shop with its coins held and left after, then the goods to buy.
+  await expect(page.locator(".buy h2").first()).toHaveText("総力戦5,940 → 5,440530 → 380");
+  await expect(page.locator(".buy table").first().locator("tr")).toHaveText([
+    "最上級技術ノート（ゲヘナ）20回500×20",
+    "最上級技術ノート（ゲヘナ）6回150×6",
+  ]);
+  expect(
+    await page
+      .locator(".buy table")
+      .first()
+      .locator("td:nth-child(3) img")
+      .evaluateAll((imgs) => imgs.map((i) => i.alt)),
+  ).toEqual(["総力戦コイン", "総力戦レアコイン"]);
+  await expect(page.locator(".buy table").last().locator("tr")).toHaveText([
+    "最上級技術ノート（ゲヘナ）3",
+  ]);
+  await expect(page.getByText("今月まだ読んでいないショップ: 大決戦")).toBeVisible();
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+
+  // Nothing is short that what is held does not make up: a guide instead.
+  await page.evaluate(
+    (s) => window.__AOI_PUSH__({ ...s, shorts: [{ ...s.shorts[0], left: 0 }] }),
+    snapshot,
+  );
+  await expect(page.locator(".buy [data-state=empty]")).toBeVisible();
 });
 
 test("keeps the tab chosen when the game shows another list", async ({ page }) => {

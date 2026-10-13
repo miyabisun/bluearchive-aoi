@@ -102,6 +102,12 @@ impl Prices {
         (kind, had)
     }
 
+    /// Whether the good `id` is of `kind` (as a rule names one: 神名文字,
+    /// 戦術教育BD, 技術ノート, オーパーツ, ...).
+    pub fn is_kind(&self, id: i64, kind: &str) -> bool {
+        self.goods.get(&id).is_some_and(|good| is(good, kind))
+    }
+
     /// The family and tier of a good of the kinds that come in four tiers
     /// (tactical BDs, tech notes, ooparts), the family told by its first tier.
     pub fn family(&self, id: i64) -> Option<(i64, u8)> {

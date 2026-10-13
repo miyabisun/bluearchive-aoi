@@ -24,6 +24,7 @@ export const LISTS = [
   { id: "shops", name: "ショップ" },
   { id: "students", name: "生徒" },
   { id: "plan", name: "育成" },
+  { id: "buy", name: "購買戦略" },
   { id: "work", name: "お仕事" },
 ];
 
@@ -211,6 +212,46 @@ export function shortCells(row) {
     boxes: row.boxes.map((b) => ({ ...b, count: `×${exact.format(b.count)}` })),
     left: row.left === 0 ? "補える" : format(row.left),
     done: row.left === 0,
+  };
+}
+
+/**
+ * The purchase plan as text: each shop's coins held and left after
+ * ("5,940 → 5,240", "?" not read), its goods to buy (the times, the coins
+ * they cost, and what they make up: "×6", credits "+5M", report exp
+ * "+200,000 EXP"), what is still short, and the shops not read this month.
+ */
+export function buyCells(plan) {
+  const amount = (kind, n) => (kind === "credits" ? millions(n) : exact.format(n));
+  const gives = (kind, n) =>
+    kind === "credits"
+      ? `+${millions(n)}`
+      : kind === "report_exp"
+        ? `+${exact.format(n)} EXP`
+        : `×${exact.format(n)}`;
+  return {
+    shops: plan.shops.map((shop) => ({
+      name: shop.name,
+      coins: shop.coins.map((c) => ({
+        name: c.name,
+        icon: c.icon,
+        text: c.held == null ? "?" : `${exact.format(c.held)} → ${exact.format(c.held - c.spent)}`,
+      })),
+      goods: shop.goods.map((g) => ({
+        name: g.name,
+        icon: g.icon,
+        coin: shop.coins[g.coin],
+        times: `${exact.format(g.times)}回`,
+        cost: exact.format(g.cost),
+        gives: gives(g.kind, g.gives),
+      })),
+    })),
+    left: plan.left.map((l) => ({
+      name: PLAN_KINDS[l.kind] ?? l.name,
+      icon: l.icon,
+      left: amount(l.kind, l.left),
+    })),
+    unread: plan.unread.length > 0 ? `今月まだ読んでいないショップ: ${plan.unread.join("・")}` : "",
   };
 }
 

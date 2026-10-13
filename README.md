@@ -110,6 +110,16 @@ few schools is opened before a box of any school), and for elephs the 神名の�
 they are enough for every eleph the plan buys. 残り is what is still short (補える when
 nothing is), for the shops to make up.
 
+The 購買戦略 tab buys what is still short from the shops read this month: 総力戦, 大決戦,
+合同火力演習, 熟達証書 and 指名手配 in that order, each coin from the plain one and the goods
+in the shop's order (what is worth buying first), as many times as the line needs, the
+shop has left and the coins held pay for; 指名手配 buys elephs and the last tier of ooparts
+alone (its coins go to the event students' stars). Credits and report exp count too (the
+credit points and the reports the shops sell). Each shop lists its coins held and left
+after, then the goods to buy, the times, the coins they cost and what they make up; what
+the shops still cannot make up, and the shops not read this month, come last. The
+credits held head the tab.
+
 The お仕事 tab weighs the daily plays against what is held, from the item and equipment
 lists and the credits read:
 

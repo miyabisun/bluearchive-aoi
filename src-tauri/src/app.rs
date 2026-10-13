@@ -14,7 +14,7 @@ use crate::{
     keep::{self, Kept, ReadAt, now},
     plan::{NeedRow, Target, UnknownRow},
     shop::ShopRow,
-    supply::ShortRow,
+    supply::{BuyPlan, ShortRow},
     tally::Tally,
     update,
     watch::{self, Status, StudentRow, Update},
@@ -37,6 +37,8 @@ pub struct Snapshot {
     plan_unknown: Vec<UnknownRow>,
     /// The plan's lines that fall short, made up from the choice boxes held.
     shorts: Vec<ShortRow>,
+    /// What to buy in the shops for what is still short.
+    buy: BuyPlan,
     /// The daily plays against what is held.
     work: WorkRows,
     read_at: ReadAt,
@@ -80,6 +82,7 @@ impl Snapshot {
             plan: Vec::new(),
             plan_unknown: Vec::new(),
             shorts: Vec::new(),
+            buy: BuyPlan::default(),
             work: recognizer.work_rows(&[], &[], None),
             read_at: kept.read_at.clone(),
             keep_error,
@@ -103,6 +106,7 @@ impl Snapshot {
             &self.shops,
         );
         self.shorts = recognizer.short_rows(&self.plan, &self.items, &self.shops);
+        self.buy = recognizer.buy_plan(&self.shorts, &self.shops, &now());
         self.work = recognizer.work_rows(&self.items, &self.equipment, self.credits);
     }
 
