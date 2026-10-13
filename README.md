@@ -1,5 +1,7 @@
 # bluearchive-aoi
 
+<p align="center"><img src="docs/aoi.png" width="320" alt="Aoi, holding a monocle and a finance binder"></p>
+
 Aoi counts your Blue Archive items and equipment, notes how far your students are
 trained and how many more times the shops sell each of their goods. Keep it open next
 to the game and scroll through the item list, the equipment list or a shop, or step
