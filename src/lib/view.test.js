@@ -8,7 +8,10 @@ import {
   starOf,
   tierCell,
   unknownText,
+  commissionCells,
   goodTile,
+  placeName,
+  stockCells,
   shopStale,
   followTab,
   formatCount,
@@ -373,5 +376,53 @@ describe("plan", () => {
         { id: 10, name: "アル", part: "level" },
       ]),
     ).toEqual(["ツムギ: EX・装備3", "アル: Lv"]);
+  });
+});
+
+describe("work", () => {
+  it("writes how many pieces a slot's blueprints make, and where to get more", () => {
+    const best = { name: "29-5", per_run: 0.258, ap: 10 };
+    expect(stockCells({ held: 270, about: false, need: 60, pieces: 4.5, best })).toEqual({
+      pieces: "4.5個分",
+      held: "270 / 60",
+      best: "29-5で0.26個/回",
+    });
+    expect(stockCells({ held: 2150, about: true, need: 430, pieces: 5.0, best: null })).toEqual({
+      pieces: "5.0個分",
+      held: "約2,150 / 430",
+      best: "",
+    });
+  });
+
+  it("names a place without the kind of play it is", () => {
+    expect(["指名手配：ハイウェイ", "学園交流会 - トリニティ", "拠点防衛"].map(placeName)).toEqual([
+      "ハイウェイ",
+      "トリニティ",
+      "拠点防衛",
+    ]);
+  });
+
+  it("counts the students each commission's haul raises, the fewer marked", () => {
+    const row = {
+      credits_name: "クレジット回収",
+      credits: 248955686,
+      credits_each: 41500000,
+      credit_students: 5.999,
+      reports_name: "拠点防衛",
+      report_exp: 6245925,
+      report_about: true,
+      exp_each: 1249185,
+      report_students: 5.0,
+    };
+    expect(commissionCells(row)).toEqual({
+      credits: { name: "クレジット回収", students: "6.0人分", detail: "249M ÷ 41.5M" },
+      reports: { name: "拠点防衛", students: "5.0人分", detail: "約6.2M EXP ÷ 1.2M EXP" },
+      fewer: "reports",
+    });
+    expect(commissionCells({ ...row, credits: null, credit_students: null }).credits).toEqual({
+      name: "クレジット回収",
+      students: "?",
+      detail: "? ÷ 41.5M",
+    });
   });
 });

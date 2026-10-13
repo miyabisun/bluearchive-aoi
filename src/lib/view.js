@@ -24,6 +24,7 @@ export const LISTS = [
   { id: "shops", name: "ショップ" },
   { id: "students", name: "生徒" },
   { id: "plan", name: "育成" },
+  { id: "work", name: "お仕事" },
 ];
 
 const listName = (id) => LISTS.find((l) => l.id === id)?.name ?? id;
@@ -266,4 +267,55 @@ export function unknownText(rows) {
     byStudent.set(row.id, parts);
   }
   return [...byStudent.values()].map(({ name, parts }) => `${name}: ${parts.join("・")}`);
+}
+
+const tenths = new Intl.NumberFormat("ja-JP", {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+const hundredths = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 });
+
+/**
+ * What a slot's blueprints make: how many pieces from T1 to T10, to a tenth
+ * ("4.5個分"), what is held against what one piece takes ("約" where it is
+ * about), and the mission that gives the most per AP ("29-5で0.26個/回").
+ */
+export function stockCells(stock) {
+  const best = stock.best;
+  return {
+    pieces: `${tenths.format(stock.pieces)}個分`,
+    held: `${stock.about ? "約" : ""}${exact.format(stock.held)} / ${exact.format(stock.need)}`,
+    best: best ? `${best.name}で${hundredths.format(best.per_run)}個/回` : "",
+  };
+}
+
+/** A daily play's place without the kind of play it is ("指名手配：ハイウェイ" is "ハイウェイ"). */
+export const placeName = (name) => name.split(/：| - /).at(-1);
+
+/**
+ * The commissions against a student raised from Lv1: how many students the
+ * credits and the reports' exp held raise ("6.0人分"), from what over what,
+ * and which raises fewer (the one to play), none when they tie or one is unknown.
+ */
+export function commissionCells(c) {
+  const students = (n) => (n == null ? "?" : `${tenths.format(n)}人分`);
+  const fewer =
+    c.credit_students == null || c.credit_students === c.report_students
+      ? null
+      : c.credit_students < c.report_students
+        ? "credits"
+        : "reports";
+  return {
+    credits: {
+      name: c.credits_name,
+      students: students(c.credit_students),
+      detail: `${c.credits == null ? "?" : millions(c.credits)} ÷ ${millions(c.credits_each)}`,
+    },
+    reports: {
+      name: c.reports_name,
+      students: students(c.report_students),
+      detail: `${c.report_about ? "約" : ""}${millions(c.report_exp)} EXP ÷ ${millions(c.exp_each)} EXP`,
+    },
+    fewer,
+  };
 }

@@ -25,6 +25,7 @@ pub mod shop;
 pub mod student;
 pub mod tally;
 pub mod watch;
+pub mod work;
 mod embedded {
     include!(concat!(env!("OUT_DIR"), "/embedded.rs"));
 }
@@ -163,6 +164,7 @@ pub struct Recognizer {
     goods: shop::Goods,
     prices: price::Prices,
     currency: Vec<Currency>,
+    stages: work::Stages,
     /// The growth data training plans are counted with.
     planner: plan::Planner,
     equipment: Catalog,
@@ -218,6 +220,7 @@ impl Recognizer {
                 &json::<Vec<price::Student>>(read, "schaledb/students.json")?,
             ),
             currency: json(read, "schaledb/currency.json")?,
+            stages: json(read, "schaledb/stages.json")?,
             planner: plan::Planner {
                 growth: json(read, "schaledb/growth.json")?,
                 growers: json(read, "schaledb/students.json")?,
@@ -248,6 +251,75 @@ impl Recognizer {
             fonts: json(read, "student-fonts.json")?,
             ocr: ocr::Ocr::japanese().ok(),
         })
+    }
+
+    /// The work tab against the items and equipment held and the credits.
+    pub fn work_rows(
+        &self,
+        items: &[Row],
+        equipment: &[Row],
+        credits: Option<u64>,
+    ) -> work::WorkRows {
+        let counts = |rows: &[Row]| -> HashMap<i64, Count> {
+            rows.iter().map(|r| (r.id, r.count)).collect()
+        };
+        let (items_held, equipment_held) = (counts(items), counts(equipment));
+        let (goods, pieces) = (self.items.entries(), self.equipment.entries());
+        let stages = &self.stages;
+        work::WorkRows {
+            slots: work::slots(
+                &self.planner.pieces,
+                pieces,
+                &stages.missions,
+                &equipment_held,
+            ),
+            bounties: work::places(
+                &stages.bounties,
+                goods,
+                |e| {
+                    self.prices
+                        .family(e.id)
+                        .map(|(family, _)| family.to_string())
+                },
+                &items_held,
+            ),
+            scrimmages: work::places(
+                &stages.scrimmages,
+                pieces,
+                |e| Some(e.category.clone()),
+                &equipment_held,
+            ),
+            commissions: work::commissions(
+                &stages.commissions,
+                credits,
+                self.raise_cost(),
+                &self.planner.growth.reports,
+                &items_held,
+            ),
+        }
+    }
+
+    /// The credits and the report exp a student takes from Lv1, untrained, to
+    /// the default target; the first student SchaleDB lists stands for all.
+    fn raise_cost(&self) -> (u64, u64) {
+        let Some(grower) = self.planner.growers.first() else {
+            return (0, 0);
+        };
+        let fresh = student::Training {
+            level: Some(1),
+            rarity: Some(1),
+            bond: Some(1),
+            skills: [Some(1); 4],
+            weapon: Some(None),
+            equipment: [Some(student::Gear { tier: 1, level: 1 }); 3],
+            gear: Some(0),
+            ability: [Some(0); 3],
+        };
+        let needs = self.planner.needs(
+            &BTreeMap::from([(grower.id, plan::Target::default())]),
+            &BTreeMap::from([(grower.id, fresh)]),
+        );
+        (needs.credits, needs.report_exp)
     }
 
     /// What the `targets` take against what is held, line by line (credits,

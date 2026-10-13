@@ -16,6 +16,7 @@ use crate::{
     shop::ShopRow,
     tally::Tally,
     watch::{self, Status, StudentRow, Update},
+    work::WorkRows,
 };
 
 /// Everything the window shows; sent whole on every change.
@@ -32,6 +33,8 @@ pub struct Snapshot {
     /// What the targets take against what is held, and what could not be counted.
     plan: Vec<NeedRow>,
     plan_unknown: Vec<UnknownRow>,
+    /// The daily plays against what is held.
+    work: WorkRows,
     read_at: ReadAt,
     /// Why what was read could not be kept or brought back, while it lasts.
     keep_error: Option<String>,
@@ -72,6 +75,7 @@ impl Snapshot {
                 .collect(),
             plan: Vec::new(),
             plan_unknown: Vec::new(),
+            work: recognizer.work_rows(&[], &[], None),
             read_at: kept.read_at.clone(),
             keep_error,
         };
@@ -92,6 +96,7 @@ impl Snapshot {
             &self.equipment,
             self.credits,
         );
+        self.work = recognizer.work_rows(&self.items, &self.equipment, self.credits);
     }
 
     /// What is kept of the window.

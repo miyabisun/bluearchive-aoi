@@ -4,6 +4,7 @@
   import { exportAll, follow, iconUrl, setTarget } from "./lib/snapshot.js";
   import {
     LISTS,
+    commissionCells,
     filterRows,
     filterShops,
     followTab,
@@ -11,11 +12,13 @@
     goodTile,
     groupPlan,
     needCells,
+    placeName,
     shopStale,
     sortStudents,
     starName,
     starOf,
     statusView,
+    stockCells,
     studentCells,
     tierCell,
     unknownText,
@@ -98,6 +101,8 @@
     targets: [],
     plan: [],
     plan_unknown: [],
+    /** The daily plays against what is held (none before the app sends it). */
+    work: /** @type {any} */ (null),
     credits: /** @type {number | null} */ (null),
     /** Why what was read could not be kept or brought back. */
     keep_error: /** @type {string | null} */ (null),
@@ -115,7 +120,9 @@
   const opened = new SvelteSet();
 
   const status = $derived(statusView(snapshot.status));
-  const rows = $derived(snapshot[view.tab] ?? []);
+  /** The lists of rows (the work tab has sections instead). */
+  const lists = LISTS.filter((l) => l.id !== "work");
+  const rows = $derived(view.tab === "work" ? [] : (snapshot[view.tab] ?? []));
   const shown = $derived.by(() => {
     if (view.tab === "shops") return filterShops(rows, query);
     const found = filterRows(rows, query);
@@ -123,7 +130,7 @@
   });
   /** How many students were read, to compare with how many the game holds. */
   const studentCount = $derived((snapshot.students ?? []).length);
-  const nothingRead = $derived(LISTS.every((l) => (snapshot[l.id] ?? []).length === 0));
+  const nothingRead = $derived(lists.every((l) => (snapshot[l.id] ?? []).length === 0));
   /** The students marked for training, with their names and training as read. */
   const targeted = $derived(new Set((snapshot.targets ?? []).map((t) => t.id)));
   const targetRows = $derived(
@@ -316,6 +323,90 @@
               </table>
             {/if}
           {/if}
+        </div>
+      {/if}
+    {:else if view.tab === "work"}
+      {#if snapshot.work}
+        {@const work = snapshot.work}
+        {@const commission = commissionCells(work.commissions)}
+        <div class="table-scroll work" data-state="success">
+          <section>
+            <h2>任務</h2>
+            <!-- A slot's T10 blueprints, and apart its universal ones with those of T9 and below. -->
+            <table class="slots">
+              <thead>
+                <tr>
+                  <th scope="col">部位</th>
+                  <th scope="col">T10設計図</th>
+                  <th scope="col">万能設計図</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each work.slots as slot (slot.name)}
+                  <tr>
+                    <td class="slot"
+                      ><img src={iconUrl(slot.icon)} alt="" width="32" height="32" />{slot.name}</td
+                    >
+                    {#each [slot.top, slot.universal] as stock, i (i)}
+                      {@const cells = stockCells(stock)}
+                      <td>
+                        <strong>{cells.pieces}</strong>
+                        <span class="detail">{cells.held}</span>
+                        {#if cells.best}<span class="detail">{cells.best}</span>{/if}
+                      </td>
+                    {/each}
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </section>
+          {#each [{ title: "指名手配", places: work.bounties }, { title: "学園交流会", places: work.scrimmages }] as group (group.title)}
+            <section>
+              <h2>{group.title}</h2>
+              {#each group.places as place (place.name)}
+                <h3>{placeName(place.name)}</h3>
+                <table class="tiers">
+                  <tbody>
+                    {#each place.kinds as tiers, k (k)}
+                      <tr>
+                        {#each tiers as cell, i (i)}
+                          <td class="tier-{i + 1}">
+                            {#if cell}<img
+                                src={iconUrl(cell.icon)}
+                                alt={cell.name}
+                                title={cell.name}
+                                width="40"
+                                height="40"
+                              />{cell.held == null ? "—" : formatCount(cell.held)}{/if}
+                          </td>
+                        {/each}
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              {/each}
+            </section>
+          {/each}
+          <section>
+            <h2>特別依頼</h2>
+            <!-- Each commission's haul held, in students raised from Lv1; the fewer is the one to play. -->
+            <table class="commissions">
+              <tbody>
+                {#each [{ key: "credits", ...commission.credits }, { key: "reports", ...commission.reports }] as cell (cell.key)}
+                  <tr class:fewer={commission.fewer === cell.key}>
+                    <td>{cell.name}</td>
+                    <td class="fit"
+                      ><strong>{cell.students}</strong><span class="detail">{cell.detail}</span></td
+                    >
+                    <td class="fit"
+                      >{#if commission.fewer === cell.key}<span class="pick">少ない方</span
+                        >{/if}</td
+                    >
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </section>
         </div>
       {/if}
     {:else if rows.length === 0}
@@ -810,6 +901,39 @@
     img
       vertical-align: middle
       margin-right: var(--sp-2)
+
+  // The work tab: a section a kind of play, each count with its terms under it.
+  .work
+    section + section
+      margin-top: var(--sp-5)
+    h3
+      margin: var(--sp-3) 0 var(--sp-1)
+      font-size: var(--fs-sm)
+      font-weight: 600
+      color: var(--c-muted)
+    .tiers
+      margin-top: 0
+    td
+      vertical-align: middle
+    strong
+      font-variant-numeric: tabular-nums
+    .detail
+      display: block
+      color: var(--c-muted)
+      font-size: var(--fs-caption)
+      font-variant-numeric: tabular-nums
+    .slot
+      white-space: nowrap
+      img
+        vertical-align: middle
+        margin-right: var(--sp-2)
+        object-fit: contain
+    .fewer strong
+      color: var(--c-accent)
+    .pick
+      font-size: var(--fs-caption)
+      color: var(--c-accent)
+      font-weight: 600
 
   .hidden
     position: absolute

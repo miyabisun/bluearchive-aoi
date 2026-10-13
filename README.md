@@ -96,6 +96,21 @@ list yet, or a value not read, is named as what could not be counted. The exp wi
 level is not read, so a student partway to the next level takes a little less than shown;
 equipment is counted levelled to the top of each tier before it is made into the next.
 
+The お仕事 tab weighs the daily plays against what is held, from the item and equipment
+lists and the credits read:
+
+- 任務: for each equipment slot, how many pieces from T1 to T10 the blueprints held make,
+  the T10 blueprints apart from the universal ones (those of T9 and below counted as
+  universal, one for one), and the normal mission that gives the most of each per AP
+  by SchaleDB's drop rates.
+- 指名手配 and 学園交流会: what each place drops, tier by tier, with how many are held.
+- 特別依頼: how many students raised from Lv1 to Lv90, skills 5/10/10/10 and equipment
+  T10 the credits held pay for, and how many Lv1 to 90 the reports held level; the fewer
+  is marked 少ない方, the commission to play.
+
+The stages come from SchaleDB as `src-tauri/data/schaledb/stages.json`
+(`tools/schaledb/stages.ps1`, run by `update.ps1`).
+
 Aoi switches to the tab of what the game starts showing; a tab you pick stays until the
 game shows another list or the student screen.
 

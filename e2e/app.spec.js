@@ -153,6 +153,8 @@ test("the tabs and the search field take focus from the keyboard", async ({ page
   await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "育成" })).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("tab", { name: "お仕事" })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "書き出す" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByLabel("名前で検索")).toBeFocused();
@@ -631,4 +633,98 @@ test("guides to the student tab before any student is marked", async ({ page }) 
   await open(page, { status: { state: "other_screen" }, items, equipment, students, targets: [] });
   await page.getByRole("tab", { name: "育成" }).click();
   await expect(page.locator("[data-state=empty]")).toContainText("生徒タブで「育成」");
+});
+
+const work = {
+  slots: [
+    {
+      name: "帽子",
+      icon: "equipment_icon_hat_tier10",
+      top: {
+        held: 270,
+        about: false,
+        need: 60,
+        pieces: 4.5,
+        best: { name: "29-5", per_run: 0.258, ap: 10 },
+      },
+      universal: {
+        held: 2150,
+        about: true,
+        need: 430,
+        pieces: 5.0,
+        best: { name: "25-1", per_run: 13, ap: 10 },
+      },
+    },
+  ],
+  bounties: [
+    {
+      name: "指名手配：ハイウェイ",
+      kinds: [
+        [
+          {
+            id: 110,
+            name: "ファイストス円盤の欠片",
+            icon: "item_icon_material_phaistos_0",
+            held: { exact: 51 },
+          },
+          null,
+          null,
+          null,
+        ],
+      ],
+    },
+  ],
+  scrimmages: [
+    {
+      name: "学園交流会 - トリニティ",
+      kinds: [
+        [
+          {
+            id: 10,
+            name: "錆びたスプリング",
+            icon: "equipment_icon_weaponexpgrowtha_0",
+            held: null,
+          },
+          null,
+          null,
+          null,
+        ],
+      ],
+    },
+  ],
+  commissions: {
+    credits_name: "クレジット回収",
+    credits: 248955686,
+    credits_each: 41500000,
+    credit_students: 5.999,
+    reports_name: "拠点防衛",
+    report_exp: 6245925,
+    report_about: false,
+    exp_each: 1249185,
+    report_students: 5.0,
+  },
+};
+
+test("tells what the daily plays give against what is held", async ({ page }) => {
+  await open(page, { status: { state: "other_screen" }, items, equipment, work });
+  await page.getByRole("tab", { name: "お仕事" }).click();
+  await expect(page.locator("section h2")).toHaveText([
+    "任務",
+    "指名手配",
+    "学園交流会",
+    "特別依頼",
+  ]);
+  // A slot: how many pieces its T10 blueprints and its universal ones make.
+  await expect(page.locator(".slots tbody tr")).toHaveText([
+    "帽子4.5個分 270 / 60 29-5で0.26個/回5.0個分 約2,150 / 430 25-1で13個/回",
+  ]);
+  // Each place's drops by tier with what is held, "—" where none is counted.
+  await expect(page.locator(".work h3")).toHaveText(["ハイウェイ", "トリニティ"]);
+  await expect(page.locator(".work .tiers td.tier-1")).toHaveText(["51", "—"]);
+  await expect(page.getByRole("img", { name: "ファイストス円盤の欠片" })).toBeVisible();
+  // The commission raising fewer students is the one to play.
+  await expect(page.locator(".commissions tr")).toHaveText([
+    "クレジット回収6.0人分249M ÷ 41.5M",
+    "拠点防衛5.0人分6.2M EXP ÷ 1.2M EXP少ない方",
+  ]);
 });
