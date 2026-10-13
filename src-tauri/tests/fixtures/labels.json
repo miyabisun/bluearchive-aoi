@@ -941,5 +941,93 @@
         "quantity": "1126"
       }
     ]
+  },
+  {
+    "image": "items-16x9-ooparts-wolfsegg.png",
+    "list": "items",
+    "role": "eval",
+    "note": "2026-10-13 capture, 2222x1250, the item detail panel painted black. The Wolfsegg steel's crystal touches its count's x; the Rohonc page is a faint drawing. Labels by eye.",
+    "cells": [
+      {
+        "id": 103,
+        "quantity": "81"
+      },
+      {
+        "id": 110,
+        "quantity": "2184"
+      },
+      {
+        "id": 111,
+        "quantity": "1484"
+      },
+      {
+        "id": 112,
+        "quantity": "407"
+      },
+      {
+        "id": 113,
+        "quantity": "86"
+      },
+      {
+        "id": 120,
+        "quantity": "1347"
+      },
+      {
+        "id": 121,
+        "quantity": "727"
+      },
+      {
+        "id": 122,
+        "quantity": "397"
+      },
+      {
+        "id": 123,
+        "quantity": "30"
+      },
+      {
+        "id": 130,
+        "quantity": "1222"
+      },
+      {
+        "id": 131,
+        "quantity": "700"
+      },
+      {
+        "id": 132,
+        "quantity": "269"
+      },
+      {
+        "id": 133,
+        "quantity": "113"
+      },
+      {
+        "id": 140,
+        "quantity": "1896"
+      },
+      {
+        "id": 141,
+        "quantity": "819"
+      },
+      {
+        "id": 142,
+        "quantity": "363"
+      },
+      {
+        "id": 143,
+        "quantity": "56"
+      },
+      {
+        "id": 150,
+        "quantity": "2237"
+      },
+      {
+        "id": 151,
+        "quantity": "706"
+      },
+      {
+        "id": 152,
+        "quantity": "251"
+      }
+    ]
   }
 ]

@@ -79,6 +79,10 @@ pub struct Growth {
     /// unique weapon's from 2 to 4.
     pub star_up: Vec<(u64, u64)>,
     pub weapon_up: Vec<(u64, u64)>,
+    /// The unique weapon's exp from Lv1 to each level, and the credits each
+    /// exp costs.
+    pub weapon_exp: Vec<u64>,
+    pub weapon_credits: u64,
 }
 
 /// A part of a student's training.
@@ -363,6 +367,8 @@ mod tests {
             secret_note: 9999,
             star_up: vec![(30, 10), (80, 40), (100, 200), (120, 1000)],
             weapon_up: vec![(120, 1500), (180, 2000), (200, 2500)],
+            weapon_exp: Vec::new(),
+            weapon_credits: 0,
         }
     }
 

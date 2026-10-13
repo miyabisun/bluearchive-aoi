@@ -300,8 +300,12 @@ impl Recognizer {
     }
 
     /// The credits and the report exp a student takes from Lv1, untrained, to
-    /// the default target; the first student SchaleDB lists stands for all.
+    /// the default target with the unique weapon's 4th star and its level cap
+    /// (the user's measure, 2026-10-13: level, skills, equipment, stars and the
+    /// weapon, their credits); the first student SchaleDB lists stands for all.
     fn raise_cost(&self) -> (u64, u64) {
+        /// The unique weapon's level cap at its 4th star.
+        const WEAPON_TOP: usize = 60;
         let Some(grower) = self.planner.growers.first() else {
             return (0, 0);
         };
@@ -315,11 +319,18 @@ impl Recognizer {
             gear: Some(0),
             ability: [Some(0); 3],
         };
+        let target = plan::Target {
+            star: Some(8),
+            ..plan::Target::default()
+        };
         let needs = self.planner.needs(
-            &BTreeMap::from([(grower.id, plan::Target::default())]),
+            &BTreeMap::from([(grower.id, target)]),
             &BTreeMap::from([(grower.id, fresh)]),
         );
-        (needs.credits, needs.report_exp)
+        let growth = &self.planner.growth;
+        let weapon =
+            growth.weapon_exp.get(WEAPON_TOP - 1).copied().unwrap_or(0) * growth.weapon_credits;
+        (needs.credits + weapon, needs.report_exp)
     }
 
     /// What the `targets` take against what is held, line by line (credits,

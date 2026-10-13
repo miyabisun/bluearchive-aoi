@@ -132,8 +132,10 @@ $gameData = 'https://raw.githubusercontent.com/electricgoat/ba-data/jp/Excel'
 $levels = (Get-Json "$gameData/CharacterLevelExcelTable.json").DataList
 $gearLevels = (Get-Json "$gameData/EquipmentLevelExcelTable.json").DataList
 $const = (Get-Json "$gameData/ConstCommonExcelTable.json").DataList[0]
+$weaponLevels = (Get-Json "$gameData/CharacterWeaponLevelExcelTable.json").DataList
 # The exp from Lv1 to each level: 0 for Lv1, then the totals the table gives.
 $toLevel = @(0) + @($levels | Sort-Object { $_.Level } | Select-Object -First ($levels.Count - 1) | ForEach-Object { [int64]$_.TotalExp })
+$weaponToLevel = @(0) + @($weaponLevels | Sort-Object { $_.Level } | Select-Object -First ($weaponLevels.Count - 1) | ForEach-Object { [int64]$_.TotalExp })
 $gearSorted = @($gearLevels | Sort-Object { $_.Level })
 $gearToLevel = @(for ($t = 0; $t -lt 10; $t++) {
   , (@(0) + @($gearSorted | Select-Object -First ($gearSorted.Count - 1) | ForEach-Object { [int64]$_.TotalExp[$t] }))
@@ -156,6 +158,9 @@ $growth = [ordered]@{
   # where the recipe still holds a placeholder of 1.
   star_up = @(@(30, 10000), @(80, 40000), @(100, 200000), @(120, 1000000))
   weapon_up = @(@(120, 1000000), @(180, 1500000), @(200, 2000000))
+  # The unique weapon's exp from Lv1 to each level and the credits each exp costs.
+  weapon_exp = $weaponToLevel
+  weapon_credits = [int]$const.WeaponLvUpCoefficient
   # A skill's Lv10 also takes one Secret Technique Note.
   secret_note = [int64]($items | Where-Object { $_.Icon -eq 'item_icon_skillbook_ultimate' }).Id
 }

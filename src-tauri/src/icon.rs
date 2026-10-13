@@ -71,6 +71,9 @@ const CLOSE: (f32, f32) = (0.93, 0.05);
 /// in the same frame) score up to about 0.9, while faint icons such as a
 /// written page may score only 0.83 and a titanium spring 0.898 (lead 0.2).
 const CLEAR: (f32, f32) = (0.8, 0.3);
+/// The only icon left as bright as the card, on a card of its rarity, is taken
+/// down to this (a page of the Rohonc codex, a faint drawing, measures 0.795).
+const SOLE: f32 = 0.75;
 /// Icons that differ only in a detail (a gift box with a "?" or a tick tag, the
 /// universal blueprints of two categories) tie overall (lead under `CLOSE.1`);
 /// then the winner needs at least `DETAIL.0` overall and, on the pixels where
@@ -393,11 +396,7 @@ impl IconMatcher {
                 .collect()
         };
         let Some(&(runner_up, next, _, _)) = ranked.get(1) else {
-            return if score >= CLEAR.0 {
-                Ok(best)
-            } else {
-                Err(Vec::new())
-            };
+            return self.alone(&ranked, from);
         };
         let lead = score - next;
         if score >= CLEAR.0 && lead >= needed_lead(score) {
@@ -425,6 +424,24 @@ impl IconMatcher {
             Ok(best)
         } else {
             Err(tied())
+        }
+    }
+
+    /// The only candidate left (`ranked`'s first): taken from `CLEAR.0`, or
+    /// down to `SOLE` on a card of its rarity.
+    fn alone(&self, ranked: &[Ranked], from: u32) -> Result<usize, Vec<usize>> {
+        let &(best, score, fine, (ox, oy)) = &ranked[0];
+        let on_its_card = || {
+            self.rarity[best].is_some()
+                && self.fine[best]
+                    .background(fine, ox, oy, from)
+                    .and_then(Rarity::of_background)
+                    == self.rarity[best]
+        };
+        if score >= CLEAR.0 || (score >= SOLE && on_its_card()) {
+            Ok(best)
+        } else {
+            Err(Vec::new())
         }
     }
 

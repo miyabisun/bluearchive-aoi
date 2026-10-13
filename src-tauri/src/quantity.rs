@@ -22,6 +22,8 @@ const OFF_LINE: f32 = 30.0;
 const COUNT_TOP: f32 = 0.7;
 /// Digit height relative to the card height.
 const DIGIT_HEIGHT: (f32, f32) = (0.11, 0.2);
+/// How far a digit may reach into the next, of the digits' height.
+const OVERLAP: f32 = 0.25;
 /// The "x" is shorter than the digits it precedes.
 const X_HEIGHT: (f32, f32) = (0.45, 0.85);
 /// Normalized glyph size: characters keep their width relative to their height.
@@ -139,9 +141,13 @@ fn digit_blobs(image: &RgbImage, card: &Card) -> Option<Vec<Blob>> {
     loop {
         let first = &digits[0];
         let gap_limit = first.height() as f32 * 0.6;
+        // Italic digits may overlap a little ("72" by 2 pixels at 165); a
+        // character is no wider than tall (the icon's foot may reach as far).
+        let overlap = (first.height() as f32 * OVERLAP) as u32;
         let next = all
             .iter()
-            .filter(|b| b.right < first.left + 2 && line(b))
+            .filter(|b| b.right < first.left + overlap && line(b))
+            .filter(|b| b.right - b.left < first.height())
             .filter(|b| (first.left as f32 - b.right as f32) <= gap_limit)
             .max_by_key(|b| b.right)?;
         if is_digit(next) && next.top.abs_diff(last.top) <= 2 {

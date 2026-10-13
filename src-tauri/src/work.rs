@@ -68,7 +68,7 @@ fn amount(count: Option<Count>) -> (u64, bool) {
 /// An equipment slot as the normal missions serve it: its name, the icon of
 /// its T10 piece, and what the blueprints held make of pieces from T1 to T10
 /// (the T10 blueprints, and apart the universal blueprints with those of T9
-/// and below, one for one).
+/// and below counted at `RATE`).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SlotRow {
     pub name: String,
@@ -97,6 +97,10 @@ pub struct Best {
 }
 
 const UNIVERSAL: &str = "の万能設計図";
+/// The universal blueprints one blueprint of each tier is made from (by tier,
+/// T2 to T10; the Blue Archive wiki as schale-calc's equipment-upgrade.md has
+/// it, 2026-10-13).
+const RATE: [u64; 11] = [0, 0, 2, 3, 5, 7, 10, 15, 20, 30, 50];
 /// Blueprint and universal blueprint ids start here; below are the pieces.
 const BLUEPRINTS: i64 = 100_000;
 
@@ -117,24 +121,24 @@ pub fn slots<S: BuildHasher>(
             .collect();
         let top_print = blueprints.iter().find(|p| p.tier == 10)?.id;
         let universal = blueprints.iter().find(|p| p.tier == 0)?.id;
-        let lower: Vec<i64> = blueprints
+        // Each blueprint counted in universal ones, the T10 ones in themselves.
+        let lower: Vec<(i64, u64)> = blueprints
             .iter()
             .filter(|p| (2..=9).contains(&p.tier))
-            .map(|p| p.id)
+            .map(|p| (p.id, RATE[usize::from(p.tier)]))
             .collect();
         let crafted = pieces.iter().filter(slot).filter(|p| p.id < BLUEPRINTS);
         let recipes: Vec<&(i64, u64)> = crafted.flat_map(|p| &p.recipe).collect();
-        let need = |ids: &[i64]| -> u64 {
+        let need = |worth: &[(i64, u64)]| -> u64 {
             recipes
                 .iter()
-                .filter(|(id, _)| ids.contains(id))
-                .map(|(_, n)| n)
+                .filter_map(|(id, n)| worth.iter().find(|w| w.0 == *id).map(|w| n * w.1))
                 .sum()
         };
-        let stock = |ids: &[i64], need: u64| {
-            let (held, about) = ids.iter().fold((0, false), |(sum, about), id| {
-                let (n, a) = amount(held.get(id).copied());
-                (sum + n, about || a)
+        let stock = |worth: &[(i64, u64)], need: u64| {
+            let (held, about) = worth.iter().fold((0, false), |(sum, about), &(id, each)| {
+                let (n, a) = amount(held.get(&id).copied());
+                (sum + n * each, about || a)
             });
             Stock {
                 held,
@@ -145,33 +149,32 @@ pub fn slots<S: BuildHasher>(
                 } else {
                     held as f64 / need as f64
                 },
-                best: best(missions, ids),
+                best: best(missions, worth),
             }
         };
-        let lower_with_universal: Vec<i64> = std::iter::once(universal)
+        let lower_with_universal: Vec<(i64, u64)> = std::iter::once((universal, 1))
             .chain(lower.iter().copied())
             .collect();
         let entry = |id: i64| equipment.iter().find(|e| e.id == id);
         Some(SlotRow {
             name: entry(universal)?.name.strip_suffix(UNIVERSAL)?.to_owned(),
             icon: entry(top.id)?.icon.clone(),
-            top: stock(&[top_print], need(&[top_print])),
+            top: stock(&[(top_print, 1)], need(&[(top_print, 1)])),
             universal: stock(&lower_with_universal, need(&lower)),
         })
     })
     .collect()
 }
 
-/// The mission that gives the most of `ids` per AP.
-fn best(missions: &[Mission], ids: &[i64]) -> Option<Best> {
+/// The mission that gives the most of `worth` per AP, each id at its worth.
+fn best(missions: &[Mission], worth: &[(i64, u64)]) -> Option<Best> {
     missions
         .iter()
         .map(|m| {
             let per_run: f64 = m
                 .drops
                 .iter()
-                .filter(|(id, _)| ids.contains(id))
-                .map(|(_, n)| n)
+                .filter_map(|(id, n)| worth.iter().find(|w| w.0 == *id).map(|w| n * w.1 as f64))
                 .sum();
             (m, per_run)
         })
@@ -368,12 +371,11 @@ mod tests {
         assert_eq!((hat.top.held, hat.top.need, hat.top.pieces), (270, 60, 4.5));
         let best = hat.top.best.as_ref().unwrap();
         assert_eq!((best.name.as_str(), best.per_run), ("29-5", 0.4));
-        // 1,000 universal (about) and 5 of T2's against T2's 15 and T10's 20.
+        // 1,000 universal (about) and 5 of T2's, 2 universal each, against
+        // T2's 15 and T10's 20 of T2's.
         let u = &hat.universal;
-        assert_eq!(
-            (u.held, u.about, u.need, u.pieces),
-            (1005, true, 35, 1005.0 / 35.0)
-        );
+        assert_eq!((u.held, u.about, u.need), (1010, true, 70));
+        assert!((u.pieces - 1010.0 / 70.0).abs() < 1e-9);
         assert_eq!(u.best.as_ref().unwrap().name, "25-1");
     }
 

@@ -100,12 +100,12 @@ The お仕事 tab weighs the daily plays against what is held, from the item and
 lists and the credits read:
 
 - 任務: for each equipment slot, how many pieces from T1 to T10 the blueprints held make,
-  the T10 blueprints apart from the universal ones (those of T9 and below counted as
-  universal, one for one), and the normal mission that gives the most of each per AP
-  by SchaleDB's drop rates.
+  the T10 blueprints apart from the universal ones (those of T9 and below counted in the
+  universal ones they are made from: 2 for a T2 … 30 for a T9), and the normal mission
+  that gives the most of each per AP by SchaleDB's drop rates.
 - 指名手配 and 学園交流会: what each place drops, tier by tier, with how many are held.
-- 特別依頼: how many students raised from Lv1 to Lv90, skills 5/10/10/10 and equipment
-  T10 the credits held pay for, and how many Lv1 to 90 the reports held level; the fewer
+- 特別依頼: how many students raised from Lv1 to Lv90, skills 5/10/10/10, equipment
+  T10 and the unique weapon's ★4 at Lv60 the credits held pay for, and how many Lv1 to 90 the reports held level; the fewer
   is marked 少ない方, the commission to play.
 
 The stages come from SchaleDB as `src-tauri/data/schaledb/stages.json`
