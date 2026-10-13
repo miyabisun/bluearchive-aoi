@@ -4,6 +4,7 @@ import {
   filterShops,
   groupPlan,
   needCells,
+  shortCells,
   starName,
   starOf,
   tierCell,
@@ -275,6 +276,28 @@ describe("shops", () => {
 });
 
 describe("plan", () => {
+  it("writes a shortfall, the choice boxes opened for it and what is still short", () => {
+    const box = { name: "初級技術ノート選択ボックス", icon: "item_icon_skillbook_selection_0" };
+    expect(
+      shortCells({
+        kind: "item",
+        name: "初級技術ノート（ゲヘナ）",
+        short: 1200,
+        boxes: [{ ...box, count: 1200 }],
+        left: 0,
+      }),
+    ).toEqual({
+      name: "初級技術ノート（ゲヘナ）",
+      short: "1,200",
+      boxes: [{ ...box, count: "×1,200" }],
+      left: "補える",
+      done: true,
+    });
+    expect(
+      shortCells({ kind: "credits", name: "", short: 28_400_000, boxes: [], left: 28_400_000 }),
+    ).toEqual({ name: "クレジット", short: "28.4M", boxes: [], left: "28.4M", done: false });
+  });
+
   it("tells what is short against what is held", () => {
     expect(
       needCells({ kind: "item", name: "初級技術ノート（ゲヘナ）", need: 30, have: { exact: 12 } }),

@@ -1,8 +1,9 @@
 # Refreshes the SchaleDB snapshot the recognizer uses: the JP items, equipment
 # and students that are released in Japan, each sorted by Id (the game's
 # default list order), and the item and equipment icons; and the growth tables
-# the training plan uses (`growth.json`), and the daily stages (`stages.json`,
-# by stages.ps1). Tests and the app read only this snapshot, never the network.
+# the training plan uses (`growth.json`), the daily stages (`stages.json`, by
+# stages.ps1) and the choice boxes (`boxes.json`, by boxes.ps1). Tests and the
+# app read only this snapshot, never the network.
 #   powershell -File tools/schaledb/update.ps1
 $ErrorActionPreference = 'Stop'
 $root = Join-Path $PSScriptRoot '..\..\src-tauri\data\schaledb'
@@ -174,3 +175,4 @@ Write-Json 'growth.json' (($growth | ConvertTo-Json -Compress -Depth 8) + "`n")
 Write-Host "growth: $($toLevel.Count) levels, $($gearToLevel.Count) equipment tiers"
 
 & (Join-Path $PSScriptRoot 'stages.ps1')
+& (Join-Path $PSScriptRoot 'boxes.ps1')

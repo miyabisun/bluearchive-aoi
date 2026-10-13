@@ -23,6 +23,7 @@ pub mod quantity;
 pub mod screen;
 pub mod shop;
 pub mod student;
+pub mod supply;
 pub mod tally;
 pub mod update;
 pub mod watch;
@@ -172,6 +173,8 @@ pub struct Recognizer {
     person_needs: HashMap<i64, u64>,
     /// The growth data training plans are counted with.
     planner: plan::Planner,
+    /// The choice boxes that make up what a plan is short of.
+    boxes: Vec<supply::ChoiceBox>,
     equipment: Catalog,
     digits: Digits,
     /// The sort buttons in the default order (`data/sort-default.png`).
@@ -255,6 +258,7 @@ impl Recognizer {
             ),
             currency: json(read, "schaledb/currency.json")?,
             stages: json(read, "schaledb/stages.json")?,
+            boxes: json(read, "schaledb/boxes.json")?,
             equipment: equipment::catalog(read)?,
             digits: json(read, "digits.json")?,
             sort_template: template("sort-default.png")?,
@@ -464,7 +468,6 @@ impl Recognizer {
         held: &HashMap<i64, Count, S>,
         shops: &[shop::ShopRow],
     ) {
-        let kakera = shops.iter().find(|s| s.name == shop::LASTING);
         let mut fragments = 0;
         // A student's elephs are the item of their id.
         for (&id, &need) in needs
@@ -477,10 +480,7 @@ impl Recognizer {
             if short == 0 {
                 continue;
             }
-            let offer = kakera
-                .and_then(|s| s.goods.iter().find(|g| g.id == id))
-                .and_then(|g| g.offers.first().copied().flatten());
-            match offer {
+            match kakera_offer(shops, id) {
                 Some(offer) if offer.left == 0 => {}
                 Some(shop::OfferRow {
                     left,
@@ -495,6 +495,79 @@ impl Recognizer {
         {
             *needs.items.entry(coin).or_default() += fragments;
         }
+    }
+
+    /// The lines of the `plan` that fall short, each made up from what is
+    /// held: the choice boxes the `items` count (see `supply::cover`), and for
+    /// the elephs the fragments, at the rates of the カケラ(文字) shop of `shops`
+    /// (see `supply::by_fragments`).
+    pub fn short_rows(
+        &self,
+        plan: &[plan::NeedRow],
+        items: &[Row],
+        shops: &[shop::ShopRow],
+    ) -> Vec<supply::ShortRow> {
+        let held: HashMap<i64, u64> = items
+            .iter()
+            .map(|r| {
+                let n = match r.count {
+                    Count::Exact(n) => u64::from(n),
+                    Count::Thousands(k) => u64::from(k) * 1000,
+                };
+                (r.id, n)
+            })
+            .collect();
+        let entries = self.items.entries();
+        // What is opened, by name and icon: boxes alike in both are one to the player.
+        let opened = |used: &[(i64, u64)]| {
+            let mut rows: Vec<supply::OpenedRow> = Vec::new();
+            for &(id, count) in used {
+                let entry = entries.iter().find(|e| e.id == id);
+                let name = entry.map(|e| e.name.clone()).unwrap_or_default();
+                let icon = entry.map(|e| e.icon.clone()).unwrap_or_default();
+                match rows.iter_mut().find(|r| r.name == name && r.icon == icon) {
+                    Some(row) => row.count += count,
+                    None => rows.push(supply::OpenedRow { name, icon, count }),
+                }
+            }
+            rows
+        };
+        let mut shorts = supply::cover(plan, &self.boxes, &held);
+        if let Some(coin) = self.coin_item(shop::LASTING, 0) {
+            // The fragments line is in the plan only while elephs are short.
+            let enough = plan
+                .iter()
+                .find(|r| r.kind == plan::Kind::Item && r.id == coin)
+                .and_then(|r| r.have.map(|h| (h, r.need)))
+                .is_some_and(|(plan::Held::Exact(h) | plan::Held::About(h), need)| h >= need);
+            let is_eleph = |id: i64| {
+                entries
+                    .iter()
+                    .any(|e| e.id == id && e.category == "SecretStone")
+            };
+            supply::by_fragments(&mut shorts, coin, enough, is_eleph, |id, short| {
+                let offer = kakera_offer(shops, id)?;
+                let bought = short.min(u64::from(offer.left));
+                Some((plan::fragments(bought, offer.shown?, offer.left), bought))
+            });
+        }
+        shorts
+            .into_iter()
+            .map(|short| {
+                let line = plan
+                    .iter()
+                    .find(|r| r.kind == short.kind && r.id == short.id);
+                supply::ShortRow {
+                    kind: short.kind,
+                    id: short.id,
+                    name: line.map(|r| r.name.clone()).unwrap_or_default(),
+                    icon: line.map(|r| r.icon.clone()).unwrap_or_default(),
+                    short: short.short,
+                    boxes: opened(&short.boxes),
+                    left: short.left,
+                }
+            })
+            .collect()
     }
 
     /// The item a shop's coin is (as `shop::Seen::held` tells it), where it is one.
@@ -692,6 +765,20 @@ impl Recognizer {
             .read_cards(image, &cards, &self.digits, None);
         Some((list, cells, panel.shows_start))
     }
+}
+
+/// What the カケラ(文字) shop of `shops` sells of the eleph `id`.
+fn kakera_offer(shops: &[shop::ShopRow], id: i64) -> Option<shop::OfferRow> {
+    shops
+        .iter()
+        .find(|s| s.name == shop::LASTING)?
+        .goods
+        .iter()
+        .find(|g| g.id == id)?
+        .offers
+        .first()
+        .copied()
+        .flatten()
 }
 
 #[cfg(test)]

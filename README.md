@@ -104,6 +104,12 @@ list yet, or a value not read, is named as what could not be counted. The exp wi
 level is not read, so a student partway to the next level takes a little less than shown;
 equipment is counted levelled to the top of each tier before it is made into the next.
 
+Under them, 不足 lists what falls short and how much of it what you hold makes up: the
+choice boxes the item list counts (SchaleDB's, `data/schaledb/boxes.json`; a box of a
+few schools is opened before a box of any school), and for elephs the 神名のカケラ when
+they are enough for every eleph the plan buys. 残り is what is still short (補える when
+nothing is), for the shops to make up.
+
 The お仕事 tab weighs the daily plays against what is held, from the item and equipment
 lists and the credits read:
 

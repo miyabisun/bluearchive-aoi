@@ -199,6 +199,22 @@ export function needCells(row) {
 }
 
 /**
+ * A line the plan falls short on as table cells: by how much (credits in
+ * millions), the choice boxes opened for it ("×60") and what is still short,
+ * "補える" where the boxes make it all up.
+ */
+export function shortCells(row) {
+  const format = row.kind === "credits" ? millions : (n) => exact.format(n);
+  return {
+    name: PLAN_KINDS[row.kind] ?? row.name,
+    short: format(row.short),
+    boxes: row.boxes.map((b) => ({ ...b, count: `×${exact.format(b.count)}` })),
+    left: row.left === 0 ? "補える" : format(row.left),
+    done: row.left === 0,
+  };
+}
+
+/**
  * The plan's lines of the kinds that come in four tiers, one per kind with
  * its tiers in order (`null` where none is needed), and the other lines.
  */

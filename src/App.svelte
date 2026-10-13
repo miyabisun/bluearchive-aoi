@@ -23,6 +23,7 @@
     groupPlan,
     needCells,
     placeName,
+    shortCells,
     shopStale,
     sortStudents,
     starName,
@@ -112,6 +113,8 @@
     targets: [],
     plan: [],
     plan_unknown: [],
+    /** What falls short and what is held to make it up. */
+    shorts: [],
     /** The daily plays against what is held (none before the app sends it). */
     work: /** @type {any} */ (null),
     credits: /** @type {number | null} */ (null),
@@ -443,6 +446,51 @@
                           {/if}
                         </td>
                       {/each}
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {/if}
+            {#if (snapshot.shorts ?? []).length > 0}
+              <!-- What falls short, what is held to make it up (choice boxes, fragments), and what is still short. -->
+              <h2 class="shorts-heading">不足</h2>
+              <table class="shorts" data-state="success">
+                <thead>
+                  <tr>
+                    <th scope="col">足りないもの</th>
+                    <th scope="col" class="fit">不足</th>
+                    <th scope="col">手持ちで補う</th>
+                    <th scope="col" class="fit">残り</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each snapshot.shorts as line (`${line.kind}-${line.id}`)}
+                    {@const cells = shortCells(line)}
+                    <tr>
+                      <td class="what"
+                        >{#if line.icon}<img
+                            src={iconUrl(line.icon)}
+                            alt=""
+                            width="28"
+                            height="28"
+                          />{/if}{cells.name}</td
+                      >
+                      <td class="fit">{cells.short}</td>
+                      <td class="opened">
+                        {#each cells.boxes as opened (opened.name)}
+                          <span title={opened.name}
+                            ><img
+                              src={iconUrl(opened.icon)}
+                              alt={opened.name}
+                              width="28"
+                              height="28"
+                            />{opened.count}</span
+                          >
+                        {:else}—{/each}
+                      </td>
+                      <td class="fit" class:enough={cells.done} class:short={!cells.done}
+                        >{cells.left}</td
+                      >
                     </tr>
                   {/each}
                 </tbody>
@@ -1098,7 +1146,7 @@
       width: auto
 
   // Narrower than its numbers, the table scrolls sideways rather than squeeze the names.
-  .plan :is(th, td):first-child
+  :is(.plan, .shorts) :is(th, td):first-child
     min-width: 8em
 
   .unknown
@@ -1112,6 +1160,27 @@
   .short
     color: var(--c-danger)
     font-weight: 600
+
+  // What falls short: the thing, the boxes to open for it by icon, and what is left.
+  .shorts-heading
+    margin-top: var(--sp-5)
+  .shorts
+    .what
+      white-space: normal
+      img
+        vertical-align: middle
+        margin-right: var(--sp-2)
+        object-fit: contain
+    .opened
+      font-size: var(--fs-sm)
+      font-variant-numeric: tabular-nums
+      span
+        display: inline-flex
+        align-items: center
+        gap: 2px
+        margin-right: var(--sp-3)
+      img
+        object-fit: contain
 
   // Each tier on its colour, from the grey of the first to the purple of the last.
   .tiers

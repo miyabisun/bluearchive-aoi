@@ -14,6 +14,7 @@ use crate::{
     keep::{self, Kept, ReadAt, now},
     plan::{NeedRow, Target, UnknownRow},
     shop::ShopRow,
+    supply::ShortRow,
     tally::Tally,
     update,
     watch::{self, Status, StudentRow, Update},
@@ -34,6 +35,8 @@ pub struct Snapshot {
     /// What the targets take against what is held, and what could not be counted.
     plan: Vec<NeedRow>,
     plan_unknown: Vec<UnknownRow>,
+    /// The plan's lines that fall short, made up from the choice boxes held.
+    shorts: Vec<ShortRow>,
     /// The daily plays against what is held.
     work: WorkRows,
     read_at: ReadAt,
@@ -76,6 +79,7 @@ impl Snapshot {
                 .collect(),
             plan: Vec::new(),
             plan_unknown: Vec::new(),
+            shorts: Vec::new(),
             work: recognizer.work_rows(&[], &[], None),
             read_at: kept.read_at.clone(),
             keep_error,
@@ -98,6 +102,7 @@ impl Snapshot {
             self.credits,
             &self.shops,
         );
+        self.shorts = recognizer.short_rows(&self.plan, &self.items, &self.shops);
         self.work = recognizer.work_rows(&self.items, &self.equipment, self.credits);
     }
 

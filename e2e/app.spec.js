@@ -572,6 +572,28 @@ test("shows the targets and what they take against what is held", async ({ page 
       { id: 20019, name: "アカネ（バニーガール）", part: "level" },
       { id: 20019, name: "アカネ（バニーガール）", part: { equipment: 1 } },
     ],
+    shorts: [
+      {
+        kind: "report_exp",
+        id: 0,
+        name: "",
+        icon: "",
+        short: 9000,
+        boxes: [],
+        left: 9000,
+      },
+      {
+        kind: "item",
+        id: 4030,
+        name: "初級技術ノート（ゲヘナ）",
+        icon: "item_icon_skillbook_gehenna_0",
+        short: 18,
+        boxes: [
+          { name: "初級技術ノート選択ボックス", icon: "item_icon_skillbook_gehenna_0", count: 18 },
+        ],
+        left: 0,
+      },
+    ],
   });
   await page.getByRole("tab", { name: "育成" }).click();
   const row = page.locator("table.targets tbody tr");
@@ -602,6 +624,18 @@ test("shows the targets and what they take against what is held", async ({ page 
     "src",
     "/icon/item_icon_skillbook_gehenna_3",
   );
+
+  // What falls short, the choice boxes held to open for it, and what is left.
+  await expect(page.locator("table.shorts tbody tr")).toHaveText([
+    "レポート（経験値）9,000—9,000",
+    "初級技術ノート（ゲヘナ）18×18補える",
+  ]);
+  await expect(page.locator("table.shorts .opened span")).toHaveAttribute(
+    "title",
+    "初級技術ノート選択ボックス",
+  );
+  await expect(page.locator("table.shorts tbody tr").first().locator(".short")).toHaveCount(1);
+  await expect(page.locator("table.shorts tbody tr").last().locator(".enough")).toHaveCount(1);
 
   // A target changes from the keyboard, within its range.
   const ex = page.getByLabel("アカネ（バニーガール）のEXの目標");
