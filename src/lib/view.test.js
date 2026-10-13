@@ -4,8 +4,10 @@ import {
   filterShops,
   groupPlan,
   needCells,
-  buyCells,
-  shortCells,
+  fragmentCost,
+  procureCells,
+  settle,
+  step,
   starName,
   starOf,
   tierCell,
@@ -277,28 +279,6 @@ describe("shops", () => {
 });
 
 describe("plan", () => {
-  it("writes a shortfall, the choice boxes opened for it and what is still short", () => {
-    const box = { name: "初級技術ノート選択ボックス", icon: "item_icon_skillbook_selection_0" };
-    expect(
-      shortCells({
-        kind: "item",
-        name: "初級技術ノート（ゲヘナ）",
-        short: 1200,
-        boxes: [{ ...box, count: 1200 }],
-        left: 0,
-      }),
-    ).toEqual({
-      name: "初級技術ノート（ゲヘナ）",
-      short: "1,200",
-      boxes: [{ ...box, count: "×1,200" }],
-      left: "補える",
-      done: true,
-    });
-    expect(
-      shortCells({ kind: "credits", name: "", short: 28_400_000, boxes: [], left: 28_400_000 }),
-    ).toEqual({ name: "クレジット", short: "28.4M", boxes: [], left: "28.4M", done: false });
-  });
-
   it("tells what is short against what is held", () => {
     expect(
       needCells({ kind: "item", name: "初級技術ノート（ゲヘナ）", need: 30, have: { exact: 12 } }),
@@ -384,65 +364,225 @@ describe("plan", () => {
         { id: -1, name: "ツムギ", part: { skill: 0 } },
         { id: -1, name: "ツムギ", part: { equipment: 2 } },
         { id: 10, name: "アル", part: "level" },
-        { id: 10, name: "アル", part: "fragments" },
       ]),
-    ).toEqual(["ツムギ: EX・装備3", "アル: Lv・カケラ(文字)のレート"]);
+    ).toEqual(["ツムギ: EX・装備3", "アル: Lv"]);
   });
 });
 
-describe("buy", () => {
-  it("writes what to buy shop by shop, the coins it leaves and what is still short", () => {
-    const coin = (name, held, spent) => ({ name, icon: `icon_${name}`, held, spent });
-    const good = (name, coinAt, times, cost, gives, kind = "item") => ({
-      name,
-      icon: `icon_${name}`,
-      coin: coinAt,
-      times,
-      cost,
-      gives,
-      kind,
-    });
-    const plan = {
-      shops: [
-        {
-          name: "総力戦",
-          coins: [coin("総力戦コイン", 5940, 700), coin("総力戦レアコイン", null, 0)],
-          goods: [good("上級戦術教育BD（ゲヘナ）", 0, 6, 300, 6)],
-        },
-        {
-          name: "熟達証書",
-          coins: [coin("熟達証書", 5009, 3000)],
-          goods: [
-            good("クレジットポイント", 0, 1, 1500, 5_000_000, "credits"),
-            good("最上級レポート", 0, 1, 1500, 200_000, "report_exp"),
-          ],
-        },
-      ],
-      left: [
-        { kind: "item", name: "最上級技術ノート（ゲヘナ）", icon: "n", left: 7 },
-        { kind: "credits", name: "", icon: "", left: 1_200_000 },
-      ],
-      unread: ["大決戦", "指名手配"],
+describe("procure", () => {
+  const box = {
+    type: "box",
+    id: 150003,
+    name: "最上級技術ノート選択ボックス",
+    icon: "b",
+    held: 24,
+    choices: 12,
+  };
+  const plain = {
+    type: "shop",
+    shop: "総力戦",
+    coin: "総力戦コイン",
+    icon: "c",
+    held: 5940,
+    price: 25,
+    gives: 1,
+    left: 20,
+  };
+  const oopart = {
+    ...plain,
+    shop: "合同火力演習",
+    coin: "火力演習コイン",
+    price: 2,
+    gives: 2,
+    left: 20,
+  };
+  const kakera = {
+    type: "fragments",
+    name: "神名のカケラ",
+    icon: "k",
+    held: 2941,
+    rate: 1,
+    left: 586,
+  };
+
+  it("prices elephs in fragments: 20 at each rate up to 4, then 5 each", () => {
+    expect([0, 10, 30, 100].map((n) => fragmentCost(1, n))).toEqual([0, 10, 40, 300]);
+    expect(fragmentCost(4, 30)).toBe(80 + 50);
+    expect(fragmentCost(5, 3)).toBe(15);
+  });
+
+  it("pays one a click, takes one back a right click, all or none with shift", () => {
+    // 29 lacking: one more, or as many as make it up.
+    expect(step(box, 0, 29)).toBe(1);
+    expect(step(box, 0, 29, { shift: true })).toBe(29);
+    // A box may be opened past those held: the rest can be tailor-made.
+    expect(step(box, 30, 5, { shift: true })).toBe(35);
+    // A shop sells no more than it has left this month.
+    expect(step(plain, 0, 29, { shift: true })).toBe(20);
+    expect(step(plain, 20, 9)).toBe(20);
+    // Two ooparts a purchase.
+    expect(step(oopart, 0, 5, { shift: true })).toBe(3);
+    // A click pays one even once the line is made up; shift adds none then.
+    expect(step(box, 3, 0)).toBe(4);
+    expect(step(box, 3, 0, { shift: true })).toBe(3);
+    expect(step(box, 3, 0, { right: true })).toBe(2);
+    expect(step(box, 0, 5, { right: true })).toBe(0);
+    expect(step(box, 7, 5, { right: true, shift: true })).toBe(0);
+  });
+
+  it("settles the payments: what each line still lacks and what each resource has left", () => {
+    const notes = {
+      kind: "item",
+      id: 4033,
+      name: "最上級技術ノート（ゲヘナ）",
+      icon: "n",
+      short: 29,
+      sources: [box, plain],
     };
-    const cells = buyCells(plan);
-    expect(cells.shops[0].coins.map((c) => c.text)).toEqual(["5,940 → 5,240", "?"]);
-    expect(cells.shops[0].goods).toEqual([
+    const bd = {
+      kind: "item",
+      id: 3032,
+      name: "上級戦術教育BD（ゲヘナ）",
+      icon: "d",
+      short: 6,
+      sources: [{ ...plain, price: 50 }],
+    };
+    const mutsuki = {
+      kind: "item",
+      id: 20059,
+      name: "ムツキ",
+      icon: "m",
+      short: 386,
+      sources: [kakera],
+    };
+    const payments = {
+      "item-4033|box:150003": 30,
+      "item-4033|shop:総力戦:総力戦コイン": 2,
+      "item-3032|shop:総力戦:総力戦コイン": 6,
+      "item-20059|fragments": 30,
+    };
+    const result = settle([notes, bd, mutsuki], payments);
+    expect(result.lines.map((l) => [l.key, l.given, l.left])).toEqual([
+      ["item-4033", 32, 0],
+      ["item-3032", 6, 0],
+      ["item-20059", 30, 356],
+    ]);
+    // A chip shows how much of its resource is left after every line's payments.
+    expect(result.lines[0].chips.map((c) => [c.key, c.n, c.gives, c.after])).toEqual([
+      ["box:150003", 30, 30, -6],
+      ["shop:総力戦:総力戦コイン", 2, 2, 5940 - 50 - 300],
+    ]);
+    expect(result.resources).toEqual([
       {
-        name: "上級戦術教育BD（ゲヘナ）",
-        icon: "icon_上級戦術教育BD（ゲヘナ）",
-        coin: plan.shops[0].coins[0],
-        times: "6回",
-        cost: "300",
-        gives: "×6",
+        key: "box:150003",
+        name: "最上級技術ノート選択ボックス",
+        icon: "b",
+        held: 24,
+        spent: 30,
+        after: -6,
+      },
+      {
+        key: "coin:総力戦コイン",
+        name: "総力戦コイン",
+        icon: "c",
+        held: 5940,
+        spent: 350,
+        after: 5590,
+      },
+      {
+        key: "fragments",
+        name: "神名のカケラ",
+        icon: "k",
+        held: 2941,
+        spent: 40,
+        after: 2941 - 40,
       },
     ]);
-    expect(cells.shops[1].goods.map((g) => g.gives)).toEqual(["+5M", "+200,000 EXP"]);
-    expect(cells.left).toEqual([
-      { name: "最上級技術ノート（ゲヘナ）", icon: "n", left: "7" },
-      { name: "クレジット", icon: "", left: "1.2M" },
+    // A coin not read is "?" after too.
+    const unread = settle([{ ...bd, sources: [{ ...plain, held: null }] }], {});
+    expect(unread.resources[0].after).toBe(null);
+  });
+
+  it("writes the procurement: each line, its chips and the resources after", () => {
+    const credits = {
+      kind: "credits",
+      id: 0,
+      name: "",
+      icon: "",
+      short: 7_000_000,
+      sources: [
+        {
+          type: "shop",
+          shop: "熟達証書",
+          coin: "熟達証書",
+          icon: "j",
+          held: 5009,
+          price: 1500,
+          gives: 5_000_000,
+          left: 4,
+        },
+      ],
+    };
+    const notes = {
+      kind: "item",
+      id: 4033,
+      name: "最上級技術ノート（ゲヘナ）",
+      icon: "n",
+      short: 29,
+      sources: [box, plain],
+    };
+    const cells = procureCells(
+      settle([credits, notes], {
+        "credits-0|shop:熟達証書:熟達証書": 1,
+        "item-4033|box:150003": 30,
+      }),
+    );
+    expect(cells.lines.map((l) => ({ ...l, chips: undefined }))).toEqual([
+      { key: "credits-0", name: "クレジット", icon: "", short: "7M", left: "2M", done: false },
+      {
+        key: "item-4033",
+        name: "最上級技術ノート（ゲヘナ）",
+        icon: "n",
+        short: "29",
+        left: "補えた",
+        done: true,
+      },
     ]);
-    expect(cells.unread).toBe("今月まだ読んでいないショップ: 大決戦・指名手配");
-    expect(buyCells({ shops: [], left: [], unread: [] }).unread).toBe("");
+    expect(cells.lines[0].chips).toEqual([
+      {
+        key: "shop:熟達証書:熟達証書",
+        icon: "j",
+        text: "3,509",
+        negative: false,
+        given: "+5M",
+        title: "熟達証書: 熟達証書 1,500 で ×5,000,000、今月あと 4 回",
+      },
+    ]);
+    expect(cells.lines[1].chips[0]).toMatchObject({
+      text: "-6",
+      negative: true,
+      given: "+30",
+      title: "最上級技術ノート選択ボックス（12 種から 1 つ）",
+    });
+    // The settlement lists what is paid from, the resources left untouched aside.
+    expect(cells.resources).toEqual([
+      {
+        key: "coin:熟達証書",
+        name: "熟達証書",
+        icon: "j",
+        held: "5,009",
+        after: "3,509",
+        negative: false,
+      },
+      {
+        key: "box:150003",
+        name: "最上級技術ノート選択ボックス",
+        icon: "b",
+        held: "24",
+        after: "-6",
+        negative: true,
+      },
+    ]);
   });
 });
 

@@ -199,8 +199,6 @@ test("the tabs and the search field take focus from the keyboard", async ({ page
   await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "育成" })).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("tab", { name: "購買戦略" })).toBeFocused();
-  await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "お仕事" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByLabel("名前で検索")).toBeFocused();
@@ -556,8 +554,49 @@ const tiered = (id, name, family, tier, need, have) => ({
   have,
 });
 
+/** A line short with its sources: boxes held, a shop's coin, an unread coin. */
+const procure = [
+  {
+    kind: "item",
+    id: 4033,
+    name: "最上級技術ノート（ゲヘナ）",
+    icon: "item_icon_skillbook_gehenna_3",
+    short: 29,
+    sources: [
+      {
+        type: "box",
+        id: 150003,
+        name: "最上級技術ノート選択ボックス",
+        icon: "item_icon_skillbook_selection_3",
+        held: 4,
+        choices: 12,
+      },
+      {
+        type: "shop",
+        shop: "総力戦",
+        coin: "総力戦コイン",
+        icon: "item_icon_raidcoin",
+        held: 5940,
+        price: 25,
+        gives: 1,
+        left: 20,
+      },
+      {
+        type: "shop",
+        shop: "指名手配",
+        coin: "指名手配コイン",
+        icon: "item_icon_chasercoin",
+        held: null,
+        price: 200,
+        gives: 1,
+        left: 4,
+      },
+    ],
+  },
+];
+
 test("shows the targets and what they take against what is held", async ({ page }) => {
-  await open(page, {
+  const snapshot = {
     status: { state: "other_screen" },
     items,
     equipment,
@@ -574,29 +613,10 @@ test("shows the targets and what they take against what is held", async ({ page 
       { id: 20019, name: "アカネ（バニーガール）", part: "level" },
       { id: 20019, name: "アカネ（バニーガール）", part: { equipment: 1 } },
     ],
-    shorts: [
-      {
-        kind: "report_exp",
-        id: 0,
-        name: "",
-        icon: "",
-        short: 9000,
-        boxes: [],
-        left: 9000,
-      },
-      {
-        kind: "item",
-        id: 4030,
-        name: "初級技術ノート（ゲヘナ）",
-        icon: "item_icon_skillbook_gehenna_0",
-        short: 18,
-        boxes: [
-          { name: "初級技術ノート選択ボックス", icon: "item_icon_skillbook_gehenna_0", count: 18 },
-        ],
-        left: 0,
-      },
-    ],
-  });
+    procure,
+    plan_version: 1,
+  };
+  await open(page, snapshot);
   await page.getByRole("tab", { name: "育成" }).click();
   const row = page.locator("table.targets tbody tr");
   await expect(row.locator("td").first()).toHaveText("アカネ（バニーガール）");
@@ -627,17 +647,59 @@ test("shows the targets and what they take against what is held", async ({ page 
     "/icon/item_icon_skillbook_gehenna_3",
   );
 
-  // What falls short, the choice boxes held to open for it, and what is left.
-  await expect(page.locator("table.shorts tbody tr")).toHaveText([
-    "レポート（経験値）9,000—9,000",
-    "初級技術ノート（ゲヘナ）18×18補える",
+  // The sections: the students, what they take, and how to make up what is short.
+  await expect(page.locator(".section")).toHaveText(["既存の生徒一覧", "必要素材", "不足分の調達"]);
+  await expect(page.locator("table.procure tr.line")).toHaveText([
+    "最上級技術ノート（ゲヘナ）2929",
   ]);
-  await expect(page.locator("table.shorts .opened span")).toHaveAttribute(
+  // Each source shows how much of its resource there is.
+  const chips = page.locator("table.procure .source");
+  await expect(chips).toHaveText(["4", "5,940", "?"]);
+  await expect(chips.nth(1)).toHaveAttribute(
     "title",
-    "初級技術ノート選択ボックス",
+    "総力戦: 総力戦コイン 25 で ×1、今月あと 20 回",
   );
-  await expect(page.locator("table.shorts tbody tr").first().locator(".short")).toHaveCount(1);
-  await expect(page.locator("table.shorts tbody tr").last().locator(".enough")).toHaveCount(1);
+
+  // A click pays one; a right click takes one back; shift pays all it can.
+  await chips.first().click();
+  await chips.first().click();
+  await expect(chips.first()).toHaveText("2+2");
+  await chips.first().click({ button: "right" });
+  await expect(chips.first()).toHaveText("3+1");
+  await chips.nth(1).click({ modifiers: ["Shift"] });
+  // The shop sells 20 more this month: 21 of 29 made up.
+  await expect(chips.nth(1)).toHaveText("5,440+20");
+  await expect(page.locator("table.procure tr.line")).toHaveText(["最上級技術ノート（ゲヘナ）298"]);
+  // Boxes past those held: the rest can be tailor-made.
+  await chips.first().click({ modifiers: ["Shift"] });
+  await expect(chips.first()).toHaveText("-5+9");
+  await expect(page.locator("table.procure tr.line .enough")).toHaveText("補えた");
+  // What it all comes to.
+  await expect(page.locator("table.settle tr")).toHaveText([
+    "最上級技術ノート選択ボックス4→ -5",
+    "総力戦コイン5,940→ 5,440",
+  ]);
+  await expect(page.locator("table.settle tr").first().locator(".short")).toHaveCount(1);
+
+  // A new reading of the game keeps the payments while the plan is the same.
+  await page.evaluate(
+    (s) => window.__AOI_PUSH__({ ...s, status: { state: "reading", list: "items", fps: 9 } }),
+    snapshot,
+  );
+  await expect(chips.first()).toHaveText("-5+9");
+  // Shift with a right click takes them all back; リセット, every payment.
+  await chips.first().click({ button: "right", modifiers: ["Shift"] });
+  await expect(chips.first()).toHaveText("4");
+  await page.getByRole("button", { name: "リセット" }).click();
+  await expect(chips.nth(1)).toHaveText("5,940");
+
+  // 再読込 counts the plan again from what is read now; the payments start over.
+  await chips.first().click();
+  await page.getByRole("button", { name: "再読込" }).click();
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ reload: true }]);
+  await page.evaluate((s) => window.__AOI_PUSH__({ ...s, plan_version: 2 }), snapshot);
+  await expect(chips.first()).toHaveText("4");
+  await page.evaluate(() => (window.__AOI_CALLS__ = []));
 
   // A target changes from the keyboard, within its range.
   const ex = page.getByLabel("アカネ（バニーガール）のEXの目標");
@@ -858,77 +920,6 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   ]);
   await expect(page.locator(".commissions tr.more")).toContainText("クレジット回収");
   await expect(page.locator(".commissions tr.fewer")).toContainText("拠点防衛");
-});
-
-test("tells what to buy shop by shop for what is still short", async ({ page }) => {
-  const coin = (name, icon, held, spent) => ({ name, icon, held, spent });
-  const snapshot = {
-    status: { state: "other_screen" },
-    items,
-    equipment,
-    credits: 249330855,
-    shorts: [{ kind: "item", id: 4033, name: "最上級技術ノート（ゲヘナ）", left: 29 }],
-    buy: {
-      shops: [
-        {
-          name: "総力戦",
-          coins: [
-            coin("総力戦コイン", "item_icon_raidcoin", 5940, 500),
-            coin("総力戦レアコイン", "item_icon_raidcoin_high", 530, 150),
-          ],
-          goods: [
-            {
-              name: "最上級技術ノート（ゲヘナ）",
-              icon: "item_icon_skillbook_gehenna_3",
-              coin: 0,
-              times: 20,
-              cost: 500,
-              gives: 20,
-              kind: "item",
-            },
-            {
-              name: "最上級技術ノート（ゲヘナ）",
-              icon: "item_icon_skillbook_gehenna_3",
-              coin: 1,
-              times: 6,
-              cost: 150,
-              gives: 6,
-              kind: "item",
-            },
-          ],
-        },
-      ],
-      left: [{ kind: "item", name: "最上級技術ノート（ゲヘナ）", icon: "", left: 3 }],
-      unread: ["大決戦"],
-    },
-  };
-  await open(page, snapshot, "購買戦略");
-  await expect(page.getByText("クレジット 249,330,855")).toBeVisible();
-  // A shop with its coins held and left after, then the goods to buy.
-  await expect(page.locator(".buy h2").first()).toHaveText("総力戦5,940 → 5,440530 → 380");
-  await expect(page.locator(".buy table").first().locator("tr")).toHaveText([
-    "最上級技術ノート（ゲヘナ）20回500×20",
-    "最上級技術ノート（ゲヘナ）6回150×6",
-  ]);
-  expect(
-    await page
-      .locator(".buy table")
-      .first()
-      .locator("td:nth-child(3) img")
-      .evaluateAll((imgs) => imgs.map((i) => i.alt)),
-  ).toEqual(["総力戦コイン", "総力戦レアコイン"]);
-  await expect(page.locator(".buy table").last().locator("tr")).toHaveText([
-    "最上級技術ノート（ゲヘナ）3",
-  ]);
-  await expect(page.getByText("今月まだ読んでいないショップ: 大決戦")).toBeVisible();
-  expect(await overflow(page)).toBeLessThanOrEqual(0);
-
-  // Nothing is short that what is held does not make up: a guide instead.
-  await page.evaluate(
-    (s) => window.__AOI_PUSH__({ ...s, shorts: [{ ...s.shorts[0], left: 0 }] }),
-    snapshot,
-  );
-  await expect(page.locator(".buy [data-state=empty]")).toBeVisible();
 });
 
 test("keeps the tab chosen when the game shows another list", async ({ page }) => {

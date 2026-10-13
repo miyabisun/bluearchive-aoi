@@ -372,9 +372,8 @@ impl Recognizer {
     }
 
     /// What the `targets` take against what is held, line by line (credits,
-    /// report exp, orb exp, then items and blueprints in id order, with the
-    /// fragments buying the elephs short in the `shops`), and the parts that
-    /// could not be counted, their students named.
+    /// report exp, orb exp, then items and blueprints in id order), and the
+    /// parts that could not be counted, their students named.
     pub fn plan_rows(
         &self,
         targets: &BTreeMap<i64, plan::Target>,
@@ -382,16 +381,14 @@ impl Recognizer {
         items: &[Row],
         equipment: &[Row],
         credits: Option<u64>,
-        shops: &[shop::ShopRow],
     ) -> (Vec<plan::NeedRow>, Vec<plan::UnknownRow>) {
         use plan::{Held, Kind, NeedRow, held};
         let trained = students.iter().map(|s| (s.id, s.training)).collect();
-        let mut needs = self.planner.needs(targets, &trained);
+        let needs = self.planner.needs(targets, &trained);
         let counts = |rows: &[Row]| -> HashMap<i64, Count> {
             rows.iter().map(|r| (r.id, r.count)).collect()
         };
         let (items_held, equipment_held) = (counts(items), counts(equipment));
-        self.buy_elephs(&mut needs, targets, &items_held, shops);
         let growth = &self.planner.growth;
         let line = |kind, id, entry: Option<&Item>, need, have| NeedRow {
             kind,
@@ -458,226 +455,84 @@ impl Recognizer {
         (rows, unknown)
     }
 
-    /// Adds to `needs` the fragments that buy the elephs the `targets` are
-    /// short of, at the rate the カケラ(文字) shop of `shops` showed for each
-    /// student; a student whose rate was not read is counted as unknown.
-    fn buy_elephs<S: std::hash::BuildHasher>(
-        &self,
-        needs: &mut plan::Needs,
-        targets: &BTreeMap<i64, plan::Target>,
-        held: &HashMap<i64, Count, S>,
-        shops: &[shop::ShopRow],
-    ) {
-        let mut fragments = 0;
-        // A student's elephs are the item of their id.
-        for (&id, &need) in needs
-            .items
-            .iter()
-            .filter(|(id, _)| targets.contains_key(id))
-        {
-            let (plan::Held::Exact(have) | plan::Held::About(have)) = plan::held(held, &[(id, 1)]);
-            let short = need.saturating_sub(have);
-            if short == 0 {
-                continue;
-            }
-            match kakera_offer(shops, id) {
-                Some(offer) if offer.left == 0 => {}
-                Some(shop::OfferRow {
-                    left,
-                    shown: Some(rate),
-                    ..
-                }) => fragments += plan::fragments(short, rate, left),
-                _ => needs.unknown.push((id, plan::Part::Fragments)),
-            }
-        }
-        if fragments > 0
-            && let Some(coin) = self.coin_item(shop::LASTING, 0)
-        {
-            *needs.items.entry(coin).or_default() += fragments;
-        }
-    }
-
-    /// The lines of the `plan` that fall short, each made up from what is
-    /// held: the choice boxes the `items` count (see `supply::cover`), and for
-    /// the elephs the fragments, at the rates of the カケラ(文字) shop of `shops`
-    /// (see `supply::by_fragments`).
-    pub fn short_rows(
+    /// The lines of the `plan` that fall short, each with what could make it
+    /// up (see `supply::Source`): the choice boxes (fewest choices first, the
+    /// `items` counting those held), for elephs the fragments at the rate the
+    /// カケラ(文字) shop showed, and the goods the `shops` read this month
+    /// (`now` local time) sell, shop by shop in the menu's order, each coin from
+    /// the plain one.
+    pub fn procure_rows(
         &self,
         plan: &[plan::NeedRow],
         items: &[Row],
         shops: &[shop::ShopRow],
-    ) -> Vec<supply::ShortRow> {
-        let held: HashMap<i64, u64> = items
+        now: &str,
+    ) -> Vec<supply::ProcureLine> {
+        let held = |id: i64| amount(items.iter().find(|r| r.id == id).map(|r| r.count));
+        let read: Vec<&shop::ShopRow> = shops
             .iter()
-            .map(|r| {
-                let n = match r.count {
-                    Count::Exact(n) => u64::from(n),
-                    Count::Thousands(k) => u64::from(k) * 1000,
-                };
-                (r.id, n)
-            })
+            .filter(|s| s.name != shop::LASTING)
+            .filter(|s| !(s.resets && s.read_at.get(..7) < now.get(..7)))
             .collect();
+        let for_sale = self.for_sale(&read);
         let entries = self.items.entries();
-        // What is opened, by name and icon: boxes alike in both are one to the player.
-        let opened = |used: &[(i64, u64)]| {
-            let mut rows: Vec<supply::OpenedRow> = Vec::new();
-            for &(id, count) in used {
-                let entry = entries.iter().find(|e| e.id == id);
-                let name = entry.map(|e| e.name.clone()).unwrap_or_default();
-                let icon = entry.map(|e| e.icon.clone()).unwrap_or_default();
-                match rows.iter_mut().find(|r| r.name == name && r.icon == icon) {
-                    Some(row) => row.count += count,
-                    None => rows.push(supply::OpenedRow { name, icon, count }),
-                }
-            }
-            rows
-        };
-        let mut shorts = supply::cover(plan, &self.boxes, &held);
-        if let Some(coin) = self.coin_item(shop::LASTING, 0) {
-            // The fragments line is in the plan only while elephs are short.
-            let enough = plan
-                .iter()
-                .find(|r| r.kind == plan::Kind::Item && r.id == coin)
-                .and_then(|r| r.have.map(|h| (h, r.need)))
-                .is_some_and(|(plan::Held::Exact(h) | plan::Held::About(h), need)| h >= need);
-            let is_eleph = |id: i64| {
-                entries
-                    .iter()
-                    .any(|e| e.id == id && e.category == "SecretStone")
-            };
-            supply::by_fragments(&mut shorts, coin, enough, is_eleph, |id, short| {
-                let offer = kakera_offer(shops, id)?;
-                let bought = short.min(u64::from(offer.left));
-                Some((plan::fragments(bought, offer.shown?, offer.left), bought))
-            });
-        }
-        shorts
+        let named = |id: i64| entries.iter().find(|e| e.id == id);
+        let fragments = self.coin_item(shop::LASTING, 0);
+        supply::shorts(plan)
             .into_iter()
-            .map(|short| {
-                let line = plan
-                    .iter()
-                    .find(|r| r.kind == short.kind && r.id == short.id);
-                supply::ShortRow {
-                    kind: short.kind,
-                    id: short.id,
+            .map(|(kind, id, short)| {
+                let line = plan.iter().find(|r| r.kind == kind && r.id == id);
+                let mut sources: Vec<supply::Source> = supply::boxes_for(kind, id, &self.boxes)
+                    .into_iter()
+                    .map(|b| supply::Source::Box {
+                        id: b.id,
+                        name: named(b.id).map(|e| e.name.clone()).unwrap_or_default(),
+                        icon: named(b.id).map(|e| e.icon.clone()).unwrap_or_default(),
+                        held: held(b.id),
+                        choices: b.choices.len(),
+                    })
+                    .collect();
+                let eleph = kind == plan::Kind::Item && self.prices.is_kind(id, "神名文字");
+                if let (true, Some(coin), Some(offer)) = (eleph, fragments, kakera_offer(shops, id))
+                    && let (Some(rate), true) = (offer.shown, offer.left > 0)
+                {
+                    sources.push(supply::Source::Fragments {
+                        name: named(coin).map(|e| e.name.clone()).unwrap_or_default(),
+                        icon: named(coin).map(|e| e.icon.clone()).unwrap_or_default(),
+                        held: held(coin),
+                        rate,
+                        left: offer.left,
+                    });
+                }
+                sources.extend(for_sale.iter().filter(|f| f.line == (kind, id)).map(|f| {
+                    let coin = &read[f.shop].coins[f.coin];
+                    supply::Source::Shop {
+                        shop: read[f.shop].name.clone(),
+                        coin: coin.name.clone(),
+                        icon: coin.icon.clone(),
+                        held: coin.held.map(|c| amount(Some(c))),
+                        price: f.price,
+                        gives: f.gives,
+                        left: f.left,
+                    }
+                }));
+                supply::ProcureLine {
+                    kind,
+                    id,
                     name: line.map(|r| r.name.clone()).unwrap_or_default(),
                     icon: line.map(|r| r.icon.clone()).unwrap_or_default(),
-                    short: short.short,
-                    boxes: opened(&short.boxes),
-                    left: short.left,
+                    short,
+                    sources,
                 }
             })
             .collect()
     }
 
-    /// What to buy in the `shops` for what the `shorts` still lack (see
-    /// `supply::buy`): the shops tried in `BUY_ORDER`, those read this month
-    /// (`now` local time), each coin from the plain one and the goods in the
-    /// shop's order; 指名手配 buys elephs and the last tier of ooparts alone.
-    pub fn buy_plan(
-        &self,
-        shorts: &[supply::ShortRow],
-        shops: &[shop::ShopRow],
-        now: &str,
-    ) -> supply::BuyPlan {
-        let read: Vec<&shop::ShopRow> = BUY_ORDER
-            .iter()
-            .filter_map(|name| {
-                shops
-                    .iter()
-                    .find(|s| s.name == *name && !(s.resets && s.read_at.get(..7) < now.get(..7)))
-            })
-            .collect();
-        let mut coins: Vec<Vec<u64>> = read
-            .iter()
-            .map(|s| s.coins.iter().map(|c| amount(c.held)).collect())
-            .collect();
-        let for_sale = self.for_sale(&read);
-        let mut lines: Vec<supply::Short> = shorts
-            .iter()
-            .map(|s| supply::Short {
-                kind: s.kind,
-                id: s.id,
-                short: s.left,
-                boxes: Vec::new(),
-                left: s.left,
-            })
-            .collect();
-        let bought = supply::buy(&mut lines, &for_sale, &mut coins);
-        let good = |id: i64| self.shop_goods.iter().find(|e| e.id == id);
-        let buy_row = |b: &supply::Bought| supply::BuyRow {
-            name: good(b.good).map(|g| g.name.clone()).unwrap_or_default(),
-            icon: good(b.good).map(|g| g.icon.clone()).unwrap_or_default(),
-            coin: b.coin,
-            times: b.times,
-            cost: b.cost,
-            gives: b.gives,
-            kind: for_sale
-                .iter()
-                .find(|f| f.shop == b.shop && f.good == b.good)
-                .map_or(plan::Kind::Item, |f| f.line.0),
-        };
-        supply::BuyPlan {
-            shops: read
-                .iter()
-                .enumerate()
-                .filter(|(at, _)| bought.iter().any(|b| b.shop == *at))
-                .map(|(at, row)| supply::ShopBuy {
-                    name: row.name.clone(),
-                    coins: row
-                        .coins
-                        .iter()
-                        .enumerate()
-                        .map(|(i, c)| supply::CoinSpend {
-                            name: c.name.clone(),
-                            icon: c.icon.clone(),
-                            held: c.held.map(|_| amount(c.held)),
-                            spent: bought
-                                .iter()
-                                .filter(|b| b.shop == at && b.coin == i)
-                                .map(|b| b.cost)
-                                .sum(),
-                        })
-                        .collect(),
-                    goods: bought
-                        .iter()
-                        .filter(|b| b.shop == at)
-                        .map(buy_row)
-                        .collect(),
-                })
-                .collect(),
-            left: lines
-                .iter()
-                .zip(shorts)
-                .filter(|(line, _)| line.left > 0)
-                .map(|(line, short)| supply::LeftRow {
-                    kind: short.kind,
-                    name: short.name.clone(),
-                    icon: short.icon.clone(),
-                    left: line.left,
-                })
-                .collect(),
-            unread: BUY_ORDER
-                .iter()
-                .filter(|name| !read.iter().any(|r| r.name == **name))
-                .map(|name| (*name).to_owned())
-                .collect(),
-        }
-    }
-
-    /// The goods the `shops` (in buying order) sell, as `supply::buy` takes
-    /// them: each coin from the plain one, the goods in the shop's order, and
-    /// what each makes up (an item, the credits, or the exp of a report).
+    /// The goods the `shops` sell, each coin from the plain one and the goods
+    /// in the shop's order, and what each makes up: an item, the credits
+    /// (クレジットポイント), or the exp of a report.
     fn for_sale(&self, shops: &[&shop::ShopRow]) -> Vec<supply::ForSale> {
         let credits = shop::CURRENCY_GOODS + 1;
-        // The user on 2026-10-13: 指名手配's coins all go to the event students'
-        // stars, but for the last tier of ooparts.
-        let wanted = |shop: &str, id: i64| {
-            shop != "指名手配"
-                || self.prices.is_kind(id, "神名文字")
-                || (self.prices.is_kind(id, "オーパーツ")
-                    && self.prices.family(id).is_some_and(|(_, tier)| tier == 4))
-        };
         let mut for_sale = Vec::new();
         for (at, row) in shops.iter().enumerate() {
             for coin in 0..row.coins.len() {
@@ -688,9 +543,6 @@ impl Recognizer {
                     let Some(price) = offer.price.filter(|_| offer.left > 0) else {
                         continue;
                     };
-                    if !wanted(&row.name, good.id) {
-                        continue;
-                    }
                     let gives = u64::from(price.amount);
                     let report = self.planner.growth.reports.iter().find(|r| r.0 == good.id);
                     let (line, gives) = if good.id == credits {
@@ -911,9 +763,6 @@ impl Recognizer {
         Some((list, cells, panel.shows_start))
     }
 }
-
-/// The shops to buy in, first first (see `Recognizer::buy_plan`).
-const BUY_ORDER: [&str; 5] = ["総力戦", "大決戦", "合同火力演習", "熟達証書", "指名手配"];
 
 /// A count as a number, about as many where it is in thousands; none 0.
 fn amount(count: Option<Count>) -> u64 {

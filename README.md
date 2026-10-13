@@ -89,11 +89,7 @@ To plan training, tick 育成 beside the students to train under the 生徒 tab.
 lists them with their targets, Lv90, skills 5/10/10/10 and equipment T10/10/10 to start
 with; click a target and change it with ↑ and ↓ (the value read stands over it). The star
 (星) stays at the student's own until you choose one: ★1 to ★4, then the unique weapon's
-固有1 to 固有4 (★5 is 固有1), counting the elephs and credits each step takes. The elephs short are
-bought with 神名のカケラ at the student's rate the カケラ(文字) shop showed: 20 at that rate,
-20 at each next rate up to 4, then 5 each (the shop does not tell how many of the 20 are
-already bought), no more than it has left; the fragments join the materials below, and a
-student whose rate was not read is named as not counted. Below come what the
+固有1 to 固有4 (★5 is 固有1), counting the elephs and credits each step takes. Below come what the
 targets take, all together, against what is held: credits (in millions, M), the exp of
 activity reports and of enhancement orbs, then the other materials and blueprints, each
 足りる or 不足 by how much (約 where a count is in thousands). Tech notes, tactical BDs and
@@ -104,21 +100,22 @@ list yet, or a value not read, is named as what could not be counted. The exp wi
 level is not read, so a student partway to the next level takes a little less than shown;
 equipment is counted levelled to the top of each tier before it is made into the next.
 
-Under them, 不足 lists what falls short and how much of it what you hold makes up: the
-choice boxes the item list counts (SchaleDB's, `data/schaledb/boxes.json`; a box of a
-few schools is opened before a box of any school), and for elephs the 神名のカケラ when
-they are enough for every eleph the plan buys. 残り is what is still short (補える when
-nothing is), for the shops to make up.
+Under them, 不足分の調達 lists each line that falls short, and under it what could make
+it up, each with how much of it there is: the choice boxes that give it (SchaleDB's,
+`data/schaledb/boxes.json`; a box of a few schools before a box of any school, the hover
+telling how many it chooses among), for elephs the 神名のカケラ at the student's rate the
+カケラ(文字) shop showed (20 at that rate, 20 at each next rate up to 4, then 5 each), and
+the goods this month's shops sell, each coin of each shop. Which to use is yours: a click
+pays one, a right click takes one back, shift with a click pays all the line lacks, shift
+with a right click takes all back (Delete takes one back from the keyboard). A box may be
+opened past those held (the rest can be tailor-made) and a coin spent past those held, but
+a shop sells no more than it has left this month. 精算 tells what each box, coin and the
+fragments come to after the payments; リセット clears them. Tailor-made boxes and what the
+daily plays bring are not counted.
 
-The 購買戦略 tab buys what is still short from the shops read this month: 総力戦, 大決戦,
-合同火力演習, 熟達証書 and 指名手配 in that order, each coin from the plain one and the goods
-in the shop's order (what is worth buying first), as many times as the line needs, the
-shop has left and the coins held pay for; 指名手配 buys elephs and the last tier of ooparts
-alone (its coins go to the event students' stars). Credits and report exp count too (the
-credit points and the reports the shops sell). Each shop lists its coins held and left
-after, then the goods to buy, the times, the coins they cost and what they make up; what
-the shops still cannot make up, and the shops not read this month, come last. The
-credits held head the tab.
+The 育成 tab counts from what was read when Aoi started or 再読込 (by 既存の生徒一覧) was
+pressed: a student trained or items used meanwhile leave it, and the payments, as they are
+until then. Changing a target counts again from the same reading.
 
 The お仕事 tab weighs the daily plays against what is held, from the item and equipment
 lists and the credits read:

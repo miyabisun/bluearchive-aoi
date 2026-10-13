@@ -46,6 +46,20 @@ export async function setTarget(id, target) {
 }
 
 /**
+ * Counts the plan again from what is read now (the 育成 tab's 再読込); the
+ * next snapshot carries it. Outside the app it notes the call in
+ * `window.__AOI_CALLS__`.
+ */
+export async function reloadPlan() {
+  if (!("__TAURI_INTERNALS__" in window)) {
+    const w = /** @type {any} */ (window);
+    (w.__AOI_CALLS__ ??= []).push({ reload: true });
+    return;
+  }
+  return invoke("reload_plan");
+}
+
+/**
  * Pauses reading the game, or resumes it; the next snapshot's status tells
  * which. Outside the app it notes the call in `window.__AOI_CALLS__`.
  */

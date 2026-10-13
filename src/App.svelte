@@ -7,6 +7,7 @@
     exportAll,
     follow,
     iconUrl,
+    reloadPlan,
     setPaused,
     setTarget,
   } from "./lib/snapshot.js";
@@ -22,9 +23,10 @@
     heldTone,
     groupPlan,
     needCells,
-    buyCells,
     placeName,
-    shortCells,
+    procureCells,
+    settle,
+    step,
     shopStale,
     sortStudents,
     starName,
@@ -114,10 +116,10 @@
     targets: [],
     plan: [],
     plan_unknown: [],
-    /** What falls short and what is held to make it up. */
-    shorts: [],
-    /** What to buy in the shops for what is still short. */
-    buy: { shops: [], left: [], unread: [] },
+    /** The plan's lines short, with what could make each up. */
+    procure: [],
+    /** Changes when the plan is counted from what is read anew. */
+    plan_version: 0,
     /** The daily plays against what is held (none before the app sends it). */
     work: /** @type {any} */ (null),
     credits: /** @type {number | null} */ (null),
@@ -177,7 +179,7 @@
   const status = $derived(statusView(snapshot.status));
   const paused = $derived(snapshot.status.state === "paused");
   /** The tabs with sections instead of a list of rows. */
-  const SECTIONED = ["buy", "work"];
+  const SECTIONED = ["work"];
   /** The lists of rows. */
   const lists = LISTS.filter((l) => !SECTIONED.includes(l.id));
   const rows = $derived(SECTIONED.includes(view.tab) ? [] : (snapshot[view.tab] ?? []));
@@ -194,9 +196,37 @@
   const targetRows = $derived(
     (snapshot.targets ?? []).map((t) => {
       const student = (snapshot.students ?? []).find((s) => s.id === t.id);
-      return { ...t, name: student?.name ?? "", training: student?.training };
+      return {
+        ...t,
+        name: t.name || student?.name || "",
+        training: t.training ?? student?.training,
+      };
     }),
   );
+
+  /**
+   * What is paid from each source for each line short (`line|source` keys),
+   * the player's choice. Kept while the plan counts from the same reading.
+   */
+  let payments = $state(/** @type {Record<string, number>} */ ({}));
+  /** The plan the payments are for. */
+  let paidFor = 0;
+  $effect(() => {
+    if (snapshot.plan_version !== paidFor) {
+      paidFor = snapshot.plan_version;
+      payments = {};
+    }
+  });
+  const settled = $derived(settle(snapshot.procure ?? [], payments));
+  const procure = $derived(procureCells(settled));
+
+  /** Pays one more from the `i`th source of the `at`th line (all with shift), or takes back. */
+  function pay(at, i, shift, right) {
+    const line = settled.lines[at];
+    const chip = line.chips[i];
+    const key = `${line.key}|${chip.key}`;
+    payments = { ...payments, [key]: step(chip.source, chip.n, line.left, { shift, right }) };
+  }
 
   async function save() {
     try {
@@ -342,6 +372,11 @@
         <p class="empty" data-state="empty">{EMPTY.plan}</p>
       {:else}
         <div class="table-scroll">
+          <!-- The plan counts from what was read when the app started or 再読込 was pressed. -->
+          <div class="section-head">
+            <h2 class="section">既存の生徒一覧</h2>
+            <button type="button" class="reload" onclick={reloadPlan}>再読込</button>
+          </div>
           <table class="students targets">
             <thead>
               <tr>
@@ -395,6 +430,7 @@
           {#each unknownText(snapshot.plan_unknown ?? []) as line (line)}
             <p class="unknown">{line} は数えられません</p>
           {/each}
+          <h2 class="section">必要素材</h2>
           {#if (snapshot.plan ?? []).length === 0}
             <p class="empty" data-state="reached">目標までに要る素材はありません</p>
           {:else}
@@ -456,46 +492,86 @@
                 </tbody>
               </table>
             {/if}
-            {#if (snapshot.shorts ?? []).length > 0}
-              <!-- What falls short, what is held to make it up (choice boxes, fragments), and what is still short. -->
-              <h2 class="shorts-heading">不足</h2>
-              <table class="shorts" data-state="success">
+            <h2 class="section">不足分の調達</h2>
+            {#if procure.lines.length === 0}
+              <p class="detail">足りないものはありません</p>
+            {:else}
+              <!-- A line short, then what could make it up as chips: each shows how much of
+                   its resource is left; a click pays one, a right click takes one back, with
+                   shift all or none. -->
+              <table class="procure" data-state="success">
                 <thead>
                   <tr>
                     <th scope="col">足りないもの</th>
                     <th scope="col" class="fit">不足</th>
-                    <th scope="col">手持ちで補う</th>
                     <th scope="col" class="fit">残り</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {#each snapshot.shorts as line (`${line.kind}-${line.id}`)}
-                    {@const cells = shortCells(line)}
-                    <tr>
+                {#each procure.lines as line, at (line.key)}
+                  <tbody>
+                    <tr class="line">
                       <td class="what"
                         >{#if line.icon}<img
                             src={iconUrl(line.icon)}
                             alt=""
                             width="28"
                             height="28"
-                          />{/if}{cells.name}</td
+                          />{/if}{line.name}</td
                       >
-                      <td class="fit">{cells.short}</td>
-                      <td class="opened">
-                        {#each cells.boxes as opened (opened.name)}
-                          <span title={opened.name}
-                            ><img
-                              src={iconUrl(opened.icon)}
-                              alt={opened.name}
-                              width="28"
-                              height="28"
-                            />{opened.count}</span
+                      <td class="fit">{line.short}</td>
+                      <td class="fit" class:enough={line.done} class:short={!line.done}
+                        >{line.left}</td
+                      >
+                    </tr>
+                    <tr class="sources">
+                      <td colspan="3">
+                        {#each line.chips as chip, i (chip.key)}
+                          <button
+                            type="button"
+                            class="source"
+                            class:paid={chip.given !== ""}
+                            title={chip.title}
+                            onclick={(event) => pay(at, i, event.shiftKey, false)}
+                            oncontextmenu={(event) => {
+                              event.preventDefault();
+                              pay(at, i, event.shiftKey, true);
+                            }}
+                            onkeydown={(event) => {
+                              if (event.key === "Delete" || event.key === "Backspace") {
+                                event.preventDefault();
+                                pay(at, i, event.shiftKey, true);
+                              }
+                            }}
+                            ><img src={iconUrl(chip.icon)} alt="" width="22" height="22" /><span
+                              class:short={chip.negative}>{chip.text}</span
+                            >{#if chip.given}<span class="given">{chip.given}</span>{/if}</button
                           >
-                        {:else}—{/each}
+                        {:else}
+                          <span class="detail">手持ちのボックスや今月のショップでは補えません</span>
+                        {/each}
                       </td>
-                      <td class="fit" class:enough={cells.done} class:short={!cells.done}
-                        >{cells.left}</td
+                    </tr>
+                  </tbody>
+                {/each}
+              </table>
+              <button type="button" class="reset" onclick={() => (payments = {})}>リセット</button>
+              {#if procure.resources.length > 0}
+                <h3>精算</h3>
+              {/if}
+              <table class="settle">
+                <tbody>
+                  {#each procure.resources as resource (resource.key)}
+                    <tr>
+                      <td class="what"
+                        ><img
+                          src={iconUrl(resource.icon)}
+                          alt=""
+                          width="22"
+                          height="22"
+                        />{resource.name}</td
                       >
+                      <td class="fit">{resource.held}</td>
+                      <td class="fit" class:short={resource.negative}>→ {resource.after}</td>
                     </tr>
                   {/each}
                 </tbody>
@@ -504,83 +580,6 @@
           {/if}
         </div>
       {/if}
-    {:else if view.tab === "buy"}
-      {@const buy = buyCells(snapshot.buy ?? { shops: [], left: [], unread: [] })}
-      <div class="table-scroll buy" data-state="success">
-        {#if snapshot.credits != null}
-          <p class="credits">
-            クレジット <span class="amount">{formatCount({ exact: snapshot.credits })}</span>
-          </p>
-        {/if}
-        {#if (snapshot.shorts ?? []).every((s) => s.left === 0)}
-          <p class="empty" data-state="empty">
-            育成タブの「不足」に手持ちで補えないものが出ると、ショップで買うものがここに並びます。
-          </p>
-        {:else}
-          <!-- Shop by shop, in the order bought from: the coins held and left after, and the goods to buy. -->
-          {#each buy.shops as shop (shop.name)}
-            <h2>
-              {shop.name}<span class="held"
-                >{#each shop.coins as coin (coin.name)}<span title={coin.name}
-                    ><img
-                      src={iconUrl(coin.icon)}
-                      alt={coin.name}
-                      width="20"
-                      height="20"
-                    />{coin.text}</span
-                  >{/each}</span
-              >
-            </h2>
-            <table class="buys">
-              <tbody>
-                {#each shop.goods as good, i (i)}
-                  <tr>
-                    <td class="what"
-                      ><img src={iconUrl(good.icon)} alt="" width="28" height="28" />{good.name}</td
-                    >
-                    <td class="fit">{good.times}</td>
-                    <td class="fit"
-                      ><img
-                        src={iconUrl(good.coin.icon)}
-                        alt={good.coin.name}
-                        title={good.coin.name}
-                        width="18"
-                        height="18"
-                      />{good.cost}</td
-                    >
-                    <td class="fit">{good.gives}</td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          {:else}
-            <p class="detail">今月読んだショップには、補えるものがありません</p>
-          {/each}
-          {#if buy.left.length > 0}
-            <h2>それでも足りないもの</h2>
-            <table class="buys">
-              <tbody>
-                {#each buy.left as line (line.name)}
-                  <tr>
-                    <td class="what"
-                      >{#if line.icon}<img
-                          src={iconUrl(line.icon)}
-                          alt=""
-                          width="28"
-                          height="28"
-                        />{/if}{line.name}</td
-                    >
-                    <td class="fit short">{line.left}</td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          {:else}
-            <p class="enough">ショップで買えば足ります</p>
-          {/if}
-          {#if buy.unread}<p class="detail">{buy.unread}</p>{/if}
-        {/if}
-      </div>
     {:else if view.tab === "work"}
       {#if snapshot.work}
         {@const work = snapshot.work}
@@ -1228,7 +1227,7 @@
       width: auto
 
   // Narrower than its numbers, the table scrolls sideways rather than squeeze the names.
-  :is(.plan, .shorts) :is(th, td):first-child
+  :is(.plan, .procure) :is(th, td):first-child
     min-width: 8em
 
   .unknown
@@ -1243,59 +1242,64 @@
     color: var(--c-danger)
     font-weight: 600
 
-  // The purchases: a shop a heading with its coins, a good a row; then what is still short.
-  .buy
-    h2
-      display: flex
-      align-items: center
-      gap: var(--sp-3)
-      margin: var(--sp-4) 0 var(--sp-1)
-    .held img
-      vertical-align: middle
-    .buys
-      td
-        padding: var(--sp-1) var(--sp-2)
-      .what
-        white-space: normal
-        img
-          vertical-align: middle
-          margin-right: var(--sp-2)
-          object-fit: contain
-      .fit img
-        vertical-align: middle
-        margin-right: 2px
-    .detail
-      color: var(--c-muted)
-      font-size: var(--fs-sm)
-    .enough
-      margin: var(--sp-3) 0
-  .credits
-    margin: 0
+  // The 育成 tab's sections: the students, what they take, and how to make up what is short.
+  .section
+    margin: var(--sp-5) 0 var(--sp-2)
+  .section-head
+    display: flex
+    align-items: center
+    gap: var(--sp-3)
+    .section
+      margin-top: 0
+  .reload, .reset
+    padding: 2px var(--sp-3)
+    border: 1px solid var(--c-border)
+    border-radius: var(--radius-sm)
+    background: none
+    color: var(--c-on-surface)
+    font: inherit
     font-size: var(--fs-sm)
-    color: var(--c-muted)
-    .amount
+    cursor: pointer
+    &:hover
+      border-color: var(--c-muted)
+  .reset
+    margin: var(--sp-3) 0
+  .procure
+    tbody
+      border-bottom: 1px solid var(--c-border)
+    .line td
+      border-bottom: none
+    .sources td
+      padding: 0 var(--sp-2) var(--sp-2)
+    .source
+      display: inline-flex
+      align-items: center
+      gap: 4px
+      margin: 0 var(--sp-2) var(--sp-1) 0
+      padding: 2px var(--sp-2)
+      border: 1px solid var(--c-border)
+      border-radius: 9999px
+      background: none
       color: var(--c-on-surface)
+      font: inherit
+      font-size: var(--fs-sm)
       font-variant-numeric: tabular-nums
-
-  // What falls short: the thing, the boxes to open for it by icon, and what is left.
-  .shorts-heading
-    margin-top: var(--sp-5)
-  .shorts
+      cursor: pointer
+      img
+        object-fit: contain
+      &.paid
+        border-color: var(--c-accent)
+      .given
+        color: var(--c-accent)
+        font-weight: 600
+  .settle td
+    padding: var(--sp-1) var(--sp-2)
+  .procure, .settle
     .what
       white-space: normal
       img
         vertical-align: middle
         margin-right: var(--sp-2)
-        object-fit: contain
-    .opened
-      font-size: var(--fs-sm)
-      font-variant-numeric: tabular-nums
-      span
-        display: inline-flex
-        align-items: center
-        gap: 2px
-        margin-right: var(--sp-3)
-      img
         object-fit: contain
 
   // Each tier on its colour, from the grey of the first to the purple of the last.

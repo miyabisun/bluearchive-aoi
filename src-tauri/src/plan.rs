@@ -100,8 +100,6 @@ pub enum Part {
     Skill(usize),
     Equipment(usize),
     Star,
-    /// The fragments buying the elephs short, without the student's rate.
-    Fragments,
 }
 
 /// What a plan takes: items and equipment (blueprints) by id, credits, the exp
@@ -302,27 +300,6 @@ pub fn needs(
         }
     }
     n
-}
-
-/// The fragments that buy `short` elephs in the カケラ(文字) shop, an eleph
-/// costing `rate` fragments now with `left` more to buy: 20 at each rate up to
-/// 4, then 5 each. The shop does not tell how many of the 20 at its rate are
-/// bought, so all 20 are taken as left (the user's measure of 2026-10-13); what
-/// `left` does not cover is not bought.
-pub fn fragments(short: u64, rate: u32, left: u32) -> u64 {
-    /// Elephs at each rate below the top, and the top rate.
-    const STEP: u64 = 20;
-    const TOP: u64 = 5;
-    let mut buy = short.min(u64::from(left));
-    let mut rate = u64::from(rate).clamp(1, TOP);
-    let mut cost = 0;
-    while buy > 0 {
-        let take = if rate == TOP { buy } else { buy.min(STEP) };
-        cost += take * rate;
-        buy -= take;
-        rate = (rate + 1).min(TOP);
-    }
-    cost
 }
 
 /// Skill `skill` (0 the EX) from Lv`from` to Lv`to`.
@@ -634,19 +611,5 @@ pub(crate) mod tests {
                 (-1, Part::Equipment(1))
             ]
         );
-    }
-
-    #[test]
-    fn elephs_cost_more_fragments_every_twenty_up_to_five() {
-        // 20 at the rate the shop shows, then 20 at each rate up to 4, then 5 each.
-        assert_eq!(fragments(10, 1, 720), 10);
-        assert_eq!(fragments(30, 1, 720), 20 + 10 * 2);
-        assert_eq!(fragments(100, 1, 720), 20 + 40 + 60 + 80 + 20 * 5);
-        assert_eq!(fragments(30, 4, 720), 20 * 4 + 10 * 5);
-        assert_eq!(fragments(30, 5, 720), 30 * 5);
-        // No more than the shop has left are bought.
-        assert_eq!(fragments(30, 2, 10), 10 * 2);
-        assert_eq!(fragments(30, 1, 0), 0);
-        assert_eq!(fragments(0, 3, 720), 0);
     }
 }

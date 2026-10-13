@@ -24,7 +24,6 @@ export const LISTS = [
   { id: "shops", name: "ショップ" },
   { id: "students", name: "生徒" },
   { id: "plan", name: "育成" },
-  { id: "buy", name: "購買戦略" },
   { id: "work", name: "お仕事" },
 ];
 
@@ -199,59 +198,149 @@ export function needCells(row) {
   };
 }
 
-/**
- * A line the plan falls short on as table cells: by how much (credits in
- * millions), the choice boxes opened for it ("×60") and what is still short,
- * "補える" where the boxes make it all up.
- */
-export function shortCells(row) {
-  const format = row.kind === "credits" ? millions : (n) => exact.format(n);
-  return {
-    name: PLAN_KINDS[row.kind] ?? row.name,
-    short: format(row.short),
-    boxes: row.boxes.map((b) => ({ ...b, count: `×${exact.format(b.count)}` })),
-    left: row.left === 0 ? "補える" : format(row.left),
-    done: row.left === 0,
-  };
+/** The fragments `n` elephs cost from `rate` on: 20 at each rate up to 4, then 5 each. */
+export function fragmentCost(rate, n) {
+  let [cost, left, at] = [0, n, Math.max(1, rate)];
+  while (left > 0) {
+    const take = at >= 5 ? left : Math.min(20, left);
+    cost += take * Math.min(at, 5);
+    left -= take;
+    at += 1;
+  }
+  return cost;
+}
+
+/** A line of the plan by its kind and id ("item-4033"). */
+const lineKey = (line) => `${line.kind}-${line.id}`;
+
+/** A source of a line: a box, a shop's coin, or the fragments. */
+const sourceKey = (source) =>
+  source.type === "box"
+    ? `box:${source.id}`
+    : source.type === "shop"
+      ? `shop:${source.shop}:${source.coin}`
+      : "fragments";
+
+/** What a source spends: the box, the coin (shops share it) or the fragments. */
+const resourceKey = (source) =>
+  source.type === "box"
+    ? `box:${source.id}`
+    : source.type === "shop"
+      ? `coin:${source.coin}`
+      : "fragments";
+
+/** What paying `n` from `source` gives its line and costs its resource. */
+function paid(source, n) {
+  switch (source.type) {
+    case "shop":
+      return { gives: n * source.gives, cost: n * source.price };
+    case "fragments":
+      return { gives: n, cost: fragmentCost(source.rate, n) };
+    default:
+      return { gives: n, cost: n };
+  }
 }
 
 /**
- * The purchase plan as text: each shop's coins held and left after
- * ("5,940 → 5,240", "?" not read), its goods to buy (the times, the coins
- * they cost, and what they make up: "×6", credits "+5M", report exp
- * "+200,000 EXP"), what is still short, and the shops not read this month.
+ * How many to pay from `source` after a click, `n` paid and `lacking` still
+ * short: one more, or with shift as many as make the line up; one fewer with
+ * a right click, none with shift. A box may be opened past those held (the
+ * rest can be tailor-made); a shop sells no more than it has left.
  */
-export function buyCells(plan) {
-  const amount = (kind, n) => (kind === "credits" ? millions(n) : exact.format(n));
-  const gives = (kind, n) =>
-    kind === "credits"
-      ? `+${millions(n)}`
-      : kind === "report_exp"
-        ? `+${exact.format(n)} EXP`
-        : `×${exact.format(n)}`;
+export function step(source, n, lacking, { right = false, shift = false } = {}) {
+  if (right) return shift ? 0 : Math.max(0, n - 1);
+  const each = source.type === "shop" ? source.gives : 1;
+  const more = shift ? Math.ceil(Math.max(0, lacking) / each) : 1;
+  return Math.min(source.type === "box" ? Infinity : source.left, n + more);
+}
+
+/**
+ * The `payments` (by `line|source` key) settled: each line with what is
+ * given and what it still lacks, its sources as chips (how many paid, what
+ * they give, how much of the resource is left after every line's payments),
+ * and each resource held, spent and left after (`null` where not read).
+ */
+export function settle(lines, payments) {
+  const resources = new Map();
+  const settled = lines.map((line) => {
+    let given = 0;
+    const chips = line.sources.map((source) => {
+      const key = sourceKey(source);
+      const n = payments[`${lineKey(line)}|${key}`] ?? 0;
+      const { gives, cost } = paid(source, n);
+      given += gives;
+      const at = resourceKey(source);
+      const resource = resources.get(at) ?? {
+        key: at,
+        name: source.type === "shop" ? source.coin : source.name,
+        icon: source.icon,
+        held: source.held,
+        spent: 0,
+      };
+      resource.spent += cost;
+      resources.set(at, resource);
+      return { source, key, at, n, gives };
+    });
+    return { line, key: lineKey(line), given, left: Math.max(0, line.short - given), chips };
+  });
+  const after = (r) => (r.held == null ? null : r.held - r.spent);
   return {
-    shops: plan.shops.map((shop) => ({
-      name: shop.name,
-      coins: shop.coins.map((c) => ({
-        name: c.name,
-        icon: c.icon,
-        text: c.held == null ? "?" : `${exact.format(c.held)} → ${exact.format(c.held - c.spent)}`,
-      })),
-      goods: shop.goods.map((g) => ({
-        name: g.name,
-        icon: g.icon,
-        coin: shop.coins[g.coin],
-        times: `${exact.format(g.times)}回`,
-        cost: exact.format(g.cost),
-        gives: gives(g.kind, g.gives),
+    lines: settled.map((l) => ({
+      ...l,
+      chips: l.chips.map(({ at, ...chip }) => ({ ...chip, after: after(resources.get(at)) })),
+    })),
+    resources: [...resources.values()].map((r) => ({ ...r, after: after(r) })),
+  };
+}
+
+/** What a source is, on hover: the box, the shop's terms, or the fragments' rate. */
+function sourceTitle(source) {
+  switch (source.type) {
+    case "shop":
+      return `${source.shop}: ${source.coin} ${exact.format(source.price)} で ×${exact.format(source.gives)}、今月あと ${exact.format(source.left)} 回`;
+    case "fragments":
+      return `${source.name}: 1 文字 ${source.rate} カケラから、あと ${exact.format(source.left)} 文字`;
+    default:
+      return `${source.name}（${source.choices} 種から 1 つ）`;
+  }
+}
+
+/**
+ * The settled procurement (see `settle`) as text: each line's shortfall and
+ * what it still lacks ("補えた" when nothing; credits in millions), its chips
+ * (the resource left after, "?" not read, and what the chip gives, "+20"), and
+ * each resource paid from, held and left after.
+ */
+export function procureCells(settled) {
+  const amount = (kind, n) => (kind === "credits" ? millions(n) : exact.format(n));
+  const count = (n) => (n == null ? "?" : exact.format(n));
+  return {
+    lines: settled.lines.map((l) => ({
+      key: l.key,
+      name: PLAN_KINDS[l.line.kind] ?? l.line.name,
+      icon: l.line.icon,
+      short: amount(l.line.kind, l.line.short),
+      left: l.left === 0 ? "補えた" : amount(l.line.kind, l.left),
+      done: l.left === 0,
+      chips: l.chips.map((c) => ({
+        key: c.key,
+        icon: c.source.icon,
+        text: count(c.after),
+        negative: c.after != null && c.after < 0,
+        given: c.n > 0 ? `+${amount(l.line.kind, c.gives)}` : "",
+        title: sourceTitle(c.source),
       })),
     })),
-    left: plan.left.map((l) => ({
-      name: PLAN_KINDS[l.kind] ?? l.name,
-      icon: l.icon,
-      left: amount(l.kind, l.left),
-    })),
-    unread: plan.unread.length > 0 ? `今月まだ読んでいないショップ: ${plan.unread.join("・")}` : "",
+    resources: settled.resources
+      .filter((r) => r.spent > 0)
+      .map((r) => ({
+        key: r.key,
+        name: r.name,
+        icon: r.icon,
+        held: count(r.held),
+        after: count(r.after),
+        negative: r.after != null && r.after < 0,
+      })),
   };
 }
 
@@ -304,7 +393,6 @@ export function starOf(t) {
 const PART_NAMES = {
   level: "Lv",
   star: "星",
-  fragments: "カケラ(文字)のレート",
   skill: ["EX", "N", "P", "S"],
   equipment: ["装備1", "装備2", "装備3"],
 };

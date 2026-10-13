@@ -14,7 +14,8 @@ use crate::{
     keep::{self, Kept, ReadAt, now},
     plan::{NeedRow, Target, UnknownRow},
     shop::ShopRow,
-    supply::{BuyPlan, ShortRow},
+    student::Training,
+    supply::ProcureLine,
     tally::Tally,
     update,
     watch::{self, Status, StudentRow, Update},
@@ -35,10 +36,15 @@ pub struct Snapshot {
     /// What the targets take against what is held, and what could not be counted.
     plan: Vec<NeedRow>,
     plan_unknown: Vec<UnknownRow>,
-    /// The plan's lines that fall short, made up from the choice boxes held.
-    shorts: Vec<ShortRow>,
-    /// What to buy in the shops for what is still short.
-    buy: BuyPlan,
+    /// The plan's lines that fall short, with what could make each up.
+    procure: Vec<ProcureLine>,
+    /// Counts the times the plan's ground was read again (`reload_plan`): the
+    /// window's payments hold until it changes.
+    plan_version: u32,
+    /// What the plan counts from: what was read when the app started or the
+    /// plan was last reloaded, so a student trained meanwhile leaves it as it is.
+    #[serde(skip)]
+    ground: Ground,
     /// The daily plays against what is held.
     work: WorkRows,
     read_at: ReadAt,
@@ -46,11 +52,24 @@ pub struct Snapshot {
     keep_error: Option<String>,
 }
 
-/// A student marked for training, with the target.
+/// A student marked for training, with the target, and the student's name
+/// and training as the plan counts them from (none for a student never read).
 #[derive(Debug, Clone, Serialize)]
 struct TargetRow {
     id: i64,
     target: Target,
+    name: String,
+    training: Option<Training>,
+}
+
+/// What the plan counts from (see `Snapshot::ground`).
+#[derive(Debug, Clone, Default)]
+struct Ground {
+    students: Vec<StudentRow>,
+    items: Vec<Row>,
+    equipment: Vec<Row>,
+    credits: Option<u64>,
+    shops: Vec<ShopRow>,
 }
 
 /// Where what is read is kept: `state.json` in the app's folder, brought back
@@ -74,39 +93,74 @@ impl Snapshot {
             students: watch::student_rows(recognizer, &kept.students),
             credits: kept.credits,
             shops: recognizer.shop_rows(&kept.shops, &kept.items.clone().into_iter().collect()),
-            targets: kept
-                .targets
-                .iter()
-                .map(|(&id, &target)| TargetRow { id, target })
-                .collect(),
+            targets: Vec::new(),
             plan: Vec::new(),
             plan_unknown: Vec::new(),
-            shorts: Vec::new(),
-            buy: BuyPlan::default(),
+            procure: Vec::new(),
+            plan_version: 0,
+            ground: Ground::default(),
             work: recognizer.work_rows(&[], &[], None),
             read_at: kept.read_at.clone(),
             keep_error,
         };
-        snapshot.replan(recognizer);
+        snapshot.reground();
+        snapshot.replan(recognizer, &kept.targets);
+        snapshot.rework(recognizer);
         snapshot
+    }
+
+    /// Takes what was read as the plan's ground (see `Snapshot::ground`).
+    fn reground(&mut self) {
+        self.ground = Ground {
+            students: self.students.clone(),
+            items: self.items.clone(),
+            equipment: self.equipment.clone(),
+            credits: self.credits,
+            shops: self.shops.clone(),
+        };
+        self.plan_version += 1;
     }
 
     fn targets(&self) -> BTreeMap<i64, Target> {
         self.targets.iter().map(|t| (t.id, t.target)).collect()
     }
 
-    /// Counts the plan again from the targets and what was read.
-    fn replan(&mut self, recognizer: &Recognizer) {
+    /// Counts the plan for `targets` from its ground.
+    fn replan(&mut self, recognizer: &Recognizer, targets: &BTreeMap<i64, Target>) {
+        let ground = &self.ground;
+        let student = |id: i64| {
+            ground
+                .students
+                .iter()
+                .chain(&self.students)
+                .find(|s| s.id == id)
+        };
+        self.targets = targets
+            .iter()
+            .map(|(&id, &target)| TargetRow {
+                id,
+                target,
+                name: student(id).map(|s| s.name.clone()).unwrap_or_default(),
+                training: student(id).map(|s| s.training),
+            })
+            .collect();
+        // A student read since the ground was taken counts as read now.
+        let students: Vec<StudentRow> = targets
+            .keys()
+            .filter_map(|&id| student(id).cloned())
+            .collect();
         (self.plan, self.plan_unknown) = recognizer.plan_rows(
-            &self.targets(),
-            &self.students,
-            &self.items,
-            &self.equipment,
-            self.credits,
-            &self.shops,
+            targets,
+            &students,
+            &ground.items,
+            &ground.equipment,
+            ground.credits,
         );
-        self.shorts = recognizer.short_rows(&self.plan, &self.items, &self.shops);
-        self.buy = recognizer.buy_plan(&self.shorts, &self.shops, &now());
+        self.procure = recognizer.procure_rows(&self.plan, &ground.items, &ground.shops, &now());
+    }
+
+    /// Counts the daily plays again from what was read.
+    fn rework(&mut self, recognizer: &Recognizer) {
         self.work = recognizer.work_rows(&self.items, &self.equipment, self.credits);
     }
 
@@ -182,11 +236,7 @@ fn set_target(
         Some(target) => targets.insert(id, target),
         None => targets.remove(&id),
     };
-    snapshot.targets = targets
-        .into_iter()
-        .map(|(id, target)| TargetRow { id, target })
-        .collect();
-    snapshot.replan(&recognizer);
+    snapshot.replan(&recognizer, &targets);
     let kept = keep_in(&places, &snapshot);
     snapshot.keep_error = kept
         .as_ref()
@@ -194,6 +244,22 @@ fn set_target(
         .map(|e| format!("読み取り結果を保存できませんでした: {e}"));
     let _ = app.emit(EVENT, &*snapshot);
     kept
+}
+
+/// Takes what was read now as the plan's ground and counts the plan again
+/// (the window's 再読込).
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Tauri hands command arguments over by value.
+fn reload_plan(
+    app: tauri::AppHandle,
+    latest: tauri::State<'_, Latest>,
+    recognizer: tauri::State<'_, Arc<Recognizer>>,
+) {
+    let mut snapshot = latest.0.lock().unwrap_or_else(PoisonError::into_inner);
+    snapshot.reground();
+    let targets = snapshot.targets();
+    snapshot.replan(&recognizer, &targets);
+    let _ = app.emit(EVENT, &*snapshot);
 }
 
 /// Writes everything read to `<Documents>\Aoi\aoi-<date>-<time>.yaml`; the path
@@ -313,7 +379,7 @@ pub fn run(context: tauri::Context) {
                         // Each shop carries when it was read.
                         Update::Shops(rows) => snapshot.shops = rows,
                     }
-                    snapshot.replan(&planner);
+                    snapshot.rework(&planner);
                     snapshot.keep_error = keep_in(&places, &snapshot)
                         .err()
                         .map(|e| format!("読み取り結果を保存できませんでした: {e}"));
@@ -343,7 +409,8 @@ pub fn run(context: tauri::Context) {
             set_target,
             check_update,
             apply_update,
-            set_paused
+            set_paused,
+            reload_plan
         ])
         .run(context)
         .expect("bluearchive-aoi failed to start");
