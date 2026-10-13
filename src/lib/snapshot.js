@@ -46,6 +46,19 @@ export async function setTarget(id, target) {
 }
 
 /**
+ * Pauses reading the game, or resumes it; the next snapshot's status tells
+ * which. Outside the app it notes the call in `window.__AOI_CALLS__`.
+ */
+export async function setPaused(paused) {
+  if (!("__TAURI_INTERNALS__" in window)) {
+    const w = /** @type {any} */ (window);
+    (w.__AOI_CALLS__ ??= []).push({ paused });
+    return;
+  }
+  return invoke("set_paused", { paused });
+}
+
+/**
  * Where the window loads the icon `name` from: the app's `icon` protocol;
  * outside the app `/icon/<name>`, which the browser tests answer.
  */

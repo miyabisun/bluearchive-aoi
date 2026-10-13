@@ -115,6 +115,38 @@ test("shows the equipment by tile, each piece's tier at its corner", async ({ pa
   await expect(page.locator(".tiles li")).toHaveCount(120);
 });
 
+test("the status pauses the reading when pressed, and resumes it", async ({ page }) => {
+  const snapshot = { status: reading("items"), items, equipment };
+  await open(page, snapshot);
+  const badge = page.getByRole("button", { name: /アイテムを集計中/ });
+  await expect(badge).toHaveAttribute("aria-pressed", "false");
+  await badge.click();
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ paused: true }]);
+  // The app answers with the reading paused: the lamp red.
+  await page.evaluate((s) => window.__AOI_PUSH__({ ...s, status: { state: "paused" } }), snapshot);
+  const paused = page.getByRole("button", { name: "一時中断" });
+  await expect(paused).toHaveAttribute("aria-pressed", "true");
+  const lamp = (selector) =>
+    page.locator(selector).evaluate((dot) => getComputedStyle(dot).backgroundColor);
+  const danger = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue("--c-danger").trim(),
+  );
+  const red = await page.evaluate((c) => {
+    const probe = document.createElement("span");
+    probe.style.color = c;
+    document.body.append(probe);
+    const rgb = getComputedStyle(probe).color;
+    probe.remove();
+    return rgb;
+  }, danger);
+  expect(await lamp(".status .dot")).toBe(red);
+  await paused.press("Enter");
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([
+    { paused: true },
+    { paused: false },
+  ]);
+});
+
 test("guides to the list before anything is read", async ({ page }) => {
   await open(page, { status: { state: "other_screen" }, items: [], equipment });
   await expect(page.getByRole("status")).toHaveText("対象外の画面");
@@ -150,6 +182,8 @@ for (const scheme of ["dark", "light"]) {
 
 test("the tabs and the search field take focus from the keyboard", async ({ page }) => {
   await open(page, { status: reading("items", 20), items, equipment });
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: /アイテムを集計中/ })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "メニュー" })).toBeFocused();
   await page.keyboard.press("Tab");

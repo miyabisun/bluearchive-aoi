@@ -7,6 +7,7 @@
     exportAll,
     follow,
     iconUrl,
+    setPaused,
     setTarget,
   } from "./lib/snapshot.js";
   import { THEMES, applyTheme, storedTheme } from "./lib/theme.js";
@@ -168,6 +169,7 @@
   }
 
   const status = $derived(statusView(snapshot.status));
+  const paused = $derived(snapshot.status.state === "paused");
   /** The lists of rows (the work tab has sections instead). */
   const lists = LISTS.filter((l) => l.id !== "work");
   const rows = $derived(view.tab === "work" ? [] : (snapshot[view.tab] ?? []));
@@ -215,9 +217,19 @@
 <div class="top">
   <header class="app-header">
     <h1>Aoi</h1>
-    <p class="status" data-tone={status.tone} role="status">
-      <span class="dot" aria-hidden="true"></span>{status.label}
-    </p>
+    <!-- The status, which pauses the reading when pressed and resumes it when pressed again. -->
+    <div class="status-slot" role="status">
+      <button
+        type="button"
+        class="status"
+        data-tone={status.tone}
+        aria-pressed={paused}
+        title={paused ? "押すと読み取りを再開" : "押すと読み取りを一時中断"}
+        onclick={() => setPaused(!paused)}
+      >
+        <span class="dot" aria-hidden="true"></span>{status.label}
+      </button>
+    </div>
     <div class="menu">
       <button
         type="button"
@@ -834,8 +846,10 @@
     font-size: var(--fs-title)
     font-weight: 600
 
+  .status-slot
+    margin-left: auto
+
   .status
-    margin-left: auto !important
     display: inline-flex
     align-items: center
     gap: var(--sp-2)
@@ -860,6 +874,19 @@
 
   .status[data-tone="danger"]
     color: var(--c-danger)
+
+  // Paused by the user: the lamp red, the words as they are.
+  .status
+    background: none
+    font: inherit
+    font-size: var(--fs-sm)
+    cursor: pointer
+    &:hover
+      border-color: var(--c-muted)
+  .status[data-tone="paused"]
+    color: var(--c-on-surface)
+    .dot
+      background: var(--c-danger)
 
   .content
     flex: 1

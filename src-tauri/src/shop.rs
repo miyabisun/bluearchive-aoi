@@ -2,7 +2,10 @@
 //! offers, the coin it is paid with and how many more times it can be bought,
 //! read by the OCR. What each costs is the shops' terms (`price`).
 
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::{Mutex, PoisonError},
+};
 
 use image::{Rgb, RgbImage, RgbaImage, imageops};
 use serde::{Deserialize, Serialize};
@@ -154,6 +157,9 @@ pub struct Goods {
     /// The items each icon draws.
     drawn: Vec<Vec<i64>>,
     names: Names,
+    /// The last frame's card panel (see `panel`) and what it read: a still
+    /// screen's panel stays the same to the pixel, and so does its reading.
+    last: Mutex<Option<(Vec<u8>, Option<Seen>)>>,
 }
 
 impl Goods {
@@ -184,19 +190,41 @@ impl Goods {
                 })
                 .collect(),
             names: Names::new(items),
+            last: Mutex::new(None),
         })
     }
 
     /// Reads the shop screen: the chosen shop, when it is one kept, and the
     /// offers of the cards shown whole; `prices` tell how many coins it takes.
     /// Any other screen gives `None`.
+    /// A frame whose card panel is the last one's reads as it did.
     pub fn read(&self, image: &RgbImage, ocr: &Ocr, prices: &Prices) -> Option<Seen> {
-        let h = image.height() as f32;
-        let (top, bottom) = menu_entry(image)?;
+        let entry = menu_entry(image)?;
         let bars = bars(image);
         if bars.is_empty() {
             return None;
         }
+        let panel = panel(image);
+        let mut last = self.last.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some((seen_panel, seen)) = last.as_ref()
+            && *seen_panel == panel
+        {
+            return seen.clone();
+        }
+        let seen = self.read_afresh(image, ocr, prices, entry, &bars);
+        *last = Some((panel, seen.clone()));
+        seen
+    }
+
+    fn read_afresh(
+        &self,
+        image: &RgbImage,
+        ocr: &Ocr,
+        prices: &Prices,
+        (top, bottom): (u32, u32),
+        bars: &[Bar],
+    ) -> Option<Seen> {
+        let h = image.height() as f32;
         // The OCR reads the name in one of a few takes, and a take reads as a
         // kept shop's name or as nothing alike.
         let shop = MENU_ENDS
@@ -354,6 +382,21 @@ fn menu_entry(image: &RgbImage) -> Option<(u32, u32)> {
     let (&top, &bottom) = (rows.first()?, rows.last()?);
     // A single entry, about a twelfth of the window tall.
     ((0.06..0.12).contains(&((bottom - top) as f32 / h))).then_some((top, bottom))
+}
+
+/// The card panel with the coins over it, row by row: all a shop is read from
+/// but the menu, which moves on a still screen. Another shop chosen shows
+/// other cards and coins.
+fn panel(image: &RgbImage) -> Vec<u8> {
+    let (w, h) = (image.width() as usize, image.height() as f32);
+    let from = w.saturating_sub((PANEL * h) as usize) * 3;
+    image
+        .as_raw()
+        .chunks_exact(w * 3)
+        .take((VIEW.1 * h) as usize)
+        .flat_map(|row| &row[from..])
+        .copied()
+        .collect()
 }
 
 /// A card's bar: its left and right ends and its top and bottom rows.
@@ -576,6 +619,12 @@ fn nearest(colour: &[f32; 3], among: &[[f32; 3]]) -> Option<u8> {
         .min_by(|a, b| distance(a.1).total_cmp(&distance(b.1)))
         .and_then(|(i, _)| u8::try_from(i).ok())
 }
+
+/// The ids the shops' goods the item list lacks take, past the items': an
+/// entry of the equipment list's (チタン撃針) or a currency's (クレジットポイント)
+/// own id added to these.
+pub const EQUIPMENT_GOODS: i64 = 1_000_000_000;
+pub const CURRENCY_GOODS: i64 = 2_000_000_000;
 
 /// The shop whose offers last; the others' reset as the month changes.
 pub const LASTING: &str = "カケラ(文字)";

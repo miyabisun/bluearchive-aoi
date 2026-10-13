@@ -5,7 +5,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::{
         Arc, Condvar, Mutex, PoisonError,
-        atomic::{AtomicU32, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
     },
     thread,
     time::{Duration, Instant},
@@ -56,6 +56,8 @@ pub enum Status {
     },
     /// The window cannot be captured.
     Failed { message: String },
+    /// The user paused the reading.
+    Paused,
 }
 
 /// What can be read: a list, the student screen or the shop.
@@ -101,9 +103,14 @@ struct Seen {
     on_list: Option<Screen>,
     fps: f32,
     dropped: u32,
+    /// Whether the user paused the reading.
+    paused: bool,
 }
 
 fn status(seen: &Seen) -> Status {
+    if seen.paused {
+        return Status::Paused;
+    }
     match &seen.game {
         Game::Absent => Status::NoGame,
         Game::Failed(message) => Status::Failed {
@@ -424,17 +431,22 @@ pub fn start(
     recognizer: Arc<Recognizer>,
     kept: Kept,
     report: impl Fn(&Status, Option<Update>) + Send + Sync + 'static,
-) {
+) -> Watcher {
     let board = Arc::new(Board {
         seen: Mutex::new((Seen::default(), None)),
         report: Box::new(report),
     });
     let latest = Arc::new(Latest::default());
     let frames = Arc::new(AtomicU32::new(0));
+    let watcher = Watcher {
+        paused: Arc::new(AtomicBool::new(false)),
+        board: board.clone(),
+    };
 
     // The reader: the newest frame into the tally.
     {
         let (board, latest, frames) = (board.clone(), latest.clone(), frames.clone());
+        let paused = watcher.paused.clone();
         thread::spawn(move || {
             let mut tallies = HashMap::from([
                 (List::Items, Tally::seeded(kept.items.into_iter().collect())),
@@ -451,6 +463,10 @@ pub fn start(
             let mut shelves = Shelves::seeded(kept.shops);
             loop {
                 let shot = latest.take();
+                // Paused, frames are taken and dropped unread.
+                if paused.load(Ordering::Relaxed) {
+                    continue;
+                }
                 let read = recognizer.read_frame(&shot);
                 // The OCR is slow next to the rest; the credits change seldom.
                 if frames.fetch_add(1, Ordering::Relaxed) % CREDITS_EVERY == 0
@@ -494,41 +510,60 @@ pub fn start(
     }
 
     // The watcher: the game's window into a capture, and the frame rate.
-    thread::spawn(move || {
-        let mut session: Option<(Window, CaptureControl<Capture, CaptureError>)> = None;
-        let mut since = Instant::now();
-        board.update(|_| {});
-        loop {
-            thread::sleep(LOOK_INTERVAL);
-            if session
-                .as_ref()
-                .is_some_and(|(window, control)| !window.is_valid() || control.is_finished())
-            {
-                if let Some((_, control)) = session.take() {
-                    let _ = control.stop();
-                }
-                board.update(|seen| *seen = Seen::default());
+    thread::spawn(move || look(&board, &latest, &frames));
+    watcher
+}
+
+/// Looks for the game's window every `LOOK_INTERVAL`, captures it into
+/// `latest`, and tells the frame rate of the `frames` read.
+fn look(board: &Board, latest: &Arc<Latest>, frames: &AtomicU32) {
+    let mut session: Option<(Window, CaptureControl<Capture, CaptureError>)> = None;
+    let mut since = Instant::now();
+    board.update(|_| {});
+    loop {
+        thread::sleep(LOOK_INTERVAL);
+        if session
+            .as_ref()
+            .is_some_and(|(window, control)| !window.is_valid() || control.is_finished())
+        {
+            if let Some((_, control)) = session.take() {
+                let _ = control.stop();
             }
-            if session.is_none()
-                && let Some(window) = game_window()
-            {
-                match capture(window, latest.clone()) {
-                    Ok(control) => {
-                        session = Some((window, control));
-                        latest.dropped.store(0, Ordering::Relaxed);
-                        board.update(|seen| seen.game = Game::Captured);
-                    }
-                    Err(message) => board.update(|seen| seen.game = Game::Failed(message)),
-                }
-            }
-            let fps = frames.swap(0, Ordering::Relaxed) as f32 / since.elapsed().as_secs_f32();
-            since = Instant::now();
-            board.update(|seen| {
-                seen.fps = (fps * 10.0).round() / 10.0;
-                seen.dropped = latest.dropped.load(Ordering::Relaxed);
-            });
+            board.update(|seen| *seen = Seen::default());
         }
-    });
+        if session.is_none()
+            && let Some(window) = game_window()
+        {
+            match capture(window, latest.clone()) {
+                Ok(control) => {
+                    session = Some((window, control));
+                    latest.dropped.store(0, Ordering::Relaxed);
+                    board.update(|seen| seen.game = Game::Captured);
+                }
+                Err(message) => board.update(|seen| seen.game = Game::Failed(message)),
+            }
+        }
+        let fps = frames.swap(0, Ordering::Relaxed) as f32 / since.elapsed().as_secs_f32();
+        since = Instant::now();
+        board.update(|seen| {
+            seen.fps = (fps * 10.0).round() / 10.0;
+            seen.dropped = latest.dropped.load(Ordering::Relaxed);
+        });
+    }
+}
+
+/// The watcher as the window controls it: its reading paused or not.
+pub struct Watcher {
+    paused: Arc<AtomicBool>,
+    board: Arc<Board>,
+}
+
+impl Watcher {
+    /// Pauses the reading, frames dropped unread, or resumes it.
+    pub fn pause(&self, paused: bool) {
+        self.paused.store(paused, Ordering::Relaxed);
+        self.board.update(|seen| seen.paused = paused);
+    }
 }
 
 #[cfg(test)]
@@ -566,6 +601,7 @@ mod tests {
             on_list,
             fps: 28.5,
             dropped: 4,
+            paused: false,
         };
         let items = Some(Screen::Items);
         assert_eq!(status(&seen(Game::Absent, items)), Status::NoGame);
@@ -584,5 +620,13 @@ mod tests {
                 dropped: 4
             }
         );
+        // Paused, whatever the game shows.
+        for game in [Game::Captured, Game::Absent] {
+            let paused = Seen {
+                paused: true,
+                ..seen(game, Some(Screen::Items))
+            };
+            assert_eq!(status(&paused), Status::Paused);
+        }
     }
 }

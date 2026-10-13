@@ -100,6 +100,8 @@
     - { item: 神名文字, students: フェス限定, price: 2400, amount: 5, limit: 2 }
     - { item: 神名のカケラ, price: 600, amount: 5, limit: 5 }
     - { item: 最上級レポート, price: 1500, amount: 10, limit: 4 }
+    - { item: チタン撃針, price: 1500, amount: 10, limit: 2 }
+    - { item: クレジットポイント, price: 1500, amount: 5000000, limit: 4 }
     - { item: T2装備設計図選択ボックス, price: 300, amount: 15, limit: 100 }
     - { item: T3装備設計図選択ボックス, price: 480, amount: 20, limit: 100 }
     - { item: T4装備設計図選択ボックス, price: 840, amount: 30, limit: 100 }

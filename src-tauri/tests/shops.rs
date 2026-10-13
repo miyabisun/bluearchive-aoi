@@ -9,7 +9,7 @@ use std::{
 };
 
 use aoi::{
-    List, Recognizer,
+    Recognizer,
     shop::{Offer, Shelf},
 };
 use serde::Deserialize;
@@ -41,7 +41,7 @@ fn fixtures_dir() -> PathBuf {
 #[test]
 fn every_offer_read_is_right() {
     let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
-    let items = recognizer.catalog(List::Items).entries();
+    let items = recognizer.shop_goods();
     let fixtures: Vec<Fixture> =
         serde_json::from_str(&std::fs::read_to_string(fixtures_dir().join("shops.json")).unwrap())
             .unwrap();
@@ -98,7 +98,7 @@ fn every_offer_read_is_right() {
 #[test]
 fn the_terms_price_every_labeled_offer_as_its_card() {
     let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
-    let items = recognizer.catalog(List::Items).entries();
+    let items = recognizer.shop_goods();
     let fixtures: Vec<Fixture> =
         serde_json::from_str(&std::fs::read_to_string(fixtures_dir().join("shops.json")).unwrap())
             .unwrap();
@@ -142,12 +142,12 @@ fn the_terms_price_every_labeled_offer_as_its_card() {
 /// A shop lists what is worth buying first (the user's order of 2026-10-13):
 /// 秘伝ノート, 神名のカケラ, the elephs (those of the plain coin first, then by
 /// how the student is had: fest, limited, an event's last), テイラーストーン, BDs,
-/// notes, ooparts, the goods of no such kind, then reports, booster tickets and
-/// blueprint boxes; the goods bought up go last.
+/// notes, ooparts, the goods of no such kind, チタン撃針, credits, then reports,
+/// booster tickets and blueprint boxes; the goods bought up go last.
 #[test]
 fn a_shop_lists_its_goods_worth_buying_first_and_those_bought_up_last() {
     let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
-    let items = recognizer.catalog(List::Items).entries();
+    let items = recognizer.shop_goods();
     let offer = |name: &str, coin: u8, left: u32| Offer {
         id: items.iter().find(|i| i.name == name).unwrap().id,
         coin,
@@ -180,6 +180,8 @@ fn a_shop_lists_its_goods_worth_buying_first_and_those_bought_up_last() {
                 offer("アズサ（水着）の神名文字", 0, 2),
                 offer("ミカの神名文字", 0, 0),
                 offer("ワカモの神名文字", 0, 2),
+                offer("クレジットポイント", 0, 4),
+                offer("チタン撃針", 0, 2),
                 offer("神名のカケラ", 0, 5),
             ]
         ),
@@ -188,6 +190,8 @@ fn a_shop_lists_its_goods_worth_buying_first_and_those_bought_up_last() {
             "ワカモの神名文字",
             "アズサ（水着）の神名文字",
             "ノノミの神名文字",
+            "チタン撃針",
+            "クレジットポイント",
             "最上級レポート",
             "T3装備設計図選択ボックス",
             "ミカの神名文字 売切れ",
@@ -219,4 +223,33 @@ fn a_shop_lists_its_goods_worth_buying_first_and_those_bought_up_last() {
             "ブースターチケット",
         ]
     );
+}
+
+/// A still screen's card panel stays the same to the pixel, and a frame whose
+/// panel is the last one's reads as it did at a fraction of the time; any
+/// other frame is read afresh.
+#[test]
+fn a_frame_like_the_last_reads_as_it_did_and_another_afresh() {
+    let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
+    let (recognizer, fresh) = (
+        Recognizer::load(&data).unwrap(),
+        Recognizer::load(&data).unwrap(),
+    );
+    let open = |name: &str| {
+        image::open(fixtures_dir().join("shops").join(name))
+            .unwrap()
+            .to_rgb8()
+    };
+    let (one, other) = (open("jukutatsu-credits.png"), open("daikessen.png"));
+    let timed = |image: &image::RgbImage| {
+        let at = std::time::Instant::now();
+        (recognizer.read_shop(image), at.elapsed())
+    };
+    let (first, took) = timed(&one);
+    assert!(first.is_some());
+    let (again, retook) = timed(&one);
+    assert_eq!(again, first);
+    assert!(retook * 4 < took, "{retook:?} again, {took:?} first");
+    assert_eq!(recognizer.read_shop(&other), fresh.read_shop(&other));
+    assert_eq!(recognizer.read_shop(&one), first);
 }

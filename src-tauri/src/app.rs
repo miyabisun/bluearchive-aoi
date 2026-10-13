@@ -210,6 +210,13 @@ fn export(app: tauri::AppHandle, latest: tauri::State<'_, Latest>) -> Result<Str
     Ok(path.display().to_string())
 }
 
+/// Pauses reading the game, or resumes it; the status tells which.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Tauri hands command arguments over by value.
+fn set_paused(watcher: tauri::State<'_, watch::Watcher>, paused: bool) {
+    watcher.pause(paused);
+}
+
 /// The app's version and the newer one the latest release brings, if any.
 #[derive(Debug, Clone, Serialize)]
 struct UpdateCheck {
@@ -271,7 +278,7 @@ pub fn run(context: tauri::Context) {
             app.manage(places.clone());
             let planner = recognizer.clone();
             let handle = app.handle().clone();
-            watch::start(recognizer.clone(), kept, move |status, update| {
+            let watcher = watch::start(recognizer.clone(), kept, move |status, update| {
                 let latest = handle.state::<Latest>();
                 let mut snapshot = latest.0.lock().unwrap_or_else(PoisonError::into_inner);
                 snapshot.status = status.clone();
@@ -304,6 +311,7 @@ pub fn run(context: tauri::Context) {
                 }
                 let _ = handle.emit(EVENT, &*snapshot);
             });
+            app.manage(watcher);
             Ok(())
         })
         // The window shows item icons from what is built in: `icon://<name>`.
@@ -325,7 +333,8 @@ pub fn run(context: tauri::Context) {
             export,
             set_target,
             check_update,
-            apply_update
+            apply_update,
+            set_paused
         ])
         .run(context)
         .expect("bluearchive-aoi failed to start");

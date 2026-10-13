@@ -72,7 +72,8 @@ coins held: a coin that is an item counts as under the アイテム tab, whichev
 last, and the 熟達証書, which only its shop shows, as read there. Its goods go in the
 order they are worth buying: 秘伝ノート, 神名のカケラ, the elephs (those the plain coin buys
 first, then fest, limited, always and event students), テイラーストーン, tactical BDs, tech
-notes, ooparts, the rest, then reports, booster tickets and blueprint boxes; goods bought
+notes, ooparts, the rest, チタン撃針, credits, then reports, booster tickets and blueprint
+boxes (チタン撃針 and credits, which only 熟達証書 sells, are read there too); goods bought
 up with every coin go last, greyed out. Each shows as its icon with how many come with a
 purchase (`×5`; hover for its name), and under it, for each coin that buys it, the coin's icon with the times left at
 its price, `40回@10`, or 売切れ once bought up. 総力戦 and 大決戦 take two coins: the
@@ -148,6 +149,11 @@ The badge at the top right tells what Aoi sees:
 | 生徒を集計中 N fps                          | A student's screen is being read, N frames a second.                             |
 | ショップを集計中 N fps                      | A shop is being read, N frames a second.                                         |
 | キャプチャ失敗                              | Windows refused to capture the game's window; the reason is shown below.         |
+| 一時中断                                    | You paused the reading; nothing is read until you resume it.                     |
+
+Press the badge to pause the reading (its lamp turns red); press it again to resume. A
+shop screen left still costs next to nothing to read: a frame whose cards are the same to
+the pixel as the last one's reads as it did.
 
 Other windows may cover the game; Aoi reads the game window itself, not the screen.
 

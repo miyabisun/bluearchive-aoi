@@ -119,5 +119,17 @@
       { "name": "アイリ（バンド）の神名文字", "coin": 0, "left": 6, "price": 1800 },
       { "name": "オトギの神名文字", "coin": 0, "left": 6, "price": 1800 }
     ]
+  },
+  {
+    "image": "shops/jukutatsu-credits.png",
+    "shop": "熟達証書",
+    "held": [5009],
+    "note": "2026-10-13 capture, 2222x1250, the middle of the list: チタン撃針 is an equipment list entry and クレジットポイント a currency, neither an item. The rows above and below are cut off. Labels by eye.",
+    "offers": [
+      { "name": "チタン撃針", "coin": 0, "left": 2, "price": 1500 },
+      { "name": "クレジットポイント", "coin": 0, "left": 4, "price": 1500 },
+      { "name": "T2装備設計図選択ボックス", "coin": 0, "left": 100, "price": 300 },
+      { "name": "T3装備設計図選択ボックス", "coin": 0, "left": 100, "price": 480 }
+    ]
   }
 ]

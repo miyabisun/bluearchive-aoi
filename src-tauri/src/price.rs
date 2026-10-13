@@ -169,7 +169,7 @@ static HAD: std::sync::LazyLock<HashMap<&str, u8>> =
 /// The kinds of goods in the order a shop lists them, what is worth buying
 /// first (the user's order of 2026-10-13); the goods of none of them stand
 /// where the empty kind does.
-const ORDER: [&str; 12] = [
+const ORDER: [&str; 13] = [
     "秘伝ノート",
     "神名のカケラ",
     "神名文字",
@@ -178,7 +178,8 @@ const ORDER: [&str; 12] = [
     "技術ノート",
     "オーパーツ",
     "",
-    "クレジット",
+    "チタン撃針",
+    "クレジットポイント",
     "レポート",
     "ブースターチケット",
     "装備設計図選択ボックス",

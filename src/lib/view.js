@@ -41,6 +41,8 @@ export function statusView(status) {
       return { label: "対象外の画面", tone: "idle" };
     case "failed":
       return { label: "キャプチャ失敗", tone: "danger" };
+    case "paused":
+      return { label: "一時中断", tone: "paused" };
     default:
       return { label: "ゲーム未検出", tone: "idle" };
   }

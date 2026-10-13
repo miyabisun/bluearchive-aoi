@@ -70,6 +70,7 @@ describe("statusView", () => {
       label: "キャプチャ失敗",
       tone: "danger",
     });
+    expect(statusView({ state: "paused" })).toEqual({ label: "一時中断", tone: "paused" });
   });
 });
 

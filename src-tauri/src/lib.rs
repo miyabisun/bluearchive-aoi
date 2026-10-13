@@ -161,7 +161,9 @@ fn picture(read: &Read, path: &str) -> Result<RgbaImage, String> {
 
 pub struct Recognizer {
     items: Catalog,
-    /// The items again, as the shops' goods, and what the shops ask for them.
+    /// The shops' goods (the items and the few the item list lacks), what
+    /// tells them apart, and what the shops ask for them.
+    shop_goods: Vec<Item>,
     goods: shop::Goods,
     prices: price::Prices,
     currency: Vec<Currency>,
@@ -218,15 +220,37 @@ impl Recognizer {
             growers: json(read, "schaledb/students.json")?,
             pieces: json(read, "schaledb/equipment.json")?,
         };
+        let terms: BTreeMap<String, price::Terms> =
+            serde_yaml::from_slice(&read("shops.yaml")?).map_err(|e| format!("shops.yaml: {e}"))?;
+        let (shop_goods, goods) = items::goods(read, |name| {
+            terms
+                .values()
+                .flat_map(|t| &t.goods)
+                .any(|rule| rule.item == name)
+        })?;
+        // The goods the item list lacks, as the shops' terms see them.
+        let mut priced: Vec<price::Good> = json(read, "schaledb/items.json")?;
+        priced.extend(
+            shop_goods
+                .iter()
+                .filter(|g| g.id >= shop::EQUIPMENT_GOODS)
+                .map(|g| price::Good {
+                    id: g.id,
+                    name: g.name.clone(),
+                    category: g.category.clone(),
+                    subcategory: None,
+                    rarity: g.rarity.map(|r| format!("{r:?}")).unwrap_or_default(),
+                }),
+        );
         Ok(Self {
             person_needs: work::person_needs(&planner.growers, &planner.growth),
             planner,
             items: items::catalog(read)?,
-            goods: items::goods(read)?,
+            shop_goods,
+            goods,
             prices: price::Prices::new(
-                serde_yaml::from_slice(&read("shops.yaml")?)
-                    .map_err(|e| format!("shops.yaml: {e}"))?,
-                json(read, "schaledb/items.json")?,
+                terms,
+                priced,
                 &json::<Vec<price::Student>>(read, "schaledb/students.json")?,
             ),
             currency: json(read, "schaledb/currency.json")?,
@@ -480,6 +504,11 @@ impl Recognizer {
         items.iter().find(|i| &i.name == name).map(|i| i.id)
     }
 
+    /// The shops' goods: the items and the few the item list lacks.
+    pub fn shop_goods(&self) -> &[Item] {
+        &self.shop_goods
+    }
+
     /// The shelves in the menu's order, their offers' items named; a coin that
     /// is an item held as `items` count it.
     pub fn shop_rows(
@@ -488,15 +517,10 @@ impl Recognizer {
         items_held: &HashMap<i64, Count>,
     ) -> Vec<shop::ShopRow> {
         let items = self.items.entries();
-        let named = |id: i64| {
-            items
-                .iter()
-                .find(|i| i.id == id)
-                .map(|i| i.name.clone())
-                .unwrap_or_default()
-        };
+        let good = |id: i64| self.shop_goods.iter().find(|g| g.id == id);
+        let named = |id: i64| good(id).map(|g| g.name.clone()).unwrap_or_default();
         let item = |name: &str| items.iter().find(|i| i.name == name);
-        let icon = |id: i64| items.iter().find(|i| i.id == id).map(|i| i.icon.clone());
+        let icon = |id: i64| good(id).map(|g| g.icon.clone());
         shop::SHOPS
             .iter()
             .filter_map(|&name| {

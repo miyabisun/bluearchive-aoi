@@ -3,13 +3,14 @@
 //! out.
 
 use image::RgbaImage;
+use serde::Deserialize;
 
 use crate::{
     Item, Read,
     catalog::{Catalog, ListKey, Rules},
     icon::Mask,
     json, picture,
-    shop::Goods,
+    shop::{self, Goods},
 };
 
 /// Whether the user keeps track of an item. On 2026-10-11 they dropped, from the
@@ -48,10 +49,51 @@ pub fn catalog(read: &Read) -> Result<Catalog, String> {
     Catalog::new(items, RULES, icon)
 }
 
-/// The items as the shops' goods.
-pub fn goods(read: &Read) -> Result<Goods, String> {
-    let (items, icon) = with_icons(read)?;
-    Goods::new(&items, icon)
+/// A currency of the SchaleDB snapshot (`data/schaledb/currency.json`).
+#[derive(Deserialize)]
+struct Currency {
+    id: i64,
+    name: String,
+    icon: String,
+}
+
+/// The shops' goods and what tells them apart on a card: the items, and the
+/// equipment list's entries and the currencies whose names `sold` takes
+/// (チタン撃針, クレジットポイント), which the item list lacks; these take ids
+/// past the items' (`shop::EQUIPMENT_GOODS`, `shop::CURRENCY_GOODS`).
+pub fn goods(read: &Read, sold: impl Fn(&str) -> bool) -> Result<(Vec<Item>, Goods), String> {
+    let (mut goods, icon) = with_icons(read)?;
+    let equipment: Vec<Item> = json::<Vec<Item>>(read, "schaledb/equipment.json")?
+        .into_iter()
+        .filter(|e| sold(&e.name))
+        .map(|e| Item {
+            id: shop::EQUIPMENT_GOODS + e.id,
+            ..e
+        })
+        .collect();
+    let equipment_icons: Vec<String> = equipment.iter().map(|e| e.icon.clone()).collect();
+    goods.extend(equipment);
+    goods.extend(
+        json::<Vec<Currency>>(read, "schaledb/currency.json")?
+            .into_iter()
+            .filter(|c| sold(&c.name))
+            .map(|c| Item {
+                id: shop::CURRENCY_GOODS + c.id,
+                name: c.name,
+                icon: c.icon,
+                category: "Currency".to_owned(),
+                tier: 0,
+                rarity: None,
+            }),
+    );
+    let matcher = Goods::new(&goods, |name: &str| {
+        if equipment_icons.iter().any(|e| e == name) {
+            picture(read, &format!("schaledb/equipment-icons/{name}.webp"))
+        } else {
+            icon(name)
+        }
+    })?;
+    Ok((goods, matcher))
 }
 
 /// An icon's picture, or why it could not be read.
