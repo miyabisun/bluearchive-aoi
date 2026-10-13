@@ -1,7 +1,7 @@
 //! The shop screen against screenshots labeled by eye
 //! (`tests/fixtures/shops.json`, masked to what is read). Labels list the
 //! cards shown whole: from the name to the price, which the shops' terms
-//! (`data/shops.yaml`) must give.
+//! (`data/shops.yaml`) must give, or the card itself where they leave it to it.
 
 use std::{
     collections::BTreeMap,
@@ -47,6 +47,7 @@ fn every_offer_read_is_right() {
         let image = image::open(fixtures_dir().join(&fixture.image))
             .unwrap()
             .to_rgb8();
+        let shown = recognizer.reads_price(&fixture.shop);
         let labels: Vec<Offer> = fixture
             .offers
             .iter()
@@ -58,6 +59,7 @@ fn every_offer_read_is_right() {
                     .id,
                 coin: l.coin,
                 left: l.left,
+                price: shown.then_some(l.price),
             })
             .collect();
         labeled += labels.len();
@@ -94,6 +96,7 @@ fn the_terms_price_every_labeled_offer_as_its_card() {
             .unwrap();
     let mut wrong = Vec::new();
     for fixture in fixtures {
+        let shown = recognizer.reads_price(&fixture.shop);
         for label in &fixture.offers {
             let id = items.iter().find(|i| i.name == label.name).unwrap().id;
             let shelf = Shelf {
@@ -102,6 +105,7 @@ fn the_terms_price_every_labeled_offer_as_its_card() {
                     id,
                     coin: label.coin,
                     left: label.left,
+                    price: shown.then_some(label.price),
                 }],
             };
             let rows = recognizer.shop_rows(&BTreeMap::from([(fixture.shop.clone(), shelf)]));

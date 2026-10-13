@@ -116,6 +116,7 @@ mod tests {
                         id: 9000,
                         coin: 1,
                         left: 0,
+                        price: None,
                     }],
                 },
             )]),

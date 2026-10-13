@@ -349,7 +349,8 @@ impl Recognizer {
                             .map(|o| {
                                 o.map(|o| shop::OfferRow {
                                     left: o.left,
-                                    price: self.prices.find(name, id, o.coin),
+                                    price: self.prices.find(name, id, o.coin, o.price),
+                                    shown: o.price,
                                 })
                             })
                             .collect(),
@@ -364,6 +365,11 @@ impl Recognizer {
                 })
             })
             .collect()
+    }
+
+    /// Whether some good of `shop` costs what its card shows (read with it).
+    pub fn reads_price(&self, shop: &str) -> bool {
+        self.prices.reads_price(shop)
     }
 
     /// The shop screen (see `shop::Goods::read`); `None` on any other screen,

@@ -43,10 +43,11 @@ const VIEW: Span = (0.172, 0.84);
 const BAR_WIDTH: f32 = 0.16;
 /// The card's name, from the bar's top.
 const NAME: Span = (-0.215, -0.145);
-/// The price under the bar, from its bottom, and its coin's icon from the bar's
-/// left end.
+/// The price under the bar, from its bottom, and its coin's icon and its
+/// digits from the card's left and right ends.
 const PRICE: Span = (0.012, 0.048);
 const COIN: Span = (0.02, 0.065);
+const DIGITS: Span = (0.085, -0.045);
 /// The shop's coins over the cards: the centres of their icons from the right
 /// edge, left one first (a shop with one coin shows only the right one). In a
 /// shop with two, a card's coin is told by its icon's colour.
@@ -70,6 +71,10 @@ const DARKENED: f32 = 0.85;
 /// upright by either), and its letters are lighter than this on the navy.
 const ITALIC: [f32; 2] = [0.22, 0.15];
 const LIGHT: u8 = 160;
+/// Split at Otsu's luminance, the times left sometimes lose digits ("589" read
+/// "9", 2026-10-13); split here, they read whole, except on a bought-up card,
+/// whose darkened letters read only the first way. Both takes are read.
+const LIGHTER: u8 = 200;
 
 type Span = (f32, f32);
 
@@ -80,6 +85,9 @@ pub struct Offer {
     pub id: i64,
     pub coin: u8,
     pub left: u32,
+    /// The price on the card, read where the shop's terms leave it to the card.
+    #[serde(default)]
+    pub price: Option<u32>,
 }
 
 /// What a frame of the shop screen shows.
@@ -177,29 +185,53 @@ impl Goods {
         } else {
             Vec::new()
         };
+        let read_price = prices.reads_price(shop);
         let offers = bars
             .iter()
-            .filter_map(|bar| self.offer(image, ocr, bar, &coins))
+            .filter_map(|bar| self.offer(image, ocr, bar, &coins, read_price))
             .collect();
         Some(Seen { shop, offers })
     }
 
     /// The offer of the card over `bar`, when the card is shown whole, the item
-    /// is told and the times it can still be bought read.
-    fn offer(&self, image: &RgbImage, ocr: &Ocr, bar: &Bar, coins: &[[f32; 3]]) -> Option<Offer> {
+    /// is told and the times it can still be bought read; with `read_price`,
+    /// the price on the card too.
+    fn offer(
+        &self,
+        image: &RgbImage,
+        ocr: &Ocr,
+        bar: &Bar,
+        coins: &[[f32; 3]],
+        read_price: bool,
+    ) -> Option<Offer> {
         let h = image.height() as f32;
-        let (left, name_top, right, _) = card_area(image, bar)?;
+        let (left, name_top, right, price_bottom) = card_area(image, bar)?;
         let (top, bottom) = (bar.top as f32, bar.bottom as f32);
         let name = crop(image, left, name_top, right, top + NAME.1 * h)?;
         let count = crop(image, left, top - 2.0, right, bottom + 3.0)?;
-        let text = ocr
-            .read(&stack(&[letters(&name, false), letters(&count, true)]))
-            .ok()?;
+        let mut pictures = vec![
+            letters(&name, false),
+            letters(&count, true),
+            ink(&count, true, LIGHTER),
+        ];
+        if read_price {
+            // Read under the times left, a price's lone digit reads where alone
+            // it does not.
+            let digits = crop(
+                image,
+                left + DIGITS.0 * h,
+                bottom + PRICE.0 * h,
+                right + DIGITS.1 * h,
+                price_bottom,
+            )?;
+            pictures.push(letters(&digits, true));
+        }
+        let text = ocr.read(&stack(&pictures)).ok()?;
         let lines: Vec<&str> = text.split('/').collect();
-        let at = lines.iter().position(|l| parse_left(l).is_some())?;
+        let (names, times, price) = card_text(&lines)?;
         let id = decide(
             self.icon(image, bar),
-            self.names.find_among(&lines[..at]),
+            self.names.find_among(&lines[..names]),
             &self.drawn,
         )?;
         let coin_at = (
@@ -213,7 +245,8 @@ impl Goods {
             } else {
                 nearest(&mean(image, coin_at.0, coin_at.1, COIN.1 - COIN.0)?, coins)?
             },
-            left: parse_left(lines[at])?,
+            left: times,
+            price: price.filter(|_| read_price),
         })
     }
 
@@ -392,7 +425,6 @@ pub fn otsu(values: &[u8]) -> u8 {
 /// strokes of the condensed font run together ("術教" read "燉"); measured on
 /// 2026-10-12 over 234 names, 125 read as an item this way, 56 with the split.
 fn letters(picture: &RgbImage, light: bool) -> RgbImage {
-    const MARGIN: u32 = 20;
     let values: Vec<u8> = picture.pixels().map(|p| luminance(p.0)).collect();
     let split = otsu(&values);
     let dark: Vec<f32> = values
@@ -406,6 +438,13 @@ fn letters(picture: &RgbImage, light: bool) -> RgbImage {
     } else {
         f32::midpoint(dark_mean, f32::from(split)) as u8
     };
+    ink(picture, light, threshold)
+}
+
+/// The letters of `picture` lighter (or darker) than `threshold`, black on
+/// white for the OCR, twice the size, with a margin.
+fn ink(picture: &RgbImage, light: bool, threshold: u8) -> RgbImage {
+    const MARGIN: u32 = 20;
     let (w, h) = picture.dimensions();
     let ink = RgbImage::from_fn(w, h, |x, y| {
         let v = luminance(picture.get_pixel(x, y).0);
@@ -605,6 +644,9 @@ pub struct GoodRow {
 pub struct OfferRow {
     pub left: u32,
     pub price: Option<Price>,
+    /// The price read on the card (see `Offer::price`), kept with the shelf.
+    #[serde(skip)]
+    pub shown: Option<u32>,
 }
 
 impl ShopRow {
@@ -621,6 +663,7 @@ impl ShopRow {
                             id: g.id,
                             coin,
                             left: o.left,
+                            price: o.shown,
                         })
                     })
                 })
@@ -702,6 +745,19 @@ fn plain(c: char) -> char {
             .find_map(|(from, to)| from.chars().zip(to.chars()).find(|&(f, _)| f == c))
             .map_or(c, |(_, t)| t),
     }
+}
+
+/// What the OCR reads of a card, line by line: how many lines name the item,
+/// the times left (the most of the takes read, as a take may lose digits but
+/// adds none), and the price under them.
+fn card_text(lines: &[&str]) -> Option<(usize, u32, Option<u32>)> {
+    let names = lines.iter().position(|l| parse_left(l).is_some())?;
+    let times = lines[names..].iter().filter_map(|l| parse_left(l)).max()?;
+    let price = lines[names..]
+        .iter()
+        .find_map(|l| crate::credit::parse(l))
+        .and_then(|p| u32::try_from(p).ok());
+    Some((names, times, price))
 }
 
 /// "あと15回購入可能": how many more times the offer can be bought.
@@ -793,7 +849,12 @@ mod tests {
     }
 
     fn offer(id: i64, coin: u8, left: u32) -> Offer {
-        Offer { id, coin, left }
+        Offer {
+            id,
+            coin,
+            left,
+            price: None,
+        }
     }
 
     #[test]
@@ -887,6 +948,29 @@ mod tests {
         assert_eq!(parse_left("あと回購入可能"), None);
         assert_eq!(parse_left("あと1 5回購入"), None);
         assert_eq!(parse_left("15"), None);
+    }
+
+    #[test]
+    fn a_card_reads_its_name_the_most_times_left_and_the_price_under_them() {
+        // The two takes of the times left: one drops digits ("589" read "9").
+        let lines = [
+            "ユカリの神名文",
+            "字",
+            "あと9回購入可能",
+            "あと589回購入可能",
+            "1",
+        ];
+        assert_eq!(card_text(&lines), Some((2, 589, Some(1))));
+        // A bought-up card's darkened letters read in the first take only.
+        assert_eq!(
+            card_text(&["名前", "あと0回購入可能", "5"]),
+            Some((1, 0, Some(5)))
+        );
+        assert_eq!(
+            card_text(&["名前", "あと12回購入可能"]),
+            Some((1, 12, None))
+        );
+        assert_eq!(card_text(&["名前", "1"]), None);
     }
 
     #[test]

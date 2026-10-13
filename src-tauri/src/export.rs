@@ -33,7 +33,7 @@ pub fn yaml(
     out += "# skills は EX・ノーマル・パッシブ・サブ、ability は HP・攻撃力・治癒力の能力解放。\n";
     out += "# count の K は千単位（51K は 50,500〜51,499）。\n";
     out += "# id: null の生徒は SchaleDB に未登録（名前だけで照合）。\n";
-    out += "# shops の left はあと何回買えるか。price・amount・limit は 1 回の価格・個数と回数の上限（ショップの決まり、無ければ null）。\n";
+    out += "# shops の left はあと何回買えるか。price・amount・limit は 1 回の価格・個数と回数の上限（ショップの決まり、カケラ(文字) の price はカードの値、無ければ null）。\n";
     out += "# カケラ(文字) 以外のショップは月が替わると戻る（read_at が前の月なら前の月の値）。\n";
     out += "credits: ";
     out += &credits.map_or("null".to_owned(), |c| c.to_string());
@@ -340,10 +340,12 @@ shops: []
                     Some(OfferRow {
                         left: 12,
                         price: None,
+                        shown: None,
                     }),
                     Some(OfferRow {
                         left: 40,
                         price: Some(terms),
+                        shown: None,
                     }),
                 ],
             }],

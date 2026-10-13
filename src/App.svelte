@@ -190,7 +190,7 @@
       <p class="exported" aria-live="polite">書き出しました: {exported.path}</p>
     {/if}
 
-    {#if view.tab === "items" && snapshot.credits != null}
+    {#if view.tab === "shops" && snapshot.credits != null}
       <p class="credits">
         クレジット <span class="amount">{formatCount({ exact: snapshot.credits })}</span>
       </p>

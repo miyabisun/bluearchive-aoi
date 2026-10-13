@@ -21,9 +21,9 @@ export function filterRows(rows, query) {
 export const LISTS = [
   { id: "items", name: "アイテム" },
   { id: "equipment", name: "装備" },
+  { id: "shops", name: "ショップ" },
   { id: "students", name: "生徒" },
   { id: "plan", name: "育成" },
-  { id: "shops", name: "ショップ" },
 ];
 
 const listName = (id) => LISTS.find((l) => l.id === id)?.name ?? id;
@@ -142,7 +142,7 @@ export function shopStale(shop, now = new Date()) {
 
 /**
  * What each of a shop's coins buys of a good, as table cells: the times left
- * ("買い切り" at none, "—" where the coin does not buy it) and the terms, the
+ * ("売切れ" at none, "—" where the coin does not buy it) and the terms, the
  * price and how many come with a purchase ("?" without terms).
  */
 export function goodCells(good) {
@@ -153,7 +153,7 @@ export function goodCells(good) {
       ? "?"
       : `${exact.format(t.price)}枚` + (t.amount > 1 ? `で${exact.format(t.amount)}個` : "");
     return {
-      left: offer.left === 0 ? "買い切り" : `${offer.left}回`,
+      left: offer.left === 0 ? "売切れ" : `${offer.left}回`,
       terms,
       sold: offer.left === 0,
     };

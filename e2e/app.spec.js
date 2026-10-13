@@ -147,11 +147,11 @@ test("the tabs and the search field take focus from the keyboard", async ({ page
   await page.keyboard.press("Enter");
   await expect(page.getByRole("tab", { name: "装備" })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("tab", { name: "ショップ" })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "生徒" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "育成" })).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("tab", { name: "ショップ" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "書き出す" })).toBeFocused();
   await page.keyboard.press("Tab");
@@ -353,11 +353,14 @@ test("tells why what was read could not be kept", async ({ page }) => {
   );
 });
 
-test("shows the credits on the item tab once they are read", async ({ page }) => {
+test("shows the credits on the shop tab once they are read", async ({ page }) => {
   await open(page, { status: reading("items"), items, equipment, credits: 244213276 });
+  await expect(page.getByText(/^クレジット/)).toHaveCount(0);
+  await page.getByRole("tab", { name: "ショップ" }).click();
   await expect(page.getByText("クレジット 244,213,276")).toBeVisible();
 
   await open(page, { status: reading("items"), items, equipment, credits: null });
+  await page.getByRole("tab", { name: "ショップ" }).click();
   await expect(page.getByText(/^クレジット/)).toHaveCount(0);
 });
 
@@ -410,7 +413,7 @@ test("shows each shop's goods, shop by shop, when the game shows a shop", async 
   await expect(first.locator("thead th")).toHaveText(["品", "総力戦レアコイン", "総力戦コイン"]);
   await expect(first.locator("tbody tr")).toHaveText([
     "初級戦術教育BD（百鬼夜行）12回10枚40回10枚",
-    "アズサの神名文字買い切り50枚で5個—",
+    "アズサの神名文字売切れ50枚で5個—",
   ]);
 
   await page.getByLabel("名前で検索").fill("エーテル");

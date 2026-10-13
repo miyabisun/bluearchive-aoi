@@ -258,7 +258,7 @@ describe("shops", () => {
         ]),
       ),
     ).toEqual([
-      { left: "買い切り", terms: "50枚で5個", sold: true },
+      { left: "売切れ", terms: "50枚で5個", sold: true },
       { left: "20回", terms: "50枚で5個", sold: false },
     ]);
     expect(

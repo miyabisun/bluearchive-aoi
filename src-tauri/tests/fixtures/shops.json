@@ -59,5 +59,46 @@
       { "name": "イオリ（水着）の神名文字", "coin": 0, "left": 0, "price": 1800 },
       { "name": "神名のカケラ", "coin": 0, "left": 0, "price": 600 }
     ]
+  },
+  {
+    "image": "shops/kakera-1.png",
+    "shop": "カケラ(文字)",
+    "note": "2026-10-13 capture, 2222x1250. A card's price is its student's rate (1 to 5). ユカリ's times left, 589, lost its 58 to the OCR at Otsu's split. Only the middle row is whole. Labels by eye.",
+    "offers": [
+      { "name": "メルの神名文字", "coin": 0, "left": 683, "price": 1 },
+      { "name": "ヒカリの神名文字", "coin": 0, "left": 513, "price": 5 },
+      { "name": "ユカリの神名文字", "coin": 0, "left": 589, "price": 1 },
+      { "name": "アル（ドレス）の神名文字", "coin": 0, "left": 620, "price": 4 }
+    ]
+  },
+  {
+    "image": "shops/kakera-2.png",
+    "shop": "カケラ(文字)",
+    "note": "2026-10-13 capture, 2222x1250, with a rate of 2. Two rows are whole. Labels by eye.",
+    "offers": [
+      { "name": "ミネの神名文字", "coin": 0, "left": 436, "price": 5 },
+      { "name": "フブキ（水着）の神名文字", "coin": 0, "left": 710, "price": 1 },
+      { "name": "メグの神名文字", "coin": 0, "left": 681, "price": 1 },
+      { "name": "カヨコ（正月）の神名文字", "coin": 0, "left": 467, "price": 5 },
+      { "name": "ホシノ（臨戦）の神名文字", "coin": 0, "left": 157, "price": 5 },
+      { "name": "ハナコ（水着）の神名文字", "coin": 0, "left": 176, "price": 5 },
+      { "name": "ミヤコ（水着）の神名文字", "coin": 0, "left": 620, "price": 2 },
+      { "name": "キキョウの神名文字", "coin": 0, "left": 620, "price": 1 }
+    ]
+  },
+  {
+    "image": "shops/kakera-3.png",
+    "shop": "カケラ(文字)",
+    "note": "2026-10-13 capture, 2222x1250, with rates of 3. Two rows are whole. Labels by eye.",
+    "offers": [
+      { "name": "カズサ（バンド）の神名文字", "coin": 0, "left": 486, "price": 1 },
+      { "name": "アコの神名文字", "coin": 0, "left": 343, "price": 5 },
+      { "name": "ヨシミ（バンド）の神名文字", "coin": 0, "left": 451, "price": 5 },
+      { "name": "チセの神名文字", "coin": 0, "left": 147, "price": 4 },
+      { "name": "モミジの神名文字", "coin": 0, "left": 198, "price": 3 },
+      { "name": "サキ（水着）の神名文字", "coin": 0, "left": 620, "price": 3 },
+      { "name": "フウカの神名文字", "coin": 0, "left": 269, "price": 1 },
+      { "name": "アヤネの神名文字", "coin": 0, "left": 372, "price": 1 }
+    ]
   }
 ]

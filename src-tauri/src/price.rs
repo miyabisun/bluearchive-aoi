@@ -20,7 +20,8 @@ pub struct Rule {
     pub tier: Option<u8>,
     pub students: Option<String>,
     pub coin: Option<String>,
-    pub price: u32,
+    /// None: the price the card shows (a student's rate in カケラ(文字)).
+    pub price: Option<u32>,
     #[serde(default = "one")]
     pub amount: u32,
     pub limit: u32,
@@ -103,9 +104,17 @@ impl Prices {
         self.shops.get(shop).map_or(&[], |t| t.coins.as_slice())
     }
 
+    /// Whether some good of `shop` costs what its card shows.
+    pub fn reads_price(&self, shop: &str) -> bool {
+        self.shops
+            .get(shop)
+            .is_some_and(|t| t.goods.iter().any(|rule| rule.price.is_none()))
+    }
+
     /// What `shop` asks for the good `id` paid with its coin `coin` (0 the
-    /// left one).
-    pub fn find(&self, shop: &str, id: i64, coin: u8) -> Option<Price> {
+    /// left one), its card `shown` to cost so much where the rule leaves the
+    /// price to the card.
+    pub fn find(&self, shop: &str, id: i64, coin: u8, shown: Option<u32>) -> Option<Price> {
         let terms = self.shops.get(shop)?;
         let good = self.goods.get(&id)?;
         let had = self.elephs.get(&id).copied();
@@ -124,10 +133,12 @@ impl Prices {
                         .as_ref()
                         .is_none_or(|s| had.is_some_and(|h| HAD.get(s.as_str()) == Some(&h)))
             })
-            .map(|rule| Price {
-                price: rule.price,
-                amount: rule.amount,
-                limit: rule.limit,
+            .and_then(|rule| {
+                Some(Price {
+                    price: rule.price.or(shown)?,
+                    amount: rule.amount,
+                    limit: rule.limit,
+                })
             })
     }
 }
@@ -171,6 +182,10 @@ mod tests {
     - { item: 秘伝ノート, coin: 総力戦コイン, price: 500, limit: 3 }
     - { item: 技術ノート, tier: 1, coin: 総力戦コイン, price: 3, limit: 50 }
     - { item: 技術ノート, tier: 4, coin: 総力戦コイン, price: 25, limit: 20 }
+カケラ(文字):
+  coins: [神名のカケラ]
+  goods:
+    - { item: 神名文字, limit: 20 }
 熟達証書:
   coins: [熟達証書]
   goods:
@@ -249,14 +264,14 @@ mod tests {
         let p = prices();
         assert_eq!(p.coins("総力戦"), ["総力戦レアコイン", "総力戦コイン"]);
         // Coin 1 is the right one, 総力戦コイン.
-        assert_eq!(p.find("総力戦", 10019, 1), Some(price(50, 5, 20)));
-        assert_eq!(p.find("総力戦", 10019, 0), Some(price(50, 5, 10)));
-        assert_eq!(p.find("総力戦", 9999, 1), Some(price(500, 1, 3)));
-        assert_eq!(p.find("総力戦", 4000, 1), Some(price(3, 1, 50)));
-        assert_eq!(p.find("総力戦", 4003, 1), Some(price(25, 1, 20)));
+        assert_eq!(p.find("総力戦", 10019, 1, None), Some(price(50, 5, 20)));
+        assert_eq!(p.find("総力戦", 10019, 0, None), Some(price(50, 5, 10)));
+        assert_eq!(p.find("総力戦", 9999, 1, None), Some(price(500, 1, 3)));
+        assert_eq!(p.find("総力戦", 4000, 1, None), Some(price(3, 1, 50)));
+        assert_eq!(p.find("総力戦", 4003, 1, None), Some(price(25, 1, 20)));
         // No rule for the rare coin's notes, nor for a shop without terms.
-        assert_eq!(p.find("総力戦", 4000, 0), None);
-        assert_eq!(p.find("カケラ(文字)", 10019, 0), None);
+        assert_eq!(p.find("総力戦", 4000, 0, None), None);
+        assert_eq!(p.find("指名手配", 10019, 0, None), None);
     }
 
     #[test]
@@ -269,12 +284,24 @@ mod tests {
     }
 
     #[test]
+    fn a_rule_without_a_price_takes_the_one_the_card_shows() {
+        let p = prices();
+        assert_eq!(
+            p.find("カケラ(文字)", 10019, 0, Some(3)),
+            Some(price(3, 1, 20))
+        );
+        assert_eq!(p.find("カケラ(文字)", 10019, 0, None), None);
+        // A fixed price stands whatever the card is read to show.
+        assert_eq!(p.find("総力戦", 9999, 1, Some(7)), Some(price(500, 1, 3)));
+    }
+
+    #[test]
     fn an_eleph_goes_by_how_its_student_is_had() {
         let p = prices();
-        assert_eq!(p.find("熟達証書", 10077, 0), Some(price(1800, 5, 6)));
-        assert_eq!(p.find("熟達証書", 10032, 0), Some(price(2400, 5, 2)));
-        assert_eq!(p.find("熟達証書", 10019, 0), None);
-        assert_eq!(p.find("熟達証書", 201, 0), Some(price(9, 2, 15)));
+        assert_eq!(p.find("熟達証書", 10077, 0, None), Some(price(1800, 5, 6)));
+        assert_eq!(p.find("熟達証書", 10032, 0, None), Some(price(2400, 5, 2)));
+        assert_eq!(p.find("熟達証書", 10019, 0, None), None);
+        assert_eq!(p.find("熟達証書", 201, 0, None), Some(price(9, 2, 15)));
     }
 
     #[test]
