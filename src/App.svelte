@@ -276,9 +276,25 @@
   }}
 />
 
-<div class="top">
-  <header class="app-header">
-    <h1>Aoi</h1>
+<!-- One row: the tabs, then the status and the menu at the right end. The window's
+     title bar names the app. -->
+<header class="top">
+  <div class="bar">
+    <div class="tabs" role="tablist">
+      {#each LISTS as list (list.id)}
+        <button
+          type="button"
+          role="tab"
+          id="tab-{list.id}"
+          aria-selected={view.tab === list.id}
+          aria-controls="list"
+          onclick={() => (view = { ...view, tab: list.id })}
+          >{list.name}{#if list.id === "students" && studentCount > 0}<span class="tally"
+              >&nbsp;{studentCount}</span
+            >{/if}</button
+        >
+      {/each}
+    </div>
     <!-- The status, which pauses the reading when pressed and resumes it when pressed again. -->
     <div class="status-slot" role="status">
       <button
@@ -347,25 +363,8 @@
         </div>
       {/if}
     </div>
-  </header>
-  <div class="bar">
-    <div class="tabs" role="tablist">
-      {#each LISTS as list (list.id)}
-        <button
-          type="button"
-          role="tab"
-          id="tab-{list.id}"
-          aria-selected={view.tab === list.id}
-          aria-controls="list"
-          onclick={() => (view = { ...view, tab: list.id })}
-          >{list.name}{#if list.id === "students" && studentCount > 0}<span class="tally"
-              >&nbsp;{studentCount}</span
-            >{/if}</button
-        >
-      {/each}
-    </div>
   </div>
-</div>
+</header>
 
 <main class="content">
   <div id="list" role="tabpanel" aria-labelledby="tab-{view.tab}">
@@ -897,21 +896,16 @@
     background: var(--c-wash-base)
     border-bottom: 1px solid var(--c-border)
 
-  .app-header
-    display: flex
-    align-items: center
-    gap: var(--sp-3)
-    height: 48px
-    padding: 0 var(--sp-3)
-
   .bar
     display: flex
     align-items: center
+    gap: var(--sp-2)
     padding-right: var(--sp-3)
 
-  // Narrower than its tabs, the row scrolls sideways rather than wrap a name.
+  // Narrower than its tabs, the tabs scroll sideways rather than wrap a name.
   .tabs
     display: flex
+    flex: 1 1 auto
     min-width: 0
     overflow-x: auto
     scrollbar-width: thin
@@ -940,6 +934,7 @@
 
   // The menu at the header's right end: an icon button over a short list.
   .menu
+    flex: none
     position: relative
   .menu-button
     display: grid
@@ -1013,12 +1008,8 @@
     color: var(--c-muted)
     overflow-wrap: anywhere
 
-  h1
-    margin: 0
-    font-size: var(--fs-title)
-    font-weight: 600
-
   .status-slot
+    flex: none
     margin-left: auto
 
   .status

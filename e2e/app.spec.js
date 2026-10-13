@@ -180,12 +180,30 @@ for (const scheme of ["dark", "light"]) {
   });
 }
 
+test("puts the tabs, the status and the menu on one row, without the app's name", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 720, height: 600 });
+  await open(page, { status: reading("shops"), items, equipment, students });
+  // The title bar of the window already says Aoi.
+  await expect(page.getByText("Aoi", { exact: true })).toBeHidden();
+  const middle = async (locator) => {
+    const box = await locator.boundingBox();
+    return box.y + box.height / 2;
+  };
+  const row = await middle(page.getByRole("tab", { name: "アイテム" }));
+  for (const other of [
+    page.getByRole("tab", { name: "お仕事" }),
+    page.getByRole("button", { name: /ショップを集計中/ }),
+    page.getByRole("button", { name: "メニュー" }),
+  ]) {
+    expect(Math.abs((await middle(other)) - row)).toBeLessThan(4);
+  }
+  expect(await overflow(page)).toBeLessThanOrEqual(0);
+});
+
 test("the tabs and the search field take focus from the keyboard", async ({ page }) => {
   await open(page, { status: reading("items", 20), items, equipment });
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: /アイテムを集計中/ })).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "メニュー" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "アイテム" })).toBeFocused();
   await page.keyboard.press("Tab");
@@ -200,6 +218,11 @@ test("the tabs and the search field take focus from the keyboard", async ({ page
   await expect(page.getByRole("tab", { name: "育成" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("tab", { name: "お仕事" })).toBeFocused();
+  // The status and the menu end the row.
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: /集計中/ })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "メニュー" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByLabel("名前で検索")).toBeFocused();
   await page.screenshot({ path: "test-results/wide-dark.png" });
