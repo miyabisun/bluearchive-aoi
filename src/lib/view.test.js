@@ -14,6 +14,7 @@ import {
   heldTone,
   placeName,
   stockCells,
+  updateText,
   shopStale,
   formatCount,
   sortStudents,
@@ -424,5 +425,21 @@ describe("work", () => {
       students: "?",
       detail: "? ÷ 41.5M",
     });
+  });
+});
+
+describe("update", () => {
+  it("tells where checking for an update stands", () => {
+    expect(updateText({ state: "checking" })).toBe("アップデートを確認しています…");
+    expect(updateText({ state: "latest", current: "v0.1.29" })).toBe("最新の版です（v0.1.29）");
+    expect(updateText({ state: "available", current: "v0.1.29", latest: "v0.1.30" })).toBe(
+      "v0.1.30 があります（今 v0.1.29）",
+    );
+    expect(updateText({ state: "installing", latest: "v0.1.30" })).toBe(
+      "v0.1.30 に更新しています…",
+    );
+    expect(updateText({ state: "failed", error: "通信できません" })).toBe(
+      "アップデートできませんでした: 通信できません",
+    );
   });
 });

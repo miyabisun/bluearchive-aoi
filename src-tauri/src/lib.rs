@@ -24,6 +24,7 @@ pub mod screen;
 pub mod shop;
 pub mod student;
 pub mod tally;
+pub mod update;
 pub mod watch;
 pub mod work;
 mod embedded {

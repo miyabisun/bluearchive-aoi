@@ -800,3 +800,41 @@ test("the menu chooses the theme, kept for the next start", async ({ page }) => 
   await choose("自動");
   await expect(body).toHaveCSS("background-color", "rgb(25, 25, 25)");
 });
+
+test("the menu checks for an update and takes it", async ({ page }) => {
+  await open(page, {
+    status: { state: "no_game" },
+    items,
+    equipment,
+    update: { current: "v0.1.29", latest: "v0.1.30" },
+  });
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await page.getByRole("menuitem", { name: "アップデートを確認" }).click();
+  await expect(page.getByText("v0.1.30 があります（今 v0.1.29）")).toBeVisible();
+  await page.getByRole("button", { name: "更新して再起動" }).click();
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ update: true }]);
+  await expect(page.getByText("v0.1.30 に更新しています…")).toBeVisible();
+});
+
+test("tells the app is up to date, or why it could not check", async ({ page }) => {
+  await open(page, {
+    status: { state: "no_game" },
+    items,
+    equipment,
+    update: { current: "v0.1.29", latest: null },
+  });
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await page.getByRole("menuitem", { name: "アップデートを確認" }).click();
+  await expect(page.getByText("最新の版です（v0.1.29）")).toBeVisible();
+  await expect(page.getByRole("button", { name: "更新して再起動" })).toHaveCount(0);
+
+  await open(page, {
+    status: { state: "no_game" },
+    items,
+    equipment,
+    update: { error: "通信できません" },
+  });
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await page.getByRole("menuitem", { name: "アップデートを確認" }).click();
+  await expect(page.getByRole("alert")).toHaveText("アップデートできませんでした: 通信できません");
+});

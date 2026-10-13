@@ -51,3 +51,31 @@ export async function setTarget(id, target) {
  */
 export const iconUrl = (name) =>
   "__TAURI_INTERNALS__" in window ? convertFileSrc(name, "icon") : `/icon/${name}`;
+
+/**
+ * The app's version and the newer one the latest GitHub release brings
+ * (`latest`, none when up to date); rejects with why it could not tell.
+ * Outside the app it answers with the demo's `update`.
+ */
+export async function checkUpdate() {
+  if (!("__TAURI_INTERNALS__" in window)) {
+    const answer = /** @type {any} */ (window).__AOI_DEMO__?.update;
+    if (answer?.error) throw answer.error;
+    return answer ?? { current: "v0.0.0", latest: null };
+  }
+  return invoke("check_update");
+}
+
+/**
+ * Puts the latest release in place of the running app and starts it; rejects
+ * with why it could not. Outside the app it notes the call in
+ * `window.__AOI_CALLS__`.
+ */
+export async function applyUpdate() {
+  if (!("__TAURI_INTERNALS__" in window)) {
+    const w = /** @type {any} */ (window);
+    (w.__AOI_CALLS__ ??= []).push({ update: true });
+    return;
+  }
+  return invoke("apply_update");
+}

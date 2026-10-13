@@ -1,7 +1,14 @@
 <script>
   import { onMount } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
-  import { exportAll, follow, iconUrl, setTarget } from "./lib/snapshot.js";
+  import {
+    applyUpdate,
+    checkUpdate,
+    exportAll,
+    follow,
+    iconUrl,
+    setTarget,
+  } from "./lib/snapshot.js";
   import { THEMES, applyTheme, storedTheme } from "./lib/theme.js";
   import {
     LISTS,
@@ -24,6 +31,7 @@
     studentCells,
     tierCell,
     unknownText,
+    updateText,
   } from "./lib/view.js";
 
   /**
@@ -118,6 +126,30 @@
   let sortBy = $state("level");
   /** The last export: `{ path }` or `{ error }`. */
   let exported = $state(null);
+  /** Where checking for an update stands (see `updateText`), none before asked. */
+  let update = $state(/** @type {any} */ (null));
+
+  async function check() {
+    update = { state: "checking" };
+    try {
+      const found = await checkUpdate();
+      update = found.latest
+        ? { state: "available", ...found }
+        : { state: "latest", current: found.current };
+    } catch (error) {
+      update = { state: "failed", error: String(error) };
+    }
+  }
+
+  /** Takes the update; on success the app restarts as it. */
+  async function install() {
+    update = { ...update, state: "installing" };
+    try {
+      await applyUpdate();
+    } catch (error) {
+      update = { state: "failed", error: String(error) };
+    }
+  }
   /**
    * The shops opened by hand, by name. Kept here, not in the page: every frame
    * read brings a new snapshot, which would close them again.
@@ -215,6 +247,14 @@
               save();
             }}>YAMLを書き出す</button
           >
+          <button
+            type="button"
+            role="menuitem"
+            onclick={() => {
+              menuOpen = false;
+              check();
+            }}>アップデートを確認</button
+          >
           <div role="group" aria-labelledby="theme-heading">
             <span class="menu-heading" id="theme-heading">テーマ</span>
             {#each THEMES as choice (choice.id)}
@@ -265,6 +305,16 @@
       <p class="error" role="alert">書き出せませんでした: {exported.error}</p>
     {:else if exported}
       <p class="exported" aria-live="polite">書き出しました: {exported.path}</p>
+    {/if}
+    {#if update?.state === "failed"}
+      <p class="error" role="alert">{updateText(update)}</p>
+    {:else if update}
+      <p class="exported update" aria-live="polite">
+        {updateText(update)}{#if update.state === "available"}<button
+            type="button"
+            onclick={install}>更新して再起動</button
+          >{/if}
+      </p>
     {/if}
 
     {#if view.tab === "shops" && snapshot.credits != null}
@@ -769,6 +819,16 @@
     .amount
       color: var(--c-on-surface)
       font-variant-numeric: tabular-nums
+
+  .update button
+    margin-left: var(--sp-3)
+    padding: 2px var(--sp-3)
+    border: 1px solid var(--c-accent)
+    border-radius: var(--radius-sm)
+    background: none
+    color: var(--c-accent)
+    font: inherit
+    cursor: pointer
 
   .exported
     margin: 0 0 var(--sp-4)

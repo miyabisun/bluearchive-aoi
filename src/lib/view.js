@@ -332,3 +332,19 @@ export function commissionCells(c) {
     fewer,
   };
 }
+
+/** Where checking for an update and taking it stands, as the window tells it. */
+export function updateText(update) {
+  switch (update.state) {
+    case "checking":
+      return "アップデートを確認しています…";
+    case "latest":
+      return `最新の版です（${update.current}）`;
+    case "available":
+      return `${update.latest} があります（今 ${update.current}）`;
+    case "installing":
+      return `${update.latest} に更新しています…`;
+    default:
+      return `アップデートできませんでした: ${update.error}`;
+  }
+}

@@ -15,6 +15,7 @@ use crate::{
     plan::{NeedRow, Target, UnknownRow},
     shop::ShopRow,
     tally::Tally,
+    update,
     watch::{self, Status, StudentRow, Update},
     work::WorkRows,
 };
@@ -208,10 +209,47 @@ fn export(app: tauri::AppHandle, latest: tauri::State<'_, Latest>) -> Result<Str
     Ok(path.display().to_string())
 }
 
+/// The app's version and the newer one the latest release brings, if any.
+#[derive(Debug, Clone, Serialize)]
+struct UpdateCheck {
+    current: String,
+    latest: Option<String>,
+}
+
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Asks GitHub for the latest release (see `update`).
+#[tauri::command]
+async fn check_update() -> Result<UpdateCheck, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let release = update::latest()?;
+        Ok(UpdateCheck {
+            current: format!("v{VERSION}"),
+            latest: update::update_of(&release, VERSION).map(|u| u.version),
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Puts the latest release in place of the running exe and starts it.
+#[tauri::command]
+async fn apply_update(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let release = update::latest()?;
+        let update = update::update_of(&release, VERSION).ok_or("最新の版です")?;
+        update::install(&update)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    app.restart()
+}
+
 pub fn run(context: tauri::Context) {
     let recognizer = Arc::new(Recognizer::embedded().expect("the built-in data is broken"));
     tauri::Builder::default()
         .setup(move |app| {
+            update::clean_up();
             let places = Places {
                 state: app.path().app_data_dir()?.join("state.json"),
                 latest: app.path().document_dir()?.join("Aoi").join("aoi.yaml"),
@@ -281,7 +319,13 @@ pub fn run(context: tauri::Context) {
             }
             .expect("a response of a status and a body")
         })
-        .invoke_handler(tauri::generate_handler![snapshot, export, set_target])
+        .invoke_handler(tauri::generate_handler![
+            snapshot,
+            export,
+            set_target,
+            check_update,
+            apply_update
+        ])
         .run(context)
         .expect("bluearchive-aoi failed to start");
 }

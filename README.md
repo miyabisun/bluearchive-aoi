@@ -120,8 +120,10 @@ The stages come from SchaleDB as `src-tauri/data/schaledb/stages.json`
 (`tools/schaledb/stages.ps1`, run by `update.ps1`).
 
 A tab stays as you pick it, whatever the game shows. The menu (☰) at the top right
-writes the YAML export (below) and chooses the theme: ライト, ダーク, or 自動, which
-follows Windows.
+writes the YAML export (below), checks for an update, and chooses the theme: ライト, ダーク,
+or 自動, which follows Windows. アップデートを確認 asks GitHub for the latest release; when
+it is newer, 更新して再起動 downloads its exe, checks it against the SHA-256 published
+with it, puts it in place of the running one, and starts it.
 
 Under the 装備 tab each slot's pieces T1 to T10 come first, then its blueprints T2 to T10
 and its universal blueprint, each tile with its tier at the bottom left.
