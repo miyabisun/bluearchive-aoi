@@ -80,6 +80,9 @@ read off the card (1 to 5 fragments).
 All but カケラ(文字) reset as the month changes: a shop read in an earlier month is marked
 前の月の値 until it is read again. 通常アイテム, 青輝石, カケラ(その他) and 戦術対抗戦 are
 not read.
+Above the shops, 技術ノート and 戦術教育BD each get a table of school by tier (初級 to
+最上級) of how many this month's shops still sell, every coin of every shop added (hover a
+count for which shops: `総力戦 40+12、指名手配 15`); 0 is bought up, — sold by no shop read.
 
 To plan training, tick 育成 beside the students to train under the 生徒 tab. The 育成 tab
 lists them with their targets, Lv90, skills 5/10/10/10 and equipment T10/10/10 to start

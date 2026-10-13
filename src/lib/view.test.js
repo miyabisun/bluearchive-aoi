@@ -13,6 +13,7 @@ import {
   goodTile,
   heldTone,
   placeName,
+  schoolTables,
   stockCells,
   updateText,
   shopStale,
@@ -264,6 +265,58 @@ describe("shops", () => {
     ];
     expect(filterShops(shops, "秘伝")).toEqual([{ ...shops[0], goods: [shops[0].goods[0]] }]);
     expect(filterShops(shops, "")).toEqual(shops);
+  });
+
+  it("adds up what the shops still sell of each school's notes and BDs by tier", () => {
+    const now = new Date(2026, 9, 13, 9, 0);
+    const left = (...counts) => counts.map((n) => (n == null ? null : { left: n, price: null }));
+    const shops = [
+      shop("総力戦", "2026-10-13 08:00:00", true, [
+        good(3000, "初級戦術教育BD（百鬼夜行）", left(40, 12)),
+        good(3003, "最上級戦術教育BD（百鬼夜行）", left(6, 2)),
+        good(3023, "最上級戦術教育BD（トリニティ）", left(0, 0)),
+        good(4032, "上級技術ノート（ゲヘナ）", left(30, null)),
+        good(9999, "秘伝ノート", left(3, 1)),
+      ]),
+      shop("指名手配", "2026-10-13 08:00:00", true, [
+        good(3000, "初級戦術教育BD（百鬼夜行）", left(15)),
+        good(3022, "上級戦術教育BD（トリニティ）", left(4)),
+      ]),
+      // Last month's counts no longer hold.
+      shop("大決戦", "2026-09-30 08:00:00", true, [
+        good(3010, "初級戦術教育BD（レッドウィンター）", left(40, 12)),
+      ]),
+    ];
+    expect(schoolTables(shops, now)).toEqual([
+      {
+        kind: "技術ノート",
+        rows: [{ school: "ゲヘナ", cells: [null, null, { left: 30, detail: "総力戦 30" }, null] }],
+      },
+      {
+        kind: "戦術教育BD",
+        rows: [
+          {
+            school: "百鬼夜行",
+            cells: [
+              { left: 67, detail: "総力戦 40+12、指名手配 15" },
+              null,
+              null,
+              { left: 8, detail: "総力戦 6+2" },
+            ],
+          },
+          {
+            school: "トリニティ",
+            cells: [
+              null,
+              null,
+              { left: 4, detail: "指名手配 4" },
+              { left: 0, detail: "総力戦 0+0" },
+            ],
+          },
+        ],
+      },
+    ]);
+    expect(schoolTables([], now)).toEqual([]);
   });
 });
 

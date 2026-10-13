@@ -158,6 +158,50 @@ export function filterShops(shops, query) {
     .filter((shop) => shop.goods.length > 0);
 }
 
+/** A school's tech note or tactical BD by its name: its tier, its kind and the school. */
+const SCHOOL_GOOD = /^(初級|中級|上級|最上級)(技術ノート|戦術教育BD)（(.+)）$/;
+export const TIERS = ["初級", "中級", "上級", "最上級"];
+const SCHOOL_KINDS = ["技術ノート", "戦術教育BD"];
+
+/**
+ * The tech notes and the tactical BDs as tables of school by tier: how many
+ * this month's shops still sell, every coin of every shop added, and which
+ * shops ("総力戦 40+12、指名手配 15"); a cell `null` where no shop sells it,
+ * a kind left out where no school is sold. Schools come in id order.
+ */
+export function schoolTables(shops, now = new Date()) {
+  const tables = SCHOOL_KINDS.map((kind) => ({ kind, rows: [] }));
+  for (const shop of shops) {
+    if (shopStale(shop, now)) continue;
+    for (const good of shop.goods) {
+      const [, tier, kind, school] = good.name.match(SCHOOL_GOOD) ?? [];
+      const lefts = good.offers.filter(Boolean).map((offer) => offer.left);
+      if (!kind || lefts.length === 0) continue;
+      const rows = tables[SCHOOL_KINDS.indexOf(kind)].rows;
+      let row = rows.find((r) => r.school === school);
+      if (!row) {
+        row = { school, id: good.id, cells: [null, null, null, null] };
+        rows.push(row);
+      }
+      row.id = Math.min(row.id, good.id);
+      const cell = (row.cells[TIERS.indexOf(tier)] ??= { left: 0, parts: [] });
+      cell.left += lefts.reduce((a, b) => a + b, 0);
+      cell.parts.push(`${shop.name} ${lefts.join("+")}`);
+    }
+  }
+  return tables
+    .filter((table) => table.rows.length > 0)
+    .map(({ kind, rows }) => ({
+      kind,
+      rows: rows
+        .sort((a, b) => a.id - b.id)
+        .map(({ school, cells }) => ({
+          school,
+          cells: cells.map((c) => c && { left: c.left, detail: c.parts.join("、") }),
+        })),
+    }));
+}
+
 /** The lines of the plan that count no item, by kind. */
 const PLAN_KINDS = {
   credits: "クレジット",

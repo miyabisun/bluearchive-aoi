@@ -22,6 +22,7 @@
     groupPlan,
     needCells,
     placeName,
+    schoolTables,
     shopStale,
     sortStudents,
     starName,
@@ -29,6 +30,7 @@
     statusView,
     stockCells,
     studentCells,
+    TIERS,
     tierCell,
     unknownText,
     updateText,
@@ -570,6 +572,44 @@
         <p class="empty" data-state="no-match">一致する項目がありません</p>
       {:else if view.tab === "shops"}
         <div class="table-scroll">
+          <!-- Each school's notes and BDs by tier: how many this month's shops
+               still sell, which shops on hover. Opened as the shops are. -->
+          {#each schoolTables(shown) as table (table.kind)}
+            <details class="shop" open={query.trim() !== "" || opened.has(`table:${table.kind}`)}>
+              <summary
+                onclick={(event) => {
+                  if (query.trim() === "") toggle(event, `table:${table.kind}`);
+                  else event.preventDefault();
+                }}
+              >
+                <h2>{table.kind}<span class="read-at">ショップの残り</span></h2>
+              </summary>
+              <table class="tiers schools" data-state="success">
+                <thead>
+                  <tr>
+                    <th scope="col">学園</th>
+                    {#each TIERS as tier, i (tier)}
+                      <th scope="col" class="tier-{i + 1}">{tier}</th>
+                    {/each}
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each table.rows as row (row.school)}
+                    <tr>
+                      <th scope="row">{row.school}</th>
+                      {#each row.cells as cell, i (i)}
+                        <td class="tier-{i + 1}" title={cell?.detail}
+                          >{#if cell}<span class:sold={cell.left === 0}
+                              >{formatCount({ exact: cell.left })}</span
+                            >{:else}—{/if}</td
+                        >
+                      {/each}
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </details>
+          {/each}
           {#each shown as shop (shop.name)}
             <!-- Closed until opened, and open while a search narrows the goods. -->
             <details class="shop" open={query.trim() !== "" || opened.has(shop.name)}>
@@ -1104,6 +1144,17 @@
     img
       vertical-align: middle
       margin-right: var(--sp-2)
+
+  // A school a row, its tiers' counts right-aligned on their colours.
+  .tiers.schools
+    margin-top: var(--sp-1)
+    th
+      padding: var(--sp-1) var(--sp-2)
+      font-weight: 600
+      white-space: nowrap
+    thead th:not(:first-child), td
+      width: 18%
+      text-align: right
 
   // The work tab: a section a kind of play, each count with its terms under it.
   .work
