@@ -63,6 +63,7 @@
   {
     "image": "shops/kakera-1.png",
     "shop": "カケラ(文字)",
+    "held": [2929],
     "note": "2026-10-13 capture, 2222x1250. A card's price is its student's rate (1 to 5). ユカリ's times left, 589, lost its 58 to the OCR at Otsu's split. Only the middle row is whole. Labels by eye.",
     "offers": [
       { "name": "メルの神名文字", "coin": 0, "left": 683, "price": 1 },
@@ -74,6 +75,7 @@
   {
     "image": "shops/kakera-2.png",
     "shop": "カケラ(文字)",
+    "held": [2929],
     "note": "2026-10-13 capture, 2222x1250, with a rate of 2. Two rows are whole. Labels by eye.",
     "offers": [
       { "name": "ミネの神名文字", "coin": 0, "left": 436, "price": 5 },
@@ -89,6 +91,7 @@
   {
     "image": "shops/kakera-3.png",
     "shop": "カケラ(文字)",
+    "held": [2929],
     "note": "2026-10-13 capture, 2222x1250, with rates of 3. Two rows are whole. Labels by eye.",
     "offers": [
       { "name": "カズサ（バンド）の神名文字", "coin": 0, "left": 486, "price": 1 },
@@ -99,6 +102,22 @@
       { "name": "サキ（水着）の神名文字", "coin": 0, "left": 620, "price": 3 },
       { "name": "フウカの神名文字", "coin": 0, "left": 269, "price": 1 },
       { "name": "アヤネの神名文字", "coin": 0, "left": 372, "price": 1 }
+    ]
+  },
+  {
+    "image": "shops/jukutatsu.png",
+    "shop": "熟達証書",
+    "held": [4469],
+    "note": "2026-10-13 capture, 2222x1250, the top of the list. The certificates held show only here, over the cards. Labels by eye.",
+    "offers": [
+      { "name": "キリノ（水着）の神名文字", "coin": 0, "left": 6, "price": 1800 },
+      { "name": "イブキ（水着）の神名文字", "coin": 0, "left": 2, "price": 2400 },
+      { "name": "ヒマリ（臨戦）の神名文字", "coin": 0, "left": 2, "price": 1800 },
+      { "name": "リオ（臨戦）の神名文字", "coin": 0, "left": 2, "price": 1800 },
+      { "name": "アツコ（水着）の神名文字", "coin": 0, "left": 6, "price": 1800 },
+      { "name": "イブキの神名文字", "coin": 0, "left": 6, "price": 1800 },
+      { "name": "アイリ（バンド）の神名文字", "coin": 0, "left": 6, "price": 1800 },
+      { "name": "オトギの神名文字", "coin": 0, "left": 6, "price": 1800 }
     ]
   }
 ]

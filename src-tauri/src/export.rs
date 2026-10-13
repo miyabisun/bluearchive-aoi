@@ -33,7 +33,7 @@ pub fn yaml(
     out += "# skills は EX・ノーマル・パッシブ・サブ、ability は HP・攻撃力・治癒力の能力解放。\n";
     out += "# count の K は千単位（51K は 50,500〜51,499）。\n";
     out += "# id: null の生徒は SchaleDB に未登録（名前だけで照合）。\n";
-    out += "# shops の left はあと何回買えるか。price・amount・limit は 1 回の価格・個数と回数の上限（ショップの決まり、カケラ(文字) の price はカードの値、無ければ null）。\n";
+    out += "# shops の left はあと何回買えるか。held は各コインの所持数。price・amount・limit は 1 回の価格・個数と回数の上限（ショップの決まり、カケラ(文字) の price はカードの値、無ければ null）。\n";
     out += "# カケラ(文字) 以外のショップは月が替わると戻る（read_at が前の月なら前の月の値）。\n";
     out += "credits: ";
     out += &credits.map_or("null".to_owned(), |c| c.to_string());
@@ -78,7 +78,7 @@ pub fn yaml(
             .iter()
             .flat_map(|g| {
                 g.offers.iter().enumerate().filter_map(move |(coin, o)| {
-                    let name = shop.coins.get(coin).map_or("", String::as_str);
+                    let name = shop.coins.get(coin).map_or("", |c| c.name.as_str());
                     o.map(|o| (g, name, o))
                 })
             })
@@ -99,9 +99,19 @@ pub fn yaml(
                 format!("limit: {}", terms(|p| p.limit)),
             ]
         });
+        // How many of each coin are held, by coin.
+        let held: Vec<String> = shop
+            .coins
+            .iter()
+            .map(|c| {
+                let count = c.held.map_or("null".to_owned(), |n| n.to_string());
+                format!("{}: {count}", quoted(&c.name))
+            })
+            .collect();
         vec![
             format!("name: {}", quoted(&shop.name)),
             format!("read_at: {}", quoted(&shop.read_at)),
+            format!("held: {{{}}}", held.join(", ")),
             // The offers, nested under their shop.
             offers.trim_end().replace('\n', "\n    "),
         ]
@@ -154,7 +164,7 @@ mod tests {
         keep::ReadAt,
         price::Price,
         quantity::Count,
-        shop::{GoodRow, OfferRow, ShopRow},
+        shop::{CoinRow, GoodRow, OfferRow, ShopRow},
         student::{Gear, Training, Weapon},
     };
 
@@ -332,20 +342,32 @@ shops: []
             name: "総力戦".to_owned(),
             read_at: "2026-10-12 22:00:00".to_owned(),
             resets: true,
-            coins: vec!["総力戦レアコイン".to_owned(), "総力戦コイン".to_owned()],
+            coins: ["総力戦レアコイン", "総力戦コイン"]
+                .into_iter()
+                .zip(0..)
+                .map(|(name, at)| CoinRow {
+                    name: name.to_owned(),
+                    icon: String::new(),
+                    held: (at == 0).then_some(530),
+                    at,
+                })
+                .collect(),
             goods: vec![GoodRow {
                 id: 3000,
                 name: "初級戦術教育BD（百鬼夜行）".to_owned(),
+                icon: String::new(),
                 offers: vec![
                     Some(OfferRow {
                         left: 12,
                         price: None,
                         shown: None,
+                        coin: 0,
                     }),
                     Some(OfferRow {
                         left: 40,
                         price: Some(terms),
                         shown: None,
+                        coin: 1,
                     }),
                 ],
             }],
@@ -361,6 +383,7 @@ shops: []
             r#"shops:
   - name: "総力戦"
     read_at: "2026-10-12 22:00:00"
+    held: {"総力戦レアコイン": 530, "総力戦コイン": null}
     offers:
       - id: 3000
         name: "初級戦術教育BD（百鬼夜行）"

@@ -18,6 +18,9 @@ use serde::Deserialize;
 struct Fixture {
     image: String,
     shop: String,
+    /// The coins held, left one first, where the fixture shows them.
+    #[serde(default)]
+    held: Option<Vec<Option<u64>>>,
     offers: Vec<Label>,
 }
 
@@ -70,6 +73,11 @@ fn every_offer_read_is_right() {
         if seen.shop != fixture.shop {
             wrong.push(format!("{}: read as {}", fixture.image, seen.shop));
         }
+        if let Some(held) = &fixture.held
+            && seen.held != *held
+        {
+            wrong.push(format!("{}: held read {:?}", fixture.image, seen.held));
+        }
         for offer in &seen.offers {
             let right = labels.contains(offer);
             if right {
@@ -107,9 +115,14 @@ fn the_terms_price_every_labeled_offer_as_its_card() {
                     left: label.left,
                     price: shown.then_some(label.price),
                 }],
+                held: Vec::new(),
             };
             let rows = recognizer.shop_rows(&BTreeMap::from([(fixture.shop.clone(), shelf)]));
-            let price = rows[0].goods[0].offers[usize::from(label.coin)]
+            let price = rows[0].goods[0]
+                .offers
+                .iter()
+                .flatten()
+                .find(|o| o.coin == label.coin)
                 .and_then(|o| o.price)
                 .map(|p| p.price);
             if price != Some(label.price) {

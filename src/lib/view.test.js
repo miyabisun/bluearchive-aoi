@@ -8,7 +8,7 @@ import {
   starOf,
   tierCell,
   unknownText,
-  goodCells,
+  goodTile,
   shopStale,
   followTab,
   formatCount,
@@ -249,29 +249,31 @@ describe("shops", () => {
     expect(shopStale(shop("カケラ(文字)", "2026-09-01 08:00:00", false, []), now)).toBe(false);
   });
 
-  it("writes what each coin buys: the times left, the price and how many come", () => {
+  it("writes what each coin buys: the times left at its price, or sold out", () => {
     expect(
-      goodCells(
+      goodTile(
         good(10019, "アズサの神名文字", [
-          { left: 0, price: terms(50, 5, 10) },
           { left: 20, price: terms(50, 5, 20) },
+          { left: 0, price: terms(50, 5, 10) },
         ]),
       ),
-    ).toEqual([
-      { left: "売切れ", terms: "50枚で5個", sold: true },
-      { left: "20回", terms: "50枚で5個", sold: false },
-    ]);
+    ).toEqual({
+      amount: "×5",
+      offers: [
+        { text: "20回@50", sold: false },
+        { text: "売切れ", sold: true },
+      ],
+    });
     expect(
-      goodCells(
-        good(3000, "初級戦術教育BD（百鬼夜行）", [null, { left: 40, price: terms(1800, 1, 6) }]),
+      goodTile(
+        good(3000, "初級戦術教育BD（百鬼夜行）", [{ left: 1200, price: terms(1800, 1, 6) }, null]),
       ),
-    ).toEqual([
-      { left: "—", terms: "", sold: false },
-      { left: "40回", terms: "1,800枚", sold: false },
-    ]);
-    expect(goodCells(good(1, "?", [{ left: 3, price: null }]))).toEqual([
-      { left: "3回", terms: "?", sold: false },
-    ]);
+    ).toEqual({ amount: "×1", offers: [{ text: "1,200回@1,800", sold: false }, null] });
+    // Without terms, the price is unknown and so is how many come.
+    expect(goodTile(good(1, "?", [{ left: 3, price: null }]))).toEqual({
+      amount: "",
+      offers: [{ text: "3回@?", sold: false }],
+    });
   });
 
   it("narrows each shop's goods by name and leaves out a shop with none", () => {

@@ -118,6 +118,7 @@ mod tests {
                         left: 0,
                         price: None,
                     }],
+                    held: vec![Some(530), None],
                 },
             )]),
             targets: BTreeMap::from([(10059, Target::default())]),

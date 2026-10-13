@@ -141,23 +141,22 @@ export function shopStale(shop, now = new Date()) {
 }
 
 /**
- * What each of a shop's coins buys of a good, as table cells: the times left
- * ("売切れ" at none, "—" where the coin does not buy it) and the terms, the
- * price and how many come with a purchase ("?" without terms).
+ * A good as its tile shows it: how many come with a purchase ("×5", none
+ * without terms), and what each of the shop's coins buys of it, the times
+ * left at the price ("12回@10", "@?" without terms, "売切れ" at none; `null`
+ * where the coin does not buy it).
  */
-export function goodCells(good) {
-  return good.offers.map((offer) => {
-    if (!offer) return { left: "—", terms: "", sold: false };
-    const t = offer.price;
-    const terms = !t
-      ? "?"
-      : `${exact.format(t.price)}枚` + (t.amount > 1 ? `で${exact.format(t.amount)}個` : "");
-    return {
-      left: offer.left === 0 ? "売切れ" : `${offer.left}回`,
-      terms,
-      sold: offer.left === 0,
-    };
-  });
+export function goodTile(good) {
+  const priced = good.offers.find((offer) => offer?.price);
+  return {
+    amount: priced ? `×${exact.format(priced.price.amount)}` : "",
+    offers: good.offers.map((offer) => {
+      if (!offer) return null;
+      const sold = offer.left === 0;
+      const price = offer.price ? exact.format(offer.price.price) : "?";
+      return { text: sold ? "売切れ" : `${exact.format(offer.left)}回@${price}`, sold };
+    }),
+  };
 }
 
 /** Each shop with its goods narrowed by `query` (see `filterRows`); shops left with none go. */

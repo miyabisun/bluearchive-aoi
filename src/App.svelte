@@ -8,7 +8,7 @@
     filterShops,
     followTab,
     formatCount,
-    goodCells,
+    goodTile,
     groupPlan,
     needCells,
     shopStale,
@@ -331,44 +331,66 @@
         <div class="table-scroll">
           {#each shown as shop (shop.name)}
             <!-- Closed until opened, and open while a search narrows the goods. -->
-            <details
-              class="shop"
-              open={query.trim() !== "" || opened.has(shop.name)}
-              ontoggle={(event) => {
-                if (query.trim() !== "") return;
-                if (event.currentTarget.open) opened.add(shop.name);
-                else opened.delete(shop.name);
-              }}
-            >
-              <summary>
+            <details class="shop" open={query.trim() !== "" || opened.has(shop.name)}>
+              <!-- Opened and closed here, not by the page: the snapshot of the
+                   next frame may come before the page's toggle event. -->
+              <summary
+                onclick={(event) => {
+                  event.preventDefault();
+                  if (query.trim() !== "") return;
+                  if (opened.has(shop.name)) opened.delete(shop.name);
+                  else opened.add(shop.name);
+                }}
+              >
                 <h2>
                   {shop.name}<span class="read-at"
                     >{shop.read_at.slice(5, 16).replace("-", "/")}</span
                   >{#if shopStale(shop)}<span class="stale">前の月の値</span>{/if}
                 </h2>
+                <!-- The coins held, as the shop shows them over its cards. -->
+                <span class="held">
+                  {#each shop.coins as coin (coin.name)}
+                    <span title={coin.name}
+                      ><img
+                        src={iconUrl(coin.icon)}
+                        alt={coin.name}
+                        width="20"
+                        height="20"
+                      />{coin.held == null ? "?" : formatCount({ exact: coin.held })}</span
+                    >
+                  {/each}
+                </span>
               </summary>
-              <table data-state="success">
-                <thead>
-                  <tr>
-                    <th scope="col">品</th>
-                    {#each shop.coins as coin (coin)}
-                      <th scope="col" class="fit">{coin}</th>
-                    {/each}
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each shop.goods as good (good.id)}
-                    <tr>
-                      <td>{good.name}</td>
-                      {#each goodCells(good) as cell, i (i)}
-                        <td class="fit" class:sold={cell.sold}
-                          >{cell.left}<span class="terms">{cell.terms}</span></td
+              <!-- Each good by its icon; under it, what each coin buys, the plain coin left. -->
+              <ul class="tiles goods" class:pair={shop.coins.length > 1} data-state="success">
+                {#each shop.goods as good (good.id)}
+                  {@const tile = goodTile(good)}
+                  <li title={good.name}>
+                    <span class="item"
+                      ><img
+                        src={iconUrl(good.icon)}
+                        alt={good.name}
+                        width="64"
+                        height="64"
+                        loading="lazy"
+                      />{#if tile.amount}<span class="count">{tile.amount}</span>{/if}</span
+                    >
+                    <span class="offers">
+                      {#each tile.offers as offer, i (i)}
+                        <span class="offer" class:sold={offer?.sold}
+                          >{#if offer}<img
+                              src={iconUrl(shop.coins[i].icon)}
+                              alt={shop.coins[i].name}
+                              title={shop.coins[i].name}
+                              width="18"
+                              height="18"
+                            />{offer.text}{/if}</span
                         >
                       {/each}
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
+                    </span>
+                  </li>
+                {/each}
+              </ul>
             </details>
           {/each}
         </div>
@@ -658,10 +680,56 @@
     &[open]
       padding-bottom: var(--sp-4)
     summary
+      display: flex
+      flex-wrap: wrap
+      align-items: center
+      gap: var(--sp-1) var(--sp-3)
       padding: var(--sp-2) 0
       cursor: pointer
-    table
+    .tiles
       margin-top: var(--sp-1)
+
+  .held
+    display: inline-flex
+    gap: var(--sp-3)
+    margin-left: auto
+    font-size: var(--fs-sm)
+    font-variant-numeric: tabular-nums
+    span
+      display: inline-flex
+      align-items: center
+      gap: 2px
+    img
+      object-fit: contain
+
+  // A good's tile: its icon over what each coin buys, two coins side by side.
+  .tiles.goods
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr))
+    &.pair
+      grid-template-columns: repeat(auto-fill, minmax(176px, 1fr))
+    li
+      flex-direction: column
+      align-items: center
+      gap: var(--sp-1)
+    .item
+      position: relative
+    .offers
+      display: flex
+      gap: var(--sp-2)
+      width: 100%
+      justify-content: center
+    .offer
+      display: inline-flex
+      flex: 1
+      justify-content: center
+      align-items: center
+      gap: 2px
+      font-size: var(--fs-caption)
+      font-variant-numeric: tabular-nums
+      white-space: nowrap
+      img
+        width: 18px
+        height: 18px
 
   h2
     display: inline-flex
@@ -670,11 +738,6 @@
     margin: 0
     font-size: var(--fs-md)
     font-weight: 600
-
-  .terms
-    display: block
-    color: var(--c-muted)
-    font-size: var(--fs-caption)
 
   .read-at
     color: var(--c-muted)

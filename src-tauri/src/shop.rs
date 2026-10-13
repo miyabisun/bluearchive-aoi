@@ -8,7 +8,7 @@ use image::{Rgb, RgbImage, RgbaImage, imageops};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Item,
+    Item, catalog,
     grid::Card,
     icon::{IconMatcher, Mask},
     ocr::Ocr,
@@ -54,6 +54,11 @@ const DIGITS: Span = (0.085, -0.045);
 const COINS: [f32; 2] = [0.829, 0.552];
 const COINS_ROW: f32 = 0.12;
 const COIN_SIZE: f32 = 0.04;
+/// How many of each coin are held, written right of its icon: from the icon's
+/// centre, and the rows around `COINS_ROW` (measured on 2026-10-13: "530"
+/// spans 0.031 to 0.09 right of its icon, the box ends 0.22 right of it).
+const HELD: Span = (0.03, 0.2);
+const HELD_ROWS: f32 = 0.025;
 /// The icon slot over the bar, drawn like a card of the item list: its centre
 /// from the bar's top and its height (fitted on 26 cards whose names read).
 const SLOT_CENTRE: f32 = -0.0575;
@@ -90,15 +95,17 @@ pub struct Offer {
     pub price: Option<u32>,
 }
 
-/// What a frame of the shop screen shows.
+/// What a frame of the shop screen shows: the shop, its offers, and how many
+/// of each of its coins are held (left one first; `None` not read).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Seen {
     pub shop: &'static str,
     pub offers: Vec<Offer>,
+    pub held: Vec<Option<u64>>,
 }
 
 /// Where the shop screen is read besides its cards (`card_area`): the menu and
-/// the coins over the cards. A fixture keeps these alone.
+/// the coins over the cards with their counts. A fixture keeps these alone.
 pub fn areas() -> Vec<Area> {
     let coins = COIN_SIZE / 2.0;
     vec![
@@ -109,10 +116,27 @@ pub fn areas() -> Vec<Area> {
         },
         Area {
             from_right: true,
-            x: (COINS[0] + coins, COINS[1] - coins),
-            y: (COINS_ROW - coins, COINS_ROW + coins),
+            x: (COINS[0] + coins, COINS[1] - HELD.1),
+            y: (COINS_ROW - HELD_ROWS, COINS_ROW + HELD_ROWS),
         },
     ]
+}
+
+/// How many are held of the coin whose icon is centred `at` window heights
+/// from the right edge.
+fn held(image: &RgbImage, ocr: &Ocr, at: f32) -> Option<u64> {
+    let (w, h) = (image.width() as f32, image.height() as f32);
+    let x = w - at * h;
+    let count = crop(
+        image,
+        x + HELD.0 * h,
+        (COINS_ROW - HELD_ROWS) * h,
+        x + HELD.1 * h,
+        (COINS_ROW + HELD_ROWS) * h,
+    )?;
+    let values: Vec<u8> = count.pixels().map(|p| luminance(p.0)).collect();
+    let text = ocr.read(&ink(&count, false, otsu(&values))).ok()?;
+    crate::credit::parse(&text)
 }
 
 /// The navy of the chosen menu entry and of the bars, and the darker navy of
@@ -145,7 +169,9 @@ impl Goods {
             .map(|name| picture(name))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            matcher: IconMatcher::new(&pictures, vec![None; pictures.len()], SLOT_MASK),
+            // A shop's icon slot is drawn as a card of the item list, its
+            // colour the item's rarity.
+            matcher: IconMatcher::new(&pictures, catalog::rarities(items, &icons), SLOT_MASK),
             drawn: icons
                 .iter()
                 .map(|name| {
@@ -190,7 +216,13 @@ impl Goods {
             .iter()
             .filter_map(|bar| self.offer(image, ocr, bar, &coins, read_price))
             .collect();
-        Some(Seen { shop, offers })
+        // A shop with one coin shows it where a shop with two shows the right one.
+        let shown = prices.coins(shop).len();
+        let held = COINS[COINS.len() - shown.min(COINS.len())..]
+            .iter()
+            .map(|&at| held(image, ocr, at))
+            .collect();
+        Some(Seen { shop, offers, held })
     }
 
     /// The offer of the card over `bar`, when the card is shown whole, the item
@@ -553,24 +585,30 @@ pub const LASTING: &str = "カケラ(文字)";
 pub struct Shelf {
     pub read_at: String,
     pub offers: Vec<Offer>,
+    /// How many of each coin are held (as `Seen::held`), taken as offers are.
+    #[serde(default)]
+    pub held: Vec<Option<u64>>,
 }
 
 /// Keeps the offers of every shop seen. An offer is taken once the same times
 /// left have been read in `CONFIRM` frames in a row.
 #[derive(Default)]
 pub struct Shelves {
-    shelves: BTreeMap<String, Shelf>,
+    by_shop: BTreeMap<String, Shelf>,
     /// The times left last read for each shop, item and coin, and in how many
     /// frames in a row.
     streaks: HashMap<(&'static str, i64, u8), (u32, u8)>,
+    /// The same for the coins held, by shop and coin.
+    held: HashMap<(&'static str, usize), (u64, u8)>,
 }
 
 impl Shelves {
     /// Shelves starting from those kept from before.
     pub fn seeded(shelves: BTreeMap<String, Shelf>) -> Self {
         Self {
-            shelves,
+            by_shop: shelves,
             streaks: HashMap::new(),
+            held: HashMap::new(),
         }
     }
 
@@ -579,6 +617,23 @@ impl Shelves {
     /// a new month clears what an earlier month left, but in the `LASTING` shop.
     pub fn observe(&mut self, seen: &Seen, now: &str) -> bool {
         let mut changed = false;
+        for (coin, &count) in seen.held.iter().enumerate() {
+            let Some(count) = count else { continue };
+            let streak = self.held.entry((seen.shop, coin)).or_insert((count, 0));
+            if streak.0 == count {
+                streak.1 = streak.1.saturating_add(1);
+            } else {
+                *streak = (count, 1);
+            }
+            let stock = self.by_shop.entry(seen.shop.to_owned()).or_default();
+            if streak.1 >= CONFIRM && stock.held.get(coin) != Some(&Some(count)) {
+                stock
+                    .held
+                    .resize(seen.held.len().max(stock.held.len()), None);
+                stock.held[coin] = Some(count);
+                changed = true;
+            }
+        }
         for offer in &seen.offers {
             let streak = self
                 .streaks
@@ -592,7 +647,7 @@ impl Shelves {
             if streak.1 < CONFIRM {
                 continue;
             }
-            let stock = self.shelves.entry(seen.shop.to_owned()).or_default();
+            let stock = self.by_shop.entry(seen.shop.to_owned()).or_default();
             if seen.shop != LASTING && month(&stock.read_at) != month(now) {
                 stock.offers.clear();
             }
@@ -613,28 +668,41 @@ impl Shelves {
 
     /// The shelves by shop.
     pub fn shelves(&self) -> &BTreeMap<String, Shelf> {
-        &self.shelves
+        &self.by_shop
     }
 }
 
-/// A shop's shelf as the window and the export show it: its coins by name
-/// (left first), whether its offers reset as the month changes, and its goods
-/// in id order.
+/// A shop's shelf as the window and the export show it: its coins in id
+/// order (the plain coin before the rare, which the screen shows left),
+/// whether its offers reset as the month changes, and its goods in id order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ShopRow {
     pub name: String,
     pub read_at: String,
     pub resets: bool,
-    pub coins: Vec<String>,
+    pub coins: Vec<CoinRow>,
     pub goods: Vec<GoodRow>,
 }
 
-/// A good of a shop, named, with what each coin buys of it (`None`: that
-/// coin does not).
+/// A coin of a shop: its name, its icon's (empty where SchaleDB has none) and
+/// how many are held.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CoinRow {
+    pub name: String,
+    pub icon: String,
+    pub held: Option<u64>,
+    /// The coin as the screen tells it (see `Offer::coin`).
+    #[serde(skip)]
+    pub at: u8,
+}
+
+/// A good of a shop, named, with its icon and what each coin buys of it
+/// (`None`: that coin does not).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GoodRow {
     pub id: i64,
     pub name: String,
+    pub icon: String,
     pub offers: Vec<Option<OfferRow>>,
 }
 
@@ -647,24 +715,30 @@ pub struct OfferRow {
     /// The price read on the card (see `Offer::price`), kept with the shelf.
     #[serde(skip)]
     pub shown: Option<u32>,
+    /// The coin as the screen tells it (see `Offer::coin`).
+    #[serde(skip)]
+    pub coin: u8,
 }
 
 impl ShopRow {
     /// The shelf the row shows.
     pub fn shelf(&self) -> Shelf {
+        let mut held = vec![None; self.coins.len()];
+        for coin in &self.coins {
+            held[usize::from(coin.at)] = coin.held;
+        }
         Shelf {
+            held,
             read_at: self.read_at.clone(),
             offers: self
                 .goods
                 .iter()
                 .flat_map(|g| {
-                    g.offers.iter().zip(0..).filter_map(|(o, coin)| {
-                        o.map(|o| Offer {
-                            id: g.id,
-                            coin,
-                            left: o.left,
-                            price: o.shown,
-                        })
+                    g.offers.iter().flatten().map(|o| Offer {
+                        id: g.id,
+                        coin: o.coin,
+                        left: o.left,
+                        price: o.shown,
                     })
                 })
                 .collect(),
@@ -845,7 +919,27 @@ mod tests {
         Seen {
             shop,
             offers: offers.to_vec(),
+            held: Vec::new(),
         }
+    }
+
+    #[test]
+    fn the_coins_held_are_taken_once_read_alike_in_a_row() {
+        let mut shelves = Shelves::default();
+        let held = |counts: &[Option<u64>]| Seen {
+            shop: "総力戦",
+            offers: Vec::new(),
+            held: counts.to_vec(),
+        };
+        // A misread frame between restarts the count.
+        for counts in [[Some(530), None], [Some(580), None], [Some(530), None]] {
+            assert!(!shelves.observe(&held(&counts), NOW));
+        }
+        for _ in 1..CONFIRM - 1 {
+            assert!(!shelves.observe(&held(&[Some(530), None]), NOW));
+        }
+        assert!(shelves.observe(&held(&[Some(530), Some(5940)]), NOW));
+        assert_eq!(shelves.shelves()["総力戦"].held, [Some(530), None]);
     }
 
     fn offer(id: i64, coin: u8, left: u32) -> Offer {
@@ -901,6 +995,7 @@ mod tests {
         let last_month = |offers: Vec<Offer>| Shelf {
             read_at: "2026-09-30 23:00:00".to_owned(),
             offers,
+            held: Vec::new(),
         };
         let mut shelves = Shelves::seeded(BTreeMap::from([
             (

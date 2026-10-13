@@ -8,7 +8,7 @@ use image::{RgbImage, RgbaImage};
 
 use crate::{
     Cell, Item, Row, grid,
-    icon::{IconMatcher, Mask},
+    icon::{IconMatcher, Mask, Rarity},
     order,
     quantity::{Count, Digits},
 };
@@ -73,17 +73,8 @@ impl Catalog {
                 keys
             })
             .collect();
-        // An icon's rarity, where all its items have the same.
-        let rarity = icons
-            .iter()
-            .map(|name| {
-                let mut of = entries.iter().filter(|e| e.icon == *name).map(|e| e.rarity);
-                let first = of.next().flatten();
-                of.all(|r| r == first).then_some(first).flatten()
-            })
-            .collect();
         Ok(Self {
-            matcher: IconMatcher::new(&images, rarity, rules.mask),
+            matcher: IconMatcher::new(&images, rarities(&entries, &icons), rules.mask),
             icon_keys,
             icon_ignored,
             entries,
@@ -238,6 +229,19 @@ pub fn gaps(entries: &[Item], rules: &Rules, cells: &[Cell], start: bool) -> Vec
         .collect();
     gone.sort_unstable();
     gone.into_iter().map(|(_, id)| id).collect()
+}
+
+/// The rarity of each of `icons`, where all the `entries` drawn with it have
+/// the same.
+pub fn rarities(entries: &[Item], icons: &[&str]) -> Vec<Option<Rarity>> {
+    icons
+        .iter()
+        .map(|name| {
+            let mut of = entries.iter().filter(|e| e.icon == *name).map(|e| e.rarity);
+            let first = of.next().flatten();
+            of.all(|r| r == first).then_some(first).flatten()
+        })
+        .collect()
 }
 
 #[cfg(test)]

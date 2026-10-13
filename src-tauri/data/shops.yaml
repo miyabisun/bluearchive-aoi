@@ -61,7 +61,7 @@
     - { item: 技術ノート, tier: 4, coin: 大決戦レアコイン, price: 25, limit: 6 }
 
 合同火力演習:
-  coins: [合同火力演習コイン]
+  coins: [火力演習コイン]
   goods:
     - { item: 神名文字, price: 50, amount: 5, limit: 10 }
     - { item: 秘伝ノート, price: 500, limit: 2 }

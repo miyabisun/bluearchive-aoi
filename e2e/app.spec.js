@@ -369,20 +369,26 @@ const shops = [
     name: "総力戦",
     read_at: "2026-09-30 22:00:00",
     resets: true,
-    coins: ["総力戦レアコイン", "総力戦コイン"],
+    // The plain coin left, the rare right.
+    coins: [
+      { name: "総力戦コイン", icon: "item_icon_raidcoin", held: 5940 },
+      { name: "総力戦レアコイン", icon: "item_icon_raidcoin_high", held: 530 },
+    ],
     goods: [
       {
         id: 3000,
         name: "初級戦術教育BD（百鬼夜行）",
+        icon: "item_icon_material_exskill_hyakkiyako_0",
         offers: [
-          { left: 12, price: { price: 10, amount: 1, limit: 12 } },
           { left: 40, price: { price: 10, amount: 1, limit: 40 } },
+          { left: 12, price: { price: 10, amount: 1, limit: 12 } },
         ],
       },
       {
         id: 10019,
         name: "アズサの神名文字",
-        offers: [{ left: 0, price: { price: 50, amount: 5, limit: 10 } }, null],
+        icon: "item_icon_secretstone_azusa",
+        offers: [null, { left: 0, price: { price: 50, amount: 5, limit: 10 } }],
       },
     ],
   },
@@ -390,8 +396,15 @@ const shops = [
     name: "指名手配",
     read_at: "2999-01-01 08:30:00",
     resets: true,
-    coins: ["指名手配コイン"],
-    goods: [{ id: 160, name: "エーテルの粉", offers: [{ left: 25, price: null }] }],
+    coins: [{ name: "指名手配コイン", icon: "item_icon_chasercoin", held: null }],
+    goods: [
+      {
+        id: 160,
+        name: "エーテルの粉",
+        icon: "item_icon_material_ether_0",
+        offers: [{ left: 25, price: null }],
+      },
+    ],
   },
 ];
 
@@ -402,23 +415,46 @@ test("shows each shop's goods, shop by shop, when the game shows a shop", async 
     "aria-selected",
     "true",
   );
+  // Each shop names itself, when it was read and the coins held.
   await expect(page.locator("summary")).toHaveText([
-    "総力戦09/30 22:00前の月の値",
-    "指名手配01/01 08:30",
+    "総力戦09/30 22:00前の月の値 5,940530",
+    "指名手配01/01 08:30 ?",
   ]);
+  expect(
+    await page
+      .locator("summary")
+      .first()
+      .locator("img")
+      .evaluateAll((imgs) => imgs.map((i) => i.alt)),
+  ).toEqual(["総力戦コイン", "総力戦レアコイン"]);
   // Each shop opens and closes; closed, its goods are out of sight.
   const first = page.locator("details").first();
-  await expect(first.locator("tbody")).toBeHidden();
+  const tiles = first.locator(".tiles li");
+  await expect(tiles.first()).toBeHidden();
   await page.locator("summary").first().click();
-  await expect(first.locator("thead th")).toHaveText(["品", "総力戦レアコイン", "総力戦コイン"]);
-  await expect(first.locator("tbody tr")).toHaveText([
-    "初級戦術教育BD（百鬼夜行）12回10枚40回10枚",
-    "アズサの神名文字売切れ50枚で5個—",
-  ]);
+  // A good by its icon and how many come, then each coin's times left at its
+  // price, the plain coin left; a good bought up is sold out.
+  await expect(tiles).toHaveText(["×1 40回@1012回@10", "×5 売切れ"]);
+  await expect(tiles.first()).toHaveAttribute("title", "初級戦術教育BD（百鬼夜行）");
+  expect(
+    await tiles
+      .first()
+      .locator(".offer img")
+      .evaluateAll((imgs) => imgs.map((i) => i.alt)),
+  ).toEqual(["総力戦コイン", "総力戦レアコイン"]);
+  await expect(tiles.nth(1).locator(".offer").first()).toHaveText("");
+  // The icons load from the app.
+  await expect
+    .poll(() =>
+      first
+        .locator("img")
+        .evaluateAll((imgs) => imgs.every((i) => i.complete && i.naturalWidth > 0)),
+    )
+    .toBe(true);
 
   await page.getByLabel("名前で検索").fill("エーテル");
-  await expect(page.locator("summary")).toHaveText(["指名手配01/01 08:30"]);
-  await expect(page.locator("details tbody tr")).toHaveText(["エーテルの粉25回?"]);
+  await expect(page.locator("summary")).toHaveText(["指名手配01/01 08:30 ?"]);
+  await expect(page.locator("details .tiles li")).toHaveText(["25回@?"]);
   expect(await overflow(page)).toBeLessThanOrEqual(0);
 });
 
@@ -437,7 +473,7 @@ test("a shop opened stays open while the game is read", async ({ page }) => {
     snapshot,
   );
   await expect(page.locator("details").first()).toHaveAttribute("open", "");
-  await expect(page.locator("details").first().locator("tbody tr").first()).toBeVisible();
+  await expect(page.locator("details").first().locator(".tiles li").first()).toBeVisible();
 });
 
 test("guides to the shop before any is read", async ({ page }) => {

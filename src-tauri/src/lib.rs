@@ -125,6 +125,14 @@ struct ExtraStudent {
     name: String,
 }
 
+/// A currency of the SchaleDB snapshot (`data/schaledb/currency.json`), for
+/// the shops' coins that are no item.
+#[derive(Deserialize, Debug, Clone)]
+struct Currency {
+    name: String,
+    icon: String,
+}
+
 /// One line of a tally, for the window.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Row {
@@ -154,6 +162,7 @@ pub struct Recognizer {
     /// The items again, as the shops' goods, and what the shops ask for them.
     goods: shop::Goods,
     prices: price::Prices,
+    currency: Vec<Currency>,
     /// The growth data training plans are counted with.
     planner: plan::Planner,
     equipment: Catalog,
@@ -208,6 +217,7 @@ impl Recognizer {
                 json(read, "schaledb/items.json")?,
                 &json::<Vec<price::Student>>(read, "schaledb/students.json")?,
             ),
+            currency: json(read, "schaledb/currency.json")?,
             planner: plan::Planner {
                 growth: json(read, "schaledb/growth.json")?,
                 growers: json(read, "schaledb/students.json")?,
@@ -334,23 +344,45 @@ impl Recognizer {
                 .map(|i| i.name.clone())
                 .unwrap_or_default()
         };
+        let item = |name: &str| items.iter().find(|i| i.name == name);
+        let icon = |id: i64| items.iter().find(|i| i.id == id).map(|i| i.icon.clone());
         shop::SHOPS
             .iter()
             .filter_map(|&name| {
                 let kept = shelves.get(name)?;
                 let coins = self.prices.coins(name);
+                // The coins in id order: the plain coin before the rare.
+                let mut order: Vec<usize> = (0..coins.len()).collect();
+                order.sort_by_key(|&i| item(&coins[i]).map_or(i64::MAX, |e| e.id));
+                let coin_rows = order
+                    .iter()
+                    .map(|&i| shop::CoinRow {
+                        held: kept.held.get(i).copied().flatten(),
+                        at: u8::try_from(i).unwrap_or_default(),
+                        name: coins[i].clone(),
+                        icon: item(&coins[i])
+                            .map(|e| e.icon.clone())
+                            .or_else(|| {
+                                let c = self.currency.iter().find(|c| c.name == coins[i]);
+                                c.map(|c| c.icon.clone())
+                            })
+                            .unwrap_or_default(),
+                    })
+                    .collect();
                 let goods = shop::goods(&kept.offers, coins.len())
                     .into_iter()
                     .map(|(id, offers)| shop::GoodRow {
                         id,
                         name: named(id),
-                        offers: offers
+                        icon: icon(id).unwrap_or_default(),
+                        offers: order
                             .iter()
-                            .map(|o| {
-                                o.map(|o| shop::OfferRow {
+                            .map(|&i| {
+                                offers[i].map(|o| shop::OfferRow {
                                     left: o.left,
                                     price: self.prices.find(name, id, o.coin, o.price),
                                     shown: o.price,
+                                    coin: o.coin,
                                 })
                             })
                             .collect(),
@@ -360,7 +392,7 @@ impl Recognizer {
                     name: name.to_owned(),
                     read_at: kept.read_at.clone(),
                     resets: name != shop::LASTING,
-                    coins: coins.to_vec(),
+                    coins: coin_rows,
                     goods,
                 })
             })

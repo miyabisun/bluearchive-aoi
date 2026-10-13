@@ -72,6 +72,23 @@ $items = Update-List 'items' 'icons' 'https://schaledb.com/images/item/icon' {
   $fields
 }
 
+# The currencies, for the shops' coins that are no item (the mastery
+# certificate), with their icons beside the items'.
+$currency = Get-Json 'https://schaledb.com/data/jp/currency.json' |
+  Where-Object { $_.Icon } |
+  Sort-Object { [int64]$_.Id }
+$lines = foreach ($c in $currency) {
+  [ordered]@{ id = [int64]$c.Id; name = $c.Name; icon = $c.Icon } | ConvertTo-Json -Compress
+}
+Write-Json 'currency.json' ("[`n" + ($lines -join ",`n") + "`n]`n")
+foreach ($icon in ($currency.Icon | Sort-Object -Unique)) {
+  $path = Join-Path $root "icons\$icon.webp"
+  if (Test-Path $path) { continue }
+  curl.exe -sSf -o $path "https://schaledb.com/images/item/icon/$icon.webp"
+  if ($LASTEXITCODE -ne 0) { throw "failed to fetch icon $icon" }
+}
+Write-Host "currency: $($currency.Count) entries"
+
 # Equipment also carries how it is made from the tier below (blueprints and
 # credits) and how far it levels.
 $equipment = Update-List 'equipment' 'equipment-icons' 'https://schaledb.com/images/equipment/icon' {
