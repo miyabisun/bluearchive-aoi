@@ -45,8 +45,8 @@ student appears under the 生徒 tab with their training:
 
 | Column   | Shows                                                                       |
 | -------- | --------------------------------------------------------------------------- |
-| Lv, ★    | Level and star rarity.                                                      |
-| 固有武器 | The unique weapon's stars and level; — while locked.                        |
+| Lv       | Level.                                                                      |
+| 星       | ★1 to ★4, then the unique weapon's 固有1 to 固有4; hover for its level.     |
 | スキル   | EX skill level, then the other three, M for a skill at its maximum: `5M7M`. |
 | 装備     | The tiers of the three equipment slots, `T10/9/8`; hover for their levels.  |
 | 愛用品   | The favorite item's tier; — without one.                                    |
@@ -61,7 +61,7 @@ The 生徒 tab tells how many students have been read (生徒 42). Compare it wi
 students you have in the game to see whether any were missed; a student whose name could
 not be read is not counted.
 
-Students are listed highest level first, then by rarity, then by bond. Click a column's
+Students are listed highest level first, then by 星, then by bond. Click a column's
 heading to list them by that column instead, highest first (skills, ability release and
 the equipment's tiers by their total); ties keep the default order, and ? comes last.
 
@@ -83,15 +83,12 @@ read off the card (1 to 5 fragments).
 All but カケラ(文字) reset as the month changes: a shop read in an earlier month is marked
 前の月の値 until it is read again. 通常アイテム, 青輝石, カケラ(その他) and 戦術対抗戦 are
 not read.
-Above the shops, 技術ノート and 戦術教育BD each get a table of school by tier (初級 to
-最上級) of how many this month's shops still sell, every coin of every shop added (hover a
-count for which shops: `総力戦 40+12、指名手配 15`); 0 is bought up, — sold by no shop read.
 
 To plan training, tick 育成 beside the students to train under the 生徒 tab. The 育成 tab
 lists them with their targets, Lv90, skills 5/10/10/10 and equipment T10/10/10 to start
 with; click a target and change it with ↑ and ↓ (the value read stands over it). The star
-(★) stays at the student's own until you choose one: ★1 to ★5, then the unique weapon's
-固有2 to 固有4, counting the elephs and credits each step takes. The elephs short are
+(星) stays at the student's own until you choose one: ★1 to ★4, then the unique weapon's
+固有1 to 固有4 (★5 is 固有1), counting the elephs and credits each step takes. The elephs short are
 bought with 神名のカケラ at the student's rate the カケラ(文字) shop showed: 20 at that rate,
 20 at each next rate up to 4, then 5 each (the shop does not tell how many of the 20 are
 already bought), no more than it has left; the fragments join the materials below, and a
@@ -116,10 +113,10 @@ lists and the credits read:
   バッジ 2, ヘアピン 4, お守り 1, 腕時計 4, ネックレス 2 students). Under them, how many times
   to play each normal mission, in the doubled-drop campaign, to stock the golden ratio
   with the fewest AP, by SchaleDB's drop rates (a linear program; blueprints the universal ones
-  held make count).
+  held make count), the totals under a double rule.
 - 指名手配 and 学園交流会: what each place drops, tier by tier, with how many are held; in
   指名手配, red short of what one student takes (skills and potential raised fully; the
-  median over the students that take it) and orange short of two.
+  median over the students that take it), blue short of two and green from two on.
 - 特別依頼: how many students raised from Lv1 to Lv90, skills 5/10/10/10, equipment
   T10 and the unique weapon's ★4 at Lv60 the credits held pay for, and how many Lv1 to 90 the reports held level; the more
   shows green, the fewer, the commission to play, orange.
@@ -139,7 +136,7 @@ Under the 装備 tab each slot's pieces T1 to T10 come first, then its blueprint
 and its universal blueprint, each tile with its tier at the bottom left.
 
 The credits on the game's top bar are read on any screen that shows the bar (a dialog
-dimming the screen pauses it) and appear at the top of the ショップ tab.
+dimming the screen pauses it) and count in the 育成 tab's plan and the お仕事 tab's 特別依頼.
 
 The badge at the top right tells what Aoi sees:
 

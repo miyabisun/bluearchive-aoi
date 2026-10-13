@@ -214,8 +214,7 @@ test("shows the students read from the student screen", async ({ page }) => {
     "",
     "ホシノ",
     "90",
-    "★5",
-    "★4 Lv60",
+    "固有4",
     "5MMM",
     "T10/10/10",
     "T2",
@@ -227,13 +226,17 @@ test("shows the students read from the student screen", async ({ page }) => {
     "アカネ（バニーガール）",
     "?",
     "★3",
-    "—",
     "2336",
     "T4/?/3",
     "—",
     "0/0/0",
     "20",
   ]);
+  // The star counts on into the unique weapon's, its level on hover.
+  await expect(page.locator("tbody tr").first().locator("td").nth(3)).toHaveAttribute(
+    "title",
+    "固有武器 Lv60",
+  );
   await page.getByLabel("名前で検索").fill("ｱｶﾈ");
   await expect(page.locator("tbody tr")).toHaveCount(1);
 });
@@ -318,7 +321,7 @@ const trained = (id, name, overrides) => ({
   },
 });
 
-test("orders students by level, rarity and bond, or by the column chosen", async ({ page }) => {
+test("orders students by level, star and bond, or by the column chosen", async ({ page }) => {
   const roster = [
     trained(1, "アル", { level: 80, bond: 50 }),
     trained(2, "ミカ", { bond: 43, weapon: { level: 30, stars: 1 } }),
@@ -327,15 +330,12 @@ test("orders students by level, rarity and bond, or by the column chosen", async
   ];
   await open(page, { status: reading("students"), items, equipment, students: roster }, "生徒");
   const names = page.locator("tbody td:nth-child(2)");
-  await expect(names).toHaveText(["ミカ", "ホシノ", "ヒナ", "アル"]);
+  await expect(names).toHaveText(["ホシノ", "ミカ", "ヒナ", "アル"]);
   await expect(page.locator("th", { hasText: "Lv" })).toHaveAttribute("aria-sort", "descending");
 
-  await page.getByRole("button", { name: "固有武器" }).click();
-  await expect(names).toHaveText(["ホシノ", "ヒナ", "アル", "ミカ"]);
-  await expect(page.locator("th", { hasText: "固有武器" })).toHaveAttribute(
-    "aria-sort",
-    "descending",
-  );
+  await page.getByRole("button", { name: "星" }).click();
+  await expect(names).toHaveText(["ホシノ", "アル", "ミカ", "ヒナ"]);
+  await expect(page.locator("th", { hasText: "星" })).toHaveAttribute("aria-sort", "descending");
   await expect(page.locator("th", { hasText: "Lv" })).not.toHaveAttribute(
     "aria-sort",
     "descending",
@@ -370,17 +370,6 @@ test("tells why what was read could not be kept", async ({ page }) => {
   await expect(page.getByRole("alert")).toHaveText(
     "読み取り結果を保存できませんでした: アクセスが拒否されました。",
   );
-});
-
-test("shows the credits on the shop tab once they are read", async ({ page }) => {
-  await open(page, { status: reading("items"), items, equipment, credits: 244213276 });
-  await expect(page.getByText(/^クレジット/)).toHaveCount(0);
-  await page.getByRole("tab", { name: "ショップ" }).click();
-  await expect(page.getByText("クレジット 244,213,276")).toBeVisible();
-
-  await open(page, { status: reading("items"), items, equipment, credits: null });
-  await page.getByRole("tab", { name: "ショップ" }).click();
-  await expect(page.getByText(/^クレジット/)).toHaveCount(0);
 });
 
 const shops = [
@@ -482,72 +471,6 @@ test("shows each shop's goods, shop by shop, when the game shows a shop", async 
   await expect(page.locator("summary")).toHaveText(["指名手配01/01 08:30 ?"]);
   await expect(page.locator("details .tiles li")).toHaveText(["25回@?"]);
   expect(await overflow(page)).toBeLessThanOrEqual(0);
-});
-
-test("tables each school's notes and BDs by tier as this month's shops still sell them", async ({
-  page,
-}) => {
-  const bought = { left: 0, price: { price: 100, amount: 1, limit: 6 } };
-  const fresh = [
-    {
-      ...shops[0],
-      read_at: "2999-01-01 08:00:00",
-      goods: [
-        ...shops[0].goods,
-        {
-          id: 3023,
-          name: "最上級戦術教育BD（トリニティ）",
-          icon: "item_icon_material_exskill_trinity_3",
-          offers: [bought, bought],
-        },
-      ],
-    },
-    {
-      ...shops[1],
-      goods: [
-        ...shops[1].goods,
-        {
-          id: 3000,
-          name: "初級戦術教育BD（百鬼夜行）",
-          icon: "item_icon_material_exskill_hyakkiyako_0",
-          offers: [{ left: 15, price: null }],
-        },
-        {
-          id: 4032,
-          name: "上級技術ノート（ゲヘナ）",
-          icon: "item_icon_skillbook_gehenna_2",
-          offers: [{ left: 7, price: null }],
-        },
-      ],
-    },
-  ];
-  await open(page, { status: reading("shops"), items, equipment, shops: fresh }, "ショップ");
-  // A table a kind before the shops, closed as they are.
-  await expect(page.locator("summary")).toHaveText([
-    "技術ノートショップの残り",
-    "戦術教育BDショップの残り",
-    "総力戦01/01 08:00 5,940530",
-    "指名手配01/01 08:30 ?",
-  ]);
-  const bds = page.locator("details").nth(1);
-  await expect(bds.locator("table")).toBeHidden();
-  await page.locator("summary").nth(1).click();
-  await expect(bds.locator("thead th")).toHaveText(["学園", "初級", "中級", "上級", "最上級"]);
-  // Every coin of every shop added; none sold "—", bought up 0.
-  await expect(bds.locator("tbody tr")).toHaveText(["百鬼夜行67———", "トリニティ———0"]);
-  await expect(bds.locator("tbody td").first()).toHaveAttribute(
-    "title",
-    "総力戦 40+12、指名手配 15",
-  );
-  expect(await overflow(page)).toBeLessThanOrEqual(0);
-
-  // A search narrows the schools as it does the goods, and opens the tables.
-  await page.getByLabel("名前で検索").fill("トリニティ");
-  await expect(page.locator("summary")).toHaveText([
-    "戦術教育BDショップの残り",
-    "総力戦01/01 08:00 5,940530",
-  ]);
-  await expect(page.locator("details").first().locator("tbody tr")).toHaveText(["トリニティ———0"]);
 });
 
 test("a shop opened stays open while the game is read", async ({ page }) => {
@@ -695,7 +618,7 @@ test("a star is chosen from the student's on, and kept while the game is read", 
   };
   await open(page, snapshot);
   await page.getByRole("tab", { name: "育成" }).click();
-  const star = page.getByLabel("アカネ（バニーガール）の★の目標");
+  const star = page.getByLabel("アカネ（バニーガール）の星の目標");
   // Never chosen, the target stays at the student's star; none below it.
   await expect(star).toHaveValue("3");
   await expect(star.locator("option:disabled")).toHaveText(["★1", "★2"]);
@@ -760,8 +683,20 @@ const work = {
             held: { exact: 51 },
             need: 75,
           },
-          null,
-          null,
+          {
+            id: 111,
+            name: "摩耗したファイストス円盤",
+            icon: "item_icon_material_phaistos_1",
+            held: { exact: 100 },
+            need: 75,
+          },
+          {
+            id: 112,
+            name: "破損したファイストス円盤",
+            icon: "item_icon_material_phaistos_2",
+            held: { exact: 200 },
+            need: 75,
+          },
           null,
         ],
       ],
@@ -813,20 +748,38 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   ]);
   await expect(page.locator(".slots strong.low")).toHaveText(["2.5個分"]);
   // How many times to play each mission, in the campaign, to the golden ratio.
+  // The totals under a double rule.
   await expect(page.locator(".farm tr")).toHaveText([
     "29-160回600APお守り・時計",
     "25-111回110AP帽子",
+    "計71回710AP",
   ]);
-  await expect(page.locator(".work .total")).toHaveText("計 71回 710AP");
-  // Each place's drops by tier with what is held, "—" where none is counted;
-  // short of one student's need red.
+  await expect(page.locator(".farm tfoot th")).toHaveCSS("border-top-style", "double");
+  // Every cell of a mission's row fills the row, the slots it serves too.
+  for (const row of await page.locator(".farm tbody tr").all()) {
+    const boxes = await row.locator("td").evaluateAll((cells) =>
+      cells.map((c) => {
+        const box = c.getBoundingClientRect();
+        return `${box.top}-${box.bottom}`;
+      }),
+    );
+    expect(new Set(boxes).size).toBe(1);
+  }
+  // Each place's drops by tier with what is held, "—" where none is counted.
   await expect(page.locator(".work h3")).toHaveText([
     "黄金比までの周回（2倍キャンペーン中）",
     "ハイウェイ",
     "トリニティ",
   ]);
   await expect(page.locator(".work .tiers td.tier-1")).toHaveText(["51", "—"]);
+  // Short of one student red, of two blue, enough for two green.
   await expect(page.locator(".work .tiers .short")).toHaveText(["51"]);
+  await expect(page.locator(".work .tiers .fair")).toHaveText(["100"]);
+  await expect(page.locator(".work .tiers .enough")).toHaveText(["200"]);
+  const colours = await page
+    .locator(".work .tiers :is(.short, .fair, .enough)")
+    .evaluateAll((cells) => cells.map((c) => getComputedStyle(c).color));
+  expect(new Set(colours).size).toBe(3);
   await expect(page.getByRole("img", { name: "ファイストス円盤の欠片" })).toBeVisible();
   // The commission raising more students is green, the fewer orange.
   await expect(page.locator(".commissions tr")).toHaveText([

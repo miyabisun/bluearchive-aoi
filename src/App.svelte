@@ -22,7 +22,6 @@
     groupPlan,
     needCells,
     placeName,
-    schoolTables,
     shopStale,
     sortStudents,
     starName,
@@ -42,7 +41,7 @@
    */
   const TARGET_COLUMNS = [
     { label: "Lv", max: 90, at: ["level"] },
-    { label: "★", star: true },
+    { label: "星", star: true },
     { label: "EX", max: 5, at: ["skills", 0] },
     { label: "N", max: 10, at: ["skills", 1] },
     { label: "P", max: 10, at: ["skills", 2] },
@@ -82,8 +81,7 @@
   /** The student table's columns after the name, each sorting by its key. */
   const STUDENT_COLUMNS = [
     { key: "level", label: "Lv", num: true },
-    { key: "rarity", label: "★" },
-    { key: "weapon", label: "固有武器" },
+    { key: "star", label: "星" },
     { key: "skills", label: "スキル" },
     { key: "equipment", label: "装備" },
     { key: "gear", label: "愛用品" },
@@ -319,12 +317,6 @@
       </p>
     {/if}
 
-    {#if view.tab === "shops" && snapshot.credits != null}
-      <p class="credits">
-        クレジット <span class="amount">{formatCount({ exact: snapshot.credits })}</span>
-      </p>
-    {/if}
-
     {#if view.tab === "plan"}
       {#if targetRows.length === 0}
         <p class="empty" data-state="empty">{EMPTY.plan}</p>
@@ -350,7 +342,7 @@
                       <td>
                         <span class="now">{now === null ? "?" : starName(now)}→</span><select
                           value={to ?? ""}
-                          aria-label="{row.name}の★の目標"
+                          aria-label="{row.name}の星の目標"
                           onchange={(event) => restar(row, event.currentTarget.value)}
                         >
                           {#if to === null}<option value="">?</option>{/if}
@@ -500,12 +492,19 @@
                         <td>{line.name}</td>
                         <td class="fit">{line.runs}</td>
                         <td class="fit">{line.ap}</td>
-                        <td class="detail">{line.slots}</td>
+                        <td class="serves">{line.slots}</td>
                       </tr>
                     {/each}
                   </tbody>
+                  <tfoot>
+                    <tr>
+                      <th scope="row">計</th>
+                      <td class="fit">{farm.total.runs}</td>
+                      <td class="fit">{farm.total.ap}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
                 </table>
-                <p class="total">{farm.total}</p>
               {/if}
             {/if}
           </details>
@@ -572,44 +571,6 @@
         <p class="empty" data-state="no-match">一致する項目がありません</p>
       {:else if view.tab === "shops"}
         <div class="table-scroll">
-          <!-- Each school's notes and BDs by tier: how many this month's shops
-               still sell, which shops on hover. Opened as the shops are. -->
-          {#each schoolTables(shown) as table (table.kind)}
-            <details class="shop" open={query.trim() !== "" || opened.has(`table:${table.kind}`)}>
-              <summary
-                onclick={(event) => {
-                  if (query.trim() === "") toggle(event, `table:${table.kind}`);
-                  else event.preventDefault();
-                }}
-              >
-                <h2>{table.kind}<span class="read-at">ショップの残り</span></h2>
-              </summary>
-              <table class="tiers schools" data-state="success">
-                <thead>
-                  <tr>
-                    <th scope="col">学園</th>
-                    {#each TIERS as tier, i (tier)}
-                      <th scope="col" class="tier-{i + 1}">{tier}</th>
-                    {/each}
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each table.rows as row (row.school)}
-                    <tr>
-                      <th scope="row">{row.school}</th>
-                      {#each row.cells as cell, i (i)}
-                        <td class="tier-{i + 1}" title={cell?.detail}
-                          >{#if cell}<span class:sold={cell.left === 0}
-                              >{formatCount({ exact: cell.left })}</span
-                            >{:else}—{/if}</td
-                        >
-                      {/each}
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </details>
-          {/each}
           {#each shown as shop (shop.name)}
             <!-- Closed until opened, and open while a search narrows the goods. -->
             <details class="shop" open={query.trim() !== "" || opened.has(shop.name)}>
@@ -709,8 +670,7 @@
                   </td>
                   <td class="name">{row.name}</td>
                   <td class="num">{cells.level}</td>
-                  <td>{cells.rarity}</td>
-                  <td>{cells.weapon}</td>
+                  <td title={cells.weapon || undefined}>{cells.star}</td>
                   <td class="code">{cells.skills}</td>
                   <td class="code" title={cells.equipmentLevels}>{cells.equipment}</td>
                   <td>{cells.gear}</td>
@@ -852,14 +812,6 @@
     padding: var(--sp-1) var(--sp-3) 0
     font-size: var(--fs-caption)
     color: var(--c-muted)
-
-  .credits
-    margin: 0 0 var(--sp-3)
-    font-size: var(--fs-sm)
-    color: var(--c-muted)
-    .amount
-      color: var(--c-on-surface)
-      font-variant-numeric: tabular-nums
 
   .update button
     margin-left: var(--sp-3)
@@ -1150,17 +1102,6 @@
       vertical-align: middle
       margin-right: var(--sp-2)
 
-  // A school a row, its tiers' counts right-aligned on their colours.
-  .tiers.schools
-    margin-top: var(--sp-1)
-    th
-      padding: var(--sp-1) var(--sp-2)
-      font-weight: 600
-      white-space: nowrap
-    thead th:not(:first-child), td
-      width: 18%
-      text-align: right
-
   // The work tab: a section a kind of play, each count with its terms under it.
   .work
     h3
@@ -1189,22 +1130,34 @@
       color: var(--c-ok)
     .fewer strong
       color: var(--c-warn)
-    // Short of one student red, of the golden ratio or of two students orange.
+    // Short of one student red; a slot short of the golden ratio orange.
     .short
       color: var(--c-danger)
       font-weight: 600
     .low
       color: var(--c-warn)
       font-weight: 600
+    // A drop held short of two students blue, enough for two green.
+    .fair
+      color: var(--c-accent)
+      font-weight: 600
+    .enough
+      font-weight: 600
     .slot .detail
       margin-left: 40px
-    .farm td
-      padding: var(--sp-1) var(--sp-2)
-    .total
-      margin: var(--sp-2) 0 0
-      font-size: var(--fs-sm)
-      font-weight: 600
-      font-variant-numeric: tabular-nums
+    // A mission a row, the slots it serves muted; the totals under a double rule.
+    .farm
+      td, th
+        padding: var(--sp-1) var(--sp-2)
+      .serves
+        color: var(--c-muted)
+        font-size: var(--fs-caption)
+      tfoot
+        td, th
+          border-top: 3px double var(--c-border)
+          font-weight: 600
+        th
+          text-align: left
     .fold
       border-bottom: 1px solid var(--c-border)
       &[open]

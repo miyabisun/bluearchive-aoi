@@ -13,7 +13,6 @@ import {
   goodTile,
   heldTone,
   placeName,
-  schoolTables,
   stockCells,
   updateText,
   shopStale,
@@ -101,8 +100,8 @@ describe("studentCells", () => {
   it("writes a student's training the way timeline-arona does", () => {
     expect(studentCells(known)).toEqual({
       level: "90",
-      rarity: "★5",
-      weapon: "★4 Lv60",
+      star: "固有4",
+      weapon: "固有武器 Lv60",
       skills: "5M7M",
       equipment: "T10/9/8",
       equipmentLevels: "Lv70/65/60",
@@ -123,13 +122,18 @@ describe("studentCells", () => {
       ability: [0, null, 0],
     });
     expect(cells.level).toBe("?");
-    expect(cells.weapon).toBe("—");
+    // Under ★5 the weapon is locked; at ★5 its stars must be read.
+    expect(studentCells({ ...known, rarity: 3, weapon: null })).toMatchObject({
+      star: "★3",
+      weapon: "",
+    });
+    expect(studentCells({ ...known, rarity: null }).star).toBe("?");
     expect(cells.skills).toBe("3?11");
     expect(cells.equipment).toBe("T1/?/1");
     expect(cells.equipmentLevels).toBe("Lv1/?/10");
     expect(cells.gear).toBe("—");
     expect(cells.ability).toBe("0/?/0");
-    expect(studentCells({ ...known, weapon: undefined }).weapon).toBe("?");
+    expect(studentCells({ ...known, weapon: undefined })).toMatchObject({ star: "?", weapon: "" });
   });
 });
 
@@ -156,14 +160,15 @@ describe("sortStudents", () => {
   });
   const ids = (rows) => rows.map((r) => r.id);
 
-  it("puts the highest level first, then the rarity, then the bond, by default", () => {
+  it("puts the highest level first, then the star, then the bond, by default", () => {
     const rows = [
       student(1, { level: 80, bond: 50 }),
       student(2, { rarity: 4, bond: 50 }),
       student(3, { bond: 20 }),
       student(4, { bond: 30, weapon: { stars: 1, level: 30 }, skills: [1, 1, 1, 1] }),
     ];
-    expect(ids(sortStudents(rows))).toEqual([4, 3, 2, 1]);
+    // The star counts on into the unique weapon's: ★5 with it at ★4 is above ★5 with it at ★1.
+    expect(ids(sortStudents(rows))).toEqual([3, 4, 2, 1]);
   });
 
   it("puts what could not be read last", () => {
@@ -180,7 +185,7 @@ describe("sortStudents", () => {
       student(5, { level: 87, weapon: { stars: 4, level: 60 } }),
       student(6),
     ];
-    expect(ids(sortStudents(rows, "weapon"))).toEqual([6, 5, 4, 1, 2, 3]);
+    expect(ids(sortStudents(rows, "star"))).toEqual([6, 5, 4, 1, 2, 3]);
   });
 
   it("adds up the skills, the equipment tiers and the ability releases", () => {
@@ -266,58 +271,6 @@ describe("shops", () => {
     expect(filterShops(shops, "秘伝")).toEqual([{ ...shops[0], goods: [shops[0].goods[0]] }]);
     expect(filterShops(shops, "")).toEqual(shops);
   });
-
-  it("adds up what the shops still sell of each school's notes and BDs by tier", () => {
-    const now = new Date(2026, 9, 13, 9, 0);
-    const left = (...counts) => counts.map((n) => (n == null ? null : { left: n, price: null }));
-    const shops = [
-      shop("総力戦", "2026-10-13 08:00:00", true, [
-        good(3000, "初級戦術教育BD（百鬼夜行）", left(40, 12)),
-        good(3003, "最上級戦術教育BD（百鬼夜行）", left(6, 2)),
-        good(3023, "最上級戦術教育BD（トリニティ）", left(0, 0)),
-        good(4032, "上級技術ノート（ゲヘナ）", left(30, null)),
-        good(9999, "秘伝ノート", left(3, 1)),
-      ]),
-      shop("指名手配", "2026-10-13 08:00:00", true, [
-        good(3000, "初級戦術教育BD（百鬼夜行）", left(15)),
-        good(3022, "上級戦術教育BD（トリニティ）", left(4)),
-      ]),
-      // Last month's counts no longer hold.
-      shop("大決戦", "2026-09-30 08:00:00", true, [
-        good(3010, "初級戦術教育BD（レッドウィンター）", left(40, 12)),
-      ]),
-    ];
-    expect(schoolTables(shops, now)).toEqual([
-      {
-        kind: "技術ノート",
-        rows: [{ school: "ゲヘナ", cells: [null, null, { left: 30, detail: "総力戦 30" }, null] }],
-      },
-      {
-        kind: "戦術教育BD",
-        rows: [
-          {
-            school: "百鬼夜行",
-            cells: [
-              { left: 67, detail: "総力戦 40+12、指名手配 15" },
-              null,
-              null,
-              { left: 8, detail: "総力戦 6+2" },
-            ],
-          },
-          {
-            school: "トリニティ",
-            cells: [
-              null,
-              null,
-              { left: 4, detail: "指名手配 4" },
-              { left: 0, detail: "総力戦 0+0" },
-            ],
-          },
-        ],
-      },
-    ]);
-    expect(schoolTables([], now)).toEqual([]);
-  });
 });
 
 describe("plan", () => {
@@ -389,7 +342,8 @@ describe("plan", () => {
   });
 
   it("names a star: the student's 1 to 5, then the unique weapon's", () => {
-    expect([1, 4, 5, 6, 8].map(starName)).toEqual(["★1", "★4", "★5", "固有2", "固有4"]);
+    // A teacher calls ★5 by its weapon's first star.
+    expect([1, 4, 5, 6, 8].map(starName)).toEqual(["★1", "★4", "固有1", "固有2", "固有4"]);
   });
 
   it("counts a student's star on into the unique weapon's", () => {
@@ -422,10 +376,11 @@ describe("work", () => {
     );
   });
 
-  it("tells a drop held short of one student's need red, of two orange", () => {
+  it("tells a drop held short of one student's need, of two, or enough for two", () => {
     expect(heldTone({ exact: 30 }, 75)).toBe("short");
-    expect(heldTone({ exact: 100 }, 75)).toBe("low");
-    expect(heldTone({ thousands: 2 }, 75)).toBe("");
+    expect(heldTone({ exact: 100 }, 75)).toBe("fair");
+    expect(heldTone({ exact: 150 }, 75)).toBe("enough");
+    expect(heldTone({ thousands: 2 }, 75)).toBe("enough");
     expect(heldTone(null, 75)).toBe("short");
     expect(heldTone({ exact: 3 }, null)).toBe("");
   });
@@ -445,7 +400,7 @@ describe("work", () => {
         { name: "29-1", runs: "60回", ap: "600AP", slots: "お守り・時計" },
         { name: "25-1", runs: "11回", ap: "110AP", slots: "帽子" },
       ],
-      total: "計 71回 710AP",
+      total: { runs: "71回", ap: "710AP" },
     });
   });
 

@@ -59,16 +59,17 @@ const show = (v) => (known(v) ? String(v) : "?");
 /**
  * A student's training as table cells, written as timeline-arona writes a
  * party: skills "5M7M" (the EX level, then M for a skill at 10), equipment
- * "T10/9/8". "?" marks what could not be read; "—" what the student lacks.
- * The unique weapon is `null` while locked, absent when unknown.
+ * "T10/9/8"; the star on into the unique weapon's ("固有2", see `starName`),
+ * the weapon's level apart for its hover. "?" marks what could not be read;
+ * "—" what the student lacks.
  */
 export function studentCells(t) {
   const [ex, ...others] = t.skills;
-  const weapon = !("weapon" in t) || t.weapon === undefined ? "?" : t.weapon;
+  const star = starOf(t);
   return {
     level: show(t.level),
-    rarity: known(t.rarity) ? `★${t.rarity}` : "?",
-    weapon: weapon === "?" ? "?" : weapon === null ? "—" : `★${weapon.stars} Lv${weapon.level}`,
+    star: star === null ? "?" : starName(star),
+    weapon: t.weapon ? `固有武器 Lv${t.weapon.level}` : "",
     skills: show(ex) + others.map((s) => (s === 10 ? "M" : show(s))).join(""),
     equipment: "T" + t.equipment.map((e) => (known(e) ? String(e.tier) : "?")).join("/"),
     equipmentLevels: "Lv" + t.equipment.map((e) => (known(e) ? String(e.level) : "?")).join("/"),
@@ -86,10 +87,8 @@ const sum = (values) => (values.every(known) ? values.reduce((a, b) => a + b, 0)
  */
 const STUDENT_KEYS = {
   level: (t) => t.level,
-  rarity: (t) => t.rarity,
-  // A locked weapon comes after every unlocked one, and before an unread one.
-  weapon: (t) =>
-    t.weapon === undefined ? null : t.weapon === null ? [0, 0] : [t.weapon.stars, t.weapon.level],
+  // The star on into the unique weapon's, then the weapon's level.
+  star: (t) => (starOf(t) === null ? null : [starOf(t), t.weapon?.level ?? 0]),
   skills: (t) => sum(t.skills),
   equipment: (t) =>
     t.equipment.every(known)
@@ -110,10 +109,10 @@ function descending(a, b) {
 
 /**
  * The students ordered by `column` (a key of the training), highest first;
- * ties, and the default order, go by level, then rarity, then bond.
+ * ties, and the default order, go by level, then star, then bond.
  */
 export function sortStudents(rows, column = "level") {
-  const order = [column, "level", "rarity", "bond"];
+  const order = [column, "level", "star", "bond"];
   return [...rows].sort(
     (a, b) =>
       order.reduce(
@@ -158,49 +157,8 @@ export function filterShops(shops, query) {
     .filter((shop) => shop.goods.length > 0);
 }
 
-/** A school's tech note or tactical BD by its name: its tier, its kind and the school. */
-const SCHOOL_GOOD = /^(初級|中級|上級|最上級)(技術ノート|戦術教育BD)（(.+)）$/;
+/** The four tiers' names, the first to the last. */
 export const TIERS = ["初級", "中級", "上級", "最上級"];
-const SCHOOL_KINDS = ["技術ノート", "戦術教育BD"];
-
-/**
- * The tech notes and the tactical BDs as tables of school by tier: how many
- * this month's shops still sell, every coin of every shop added, and which
- * shops ("総力戦 40+12、指名手配 15"); a cell `null` where no shop sells it,
- * a kind left out where no school is sold. Schools come in id order.
- */
-export function schoolTables(shops, now = new Date()) {
-  const tables = SCHOOL_KINDS.map((kind) => ({ kind, rows: [] }));
-  for (const shop of shops) {
-    if (shopStale(shop, now)) continue;
-    for (const good of shop.goods) {
-      const [, tier, kind, school] = good.name.match(SCHOOL_GOOD) ?? [];
-      const lefts = good.offers.filter(Boolean).map((offer) => offer.left);
-      if (!kind || lefts.length === 0) continue;
-      const rows = tables[SCHOOL_KINDS.indexOf(kind)].rows;
-      let row = rows.find((r) => r.school === school);
-      if (!row) {
-        row = { school, id: good.id, cells: [null, null, null, null] };
-        rows.push(row);
-      }
-      row.id = Math.min(row.id, good.id);
-      const cell = (row.cells[TIERS.indexOf(tier)] ??= { left: 0, parts: [] });
-      cell.left += lefts.reduce((a, b) => a + b, 0);
-      cell.parts.push(`${shop.name} ${lefts.join("+")}`);
-    }
-  }
-  return tables
-    .filter((table) => table.rows.length > 0)
-    .map(({ kind, rows }) => ({
-      kind,
-      rows: rows
-        .sort((a, b) => a.id - b.id)
-        .map(({ school, cells }) => ({
-          school,
-          cells: cells.map((c) => c && { left: c.left, detail: c.parts.join("、") }),
-        })),
-    }));
-}
 
 /** The lines of the plan that count no item, by kind. */
 const PLAN_KINDS = {
@@ -267,8 +225,11 @@ export function tierCell(row) {
   };
 }
 
-/** A star as the targets name it: the student's ★1 to ★5, then the unique weapon's 2 to 4. */
-export const starName = (star) => (star <= 5 ? `★${star}` : `固有${star - 4}`);
+/**
+ * A star as a teacher names it: the student's ★1 to ★4, then the unique
+ * weapon's 固有1 to 固有4 (★5 is the weapon's first, user's naming of 2026-10-13).
+ */
+export const starName = (star) => (star <= 4 ? `★${star}` : `固有${star - 4}`);
 
 /**
  * A student's star counted on into the unique weapon's (★5 with the weapon at
@@ -283,7 +244,7 @@ export function starOf(t) {
 /** The columns of a target: the level, the four skills and the three equipment slots. */
 const PART_NAMES = {
   level: "Lv",
-  star: "★",
+  star: "星",
   fragments: "カケラ(文字)のレート",
   skill: ["EX", "N", "P", "S"],
   equipment: ["装備1", "装備2", "装備3"],
@@ -327,14 +288,17 @@ export function stockCells(stock, golden) {
 /** How many a count holds ("51K" about 51,000; none 0). */
 const amountOf = (count) => (count == null ? 0 : (count.exact ?? count.thousands * 1000));
 
-/** How short a drop held falls of what students need: of one "short", of two "low". */
+/**
+ * How a drop held stands against what students need: short of one "short"
+ * (red), of two "fair" (blue), two or more "enough" (green).
+ */
 export function heldTone(held, need) {
   if (need == null) return "";
   const n = amountOf(held);
-  return n < need ? "short" : n < 2 * need ? "low" : "";
+  return n < need ? "short" : n < 2 * need ? "fair" : "enough";
 }
 
-/** The farm to the golden ratio: each mission's runs, AP and the slots it serves, and the whole. */
+/** The farm to the golden ratio: each mission's runs, AP and the slots it serves, and the totals. */
 export function farmCells(farm) {
   return {
     lines: farm.stages.map((s) => ({
@@ -343,7 +307,7 @@ export function farmCells(farm) {
       ap: `${exact.format(s.ap)}AP`,
       slots: s.slots.join("・"),
     })),
-    total: `計 ${exact.format(farm.runs)}回 ${exact.format(farm.ap)}AP`,
+    total: { runs: `${exact.format(farm.runs)}回`, ap: `${exact.format(farm.ap)}AP` },
   };
 }
 
