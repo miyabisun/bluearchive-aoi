@@ -370,6 +370,7 @@ shops: []
                         coin: 1,
                     }),
                 ],
+                sold: false,
             }],
         }];
         let text = yaml("", &ReadAt::default(), None, &[], &[], &[], &shops);

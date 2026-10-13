@@ -709,14 +709,15 @@ pub struct CoinRow {
     pub at: u8,
 }
 
-/// A good of a shop, named, with its icon and what each coin buys of it
-/// (`None`: that coin does not).
+/// A good of a shop, named, with its icon, what each coin buys of it
+/// (`None`: that coin does not) and whether every coin bought it up.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GoodRow {
     pub id: i64,
     pub name: String,
     pub icon: String,
     pub offers: Vec<Option<OfferRow>>,
+    pub sold: bool,
 }
 
 /// How many more times a coin buys a good, and on what terms (`None`: none

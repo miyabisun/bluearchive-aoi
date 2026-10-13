@@ -136,6 +136,7 @@ fn kakera(rate: Option<u32>, left: u32) -> ShopRow {
                 shown: rate,
                 coin: 0,
             })],
+            sold: left == 0,
         }],
     }
 }

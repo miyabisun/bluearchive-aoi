@@ -644,7 +644,8 @@
               <ul class="tiles goods" data-state="success">
                 {#each shop.goods as good (good.id)}
                   {@const tile = goodTile(good)}
-                  <li title={good.name}>
+                  <!-- A good bought up with every coin is greyed out (the app lists it last). -->
+                  <li title={good.name} class:sold={good.sold}>
                     <span class="item"
                       ><img
                         src={iconUrl(good.icon)}
@@ -1045,6 +1046,10 @@
       gap: var(--sp-1)
     .item
       position: relative
+    li.sold
+      opacity: 0.55
+      img
+        filter: grayscale(1)
     .offers
       display: flex
       flex-direction: column

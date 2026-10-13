@@ -402,12 +402,14 @@ const shops = [
           { left: 40, price: { price: 10, amount: 1, limit: 40 } },
           { left: 12, price: { price: 10, amount: 1, limit: 12 } },
         ],
+        sold: false,
       },
       {
         id: 10019,
         name: "アズサの神名文字",
         icon: "item_icon_secretstone_azusa",
         offers: [null, { left: 0, price: { price: 50, amount: 5, limit: 10 } }],
+        sold: true,
       },
     ],
   },
@@ -422,6 +424,7 @@ const shops = [
         name: "エーテルの粉",
         icon: "item_icon_material_ether_0",
         offers: [{ left: 25, price: null }],
+        sold: false,
       },
     ],
   },
@@ -462,6 +465,10 @@ test("shows each shop's goods, shop by shop, when the game shows a shop", async 
       .evaluateAll((imgs) => imgs.map((i) => i.alt)),
   ).toEqual(["総力戦コイン", "総力戦レアコイン"]);
   await expect(tiles.nth(1).locator(".offer").first()).toHaveText("");
+  // A good bought up with every coin is greyed out; the app lists it last.
+  await expect(tiles.nth(1)).toHaveClass(/sold/);
+  await expect(tiles.first()).not.toHaveClass(/sold/);
+  expect(await tiles.nth(1).evaluate((t) => Number(getComputedStyle(t).opacity))).toBeLessThan(1);
   // The icons load from the app.
   await expect
     .poll(() =>

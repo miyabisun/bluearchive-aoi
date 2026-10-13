@@ -529,12 +529,13 @@ impl Recognizer {
                             .unwrap_or_default(),
                     })
                     .collect();
-                let goods = shop::goods(&kept.offers, coins.len())
+                let mut goods: Vec<_> = shop::goods(&kept.offers, coins.len())
                     .into_iter()
                     .map(|(id, offers)| shop::GoodRow {
                         id,
                         name: named(id),
                         icon: icon(id).unwrap_or_default(),
+                        sold: offers.iter().flatten().all(|o| o.left == 0),
                         offers: order
                             .iter()
                             .map(|&i| {
@@ -548,6 +549,13 @@ impl Recognizer {
                             .collect(),
                     })
                     .collect();
+                // What is worth buying first, those the plain coin buys before
+                // the rare's; the goods bought up last.
+                goods.sort_by_key(|g| {
+                    let (kind, had) = self.prices.rank(g.id);
+                    let coin = g.offers.iter().position(Option::is_some);
+                    (g.sold, kind, coin, had, g.id)
+                });
                 Some(shop::ShopRow {
                     name: name.to_owned(),
                     read_at: kept.read_at.clone(),

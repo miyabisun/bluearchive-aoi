@@ -138,3 +138,85 @@ fn the_terms_price_every_labeled_offer_as_its_card() {
     }
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
 }
+
+/// A shop lists what is worth buying first (the user's order of 2026-10-13):
+/// 秘伝ノート, 神名のカケラ, the elephs (those of the plain coin first, then by
+/// how the student is had: fest, limited, an event's last), テイラーストーン, BDs,
+/// notes, ooparts, the goods of no such kind, then reports, booster tickets and
+/// blueprint boxes; the goods bought up go last.
+#[test]
+fn a_shop_lists_its_goods_worth_buying_first_and_those_bought_up_last() {
+    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let items = recognizer.catalog(List::Items).entries();
+    let offer = |name: &str, coin: u8, left: u32| Offer {
+        id: items.iter().find(|i| i.name == name).unwrap().id,
+        coin,
+        left,
+        price: None,
+    };
+    let listed = |shop: &str, offers: Vec<Offer>| {
+        let shelf = Shelf {
+            read_at: String::new(),
+            offers,
+            held: Vec::new(),
+        };
+        let rows = recognizer.shop_rows(
+            &BTreeMap::from([(shop.to_owned(), shelf)]),
+            &std::collections::HashMap::new(),
+        );
+        rows[0]
+            .goods
+            .iter()
+            .map(|g| format!("{}{}", g.name, if g.sold { " 売切れ" } else { "" }))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        listed(
+            "熟達証書",
+            vec![
+                offer("T3装備設計図選択ボックス", 0, 100),
+                offer("最上級レポート", 0, 4),
+                offer("ノノミの神名文字", 0, 6),
+                offer("アズサ（水着）の神名文字", 0, 2),
+                offer("ミカの神名文字", 0, 0),
+                offer("ワカモの神名文字", 0, 2),
+                offer("神名のカケラ", 0, 5),
+            ]
+        ),
+        [
+            "神名のカケラ",
+            "ワカモの神名文字",
+            "アズサ（水着）の神名文字",
+            "ノノミの神名文字",
+            "最上級レポート",
+            "T3装備設計図選択ボックス",
+            "ミカの神名文字 売切れ",
+        ]
+    );
+    // 総力戦's coins from the left: the rare, then the plain.
+    assert_eq!(
+        listed(
+            "総力戦",
+            vec![
+                offer("ブースターチケット", 1, 5),
+                offer("エーテルの粉", 1, 5),
+                offer("初級技術ノート（百鬼夜行）", 0, 16),
+                offer("初級技術ノート（百鬼夜行）", 1, 50),
+                offer("初級戦術教育BD（百鬼夜行）", 0, 0),
+                offer("初級戦術教育BD（百鬼夜行）", 1, 40),
+                offer("マキの神名文字", 0, 10),
+                offer("ミドリの神名文字", 1, 20),
+                offer("秘伝ノート", 1, 3),
+            ]
+        ),
+        [
+            "秘伝ノート",
+            "ミドリの神名文字",
+            "マキの神名文字",
+            "初級戦術教育BD（百鬼夜行）",
+            "初級技術ノート（百鬼夜行）",
+            "エーテルの粉",
+            "ブースターチケット",
+        ]
+    );
+}

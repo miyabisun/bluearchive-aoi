@@ -85,6 +85,23 @@ impl Prices {
         }
     }
 
+    /// Where the good `id` goes in a shop's list (see `ORDER`), then, for an
+    /// eleph, by how its student is had: fest, limited, always, an event's.
+    pub fn rank(&self, id: i64) -> (usize, u8) {
+        let kind = self
+            .goods
+            .get(&id)
+            .and_then(|good| ORDER.iter().position(|k| !k.is_empty() && is(good, k)))
+            .unwrap_or(OTHERS);
+        let had = match self.elephs.get(&id) {
+            Some(3) => 0,
+            Some(1) => 1,
+            Some(2) => 3,
+            _ => 2,
+        };
+        (kind, had)
+    }
+
     /// The family and tier of a good of the kinds that come in four tiers
     /// (tactical BDs, tech notes, ooparts), the family told by its first tier.
     pub fn family(&self, id: i64) -> Option<(i64, u8)> {
@@ -149,7 +166,27 @@ const ELEPH: &str = "の神名文字";
 static HAD: std::sync::LazyLock<HashMap<&str, u8>> =
     std::sync::LazyLock::new(|| HashMap::from([("限定", 1), ("配布", 2), ("フェス限定", 3)]));
 
-/// Whether `good` is the item or of the kind a rule names.
+/// The kinds of goods in the order a shop lists them, what is worth buying
+/// first (the user's order of 2026-10-13); the goods of none of them stand
+/// where the empty kind does.
+const ORDER: [&str; 12] = [
+    "秘伝ノート",
+    "神名のカケラ",
+    "神名文字",
+    "テイラーストーン",
+    "戦術教育BD",
+    "技術ノート",
+    "オーパーツ",
+    "",
+    "クレジット",
+    "レポート",
+    "ブースターチケット",
+    "装備設計図選択ボックス",
+];
+const OTHERS: usize = 7;
+const _: () = assert!(ORDER[OTHERS].is_empty());
+
+/// Whether `good` is the item or of the kind a rule (or `ORDER`) names.
 fn is(good: &Good, item: &str) -> bool {
     let sub = good.subcategory.as_deref();
     match item {
@@ -157,6 +194,10 @@ fn is(good: &Good, item: &str) -> bool {
         "戦術教育BD" => sub == Some("CDItem"),
         "技術ノート" => sub == Some("BookItem") && good.name.contains(item),
         "オーパーツ" => sub == Some("Artifact"),
+        "レポート" => good.category == "CharacterExpGrowth",
+        "テイラーストーン" | "ブースターチケット" | "装備設計図選択ボックス" => {
+            good.name.contains(item)
+        }
         name => good.name == name,
     }
 }
