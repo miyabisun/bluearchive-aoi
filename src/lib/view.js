@@ -284,6 +284,7 @@ export function starOf(t) {
 const PART_NAMES = {
   level: "Lv",
   star: "★",
+  fragments: "カケラ(文字)のレート",
   skill: ["EX", "N", "P", "S"],
   equipment: ["装備1", "装備2", "装備3"],
 };

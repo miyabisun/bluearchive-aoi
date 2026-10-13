@@ -405,8 +405,9 @@ describe("plan", () => {
         { id: -1, name: "ツムギ", part: { skill: 0 } },
         { id: -1, name: "ツムギ", part: { equipment: 2 } },
         { id: 10, name: "アル", part: "level" },
+        { id: 10, name: "アル", part: "fragments" },
       ]),
-    ).toEqual(["ツムギ: EX・装備3", "アル: Lv"]);
+    ).toEqual(["ツムギ: EX・装備3", "アル: Lv・カケラ(文字)のレート"]);
   });
 });
 

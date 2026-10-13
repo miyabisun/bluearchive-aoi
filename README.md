@@ -88,7 +88,11 @@ To plan training, tick 育成 beside the students to train under the 生徒 tab.
 lists them with their targets, Lv90, skills 5/10/10/10 and equipment T10/10/10 to start
 with; click a target and change it with ↑ and ↓ (the value read stands over it). The star
 (★) stays at the student's own until you choose one: ★1 to ★5, then the unique weapon's
-固有2 to 固有4, counting the elephs and credits each step takes. Below come what the
+固有2 to 固有4, counting the elephs and credits each step takes. The elephs short are
+bought with 神名のカケラ at the student's rate the カケラ(文字) shop showed: 20 at that rate,
+20 at each next rate up to 4, then 5 each (the shop does not tell how many of the 20 are
+already bought), no more than it has left; the fragments join the materials below, and a
+student whose rate was not read is named as not counted. Below come what the
 targets take, all together, against what is held: credits (in millions, M), the exp of
 activity reports and of enhancement orbs, then the other materials and blueprints, each
 足りる or 不足 by how much (約 where a count is in thousands). Tech notes, tactical BDs and

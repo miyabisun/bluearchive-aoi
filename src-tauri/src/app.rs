@@ -96,6 +96,7 @@ impl Snapshot {
             &self.items,
             &self.equipment,
             self.credits,
+            &self.shops,
         );
         self.work = recognizer.work_rows(&self.items, &self.equipment, self.credits);
     }

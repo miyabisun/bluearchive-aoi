@@ -344,8 +344,9 @@ impl Recognizer {
     }
 
     /// What the `targets` take against what is held, line by line (credits,
-    /// report exp, orb exp, then items and blueprints in id order), and the
-    /// parts that could not be counted, their students named.
+    /// report exp, orb exp, then items and blueprints in id order, with the
+    /// fragments buying the elephs short in the `shops`), and the parts that
+    /// could not be counted, their students named.
     pub fn plan_rows(
         &self,
         targets: &BTreeMap<i64, plan::Target>,
@@ -353,14 +354,16 @@ impl Recognizer {
         items: &[Row],
         equipment: &[Row],
         credits: Option<u64>,
+        shops: &[shop::ShopRow],
     ) -> (Vec<plan::NeedRow>, Vec<plan::UnknownRow>) {
         use plan::{Held, Kind, NeedRow, held};
         let trained = students.iter().map(|s| (s.id, s.training)).collect();
-        let needs = self.planner.needs(targets, &trained);
+        let mut needs = self.planner.needs(targets, &trained);
         let counts = |rows: &[Row]| -> HashMap<i64, Count> {
             rows.iter().map(|r| (r.id, r.count)).collect()
         };
         let (items_held, equipment_held) = (counts(items), counts(equipment));
+        self.buy_elephs(&mut needs, targets, &items_held, shops);
         let growth = &self.planner.growth;
         let line = |kind, id, entry: Option<&Item>, need, have| NeedRow {
             kind,
@@ -425,6 +428,49 @@ impl Recognizer {
             })
             .collect();
         (rows, unknown)
+    }
+
+    /// Adds to `needs` the fragments that buy the elephs the `targets` are
+    /// short of, at the rate the カケラ(文字) shop of `shops` showed for each
+    /// student; a student whose rate was not read is counted as unknown.
+    fn buy_elephs<S: std::hash::BuildHasher>(
+        &self,
+        needs: &mut plan::Needs,
+        targets: &BTreeMap<i64, plan::Target>,
+        held: &HashMap<i64, Count, S>,
+        shops: &[shop::ShopRow],
+    ) {
+        let kakera = shops.iter().find(|s| s.name == shop::LASTING);
+        let mut fragments = 0;
+        // A student's elephs are the item of their id.
+        for (&id, &need) in needs
+            .items
+            .iter()
+            .filter(|(id, _)| targets.contains_key(id))
+        {
+            let (plan::Held::Exact(have) | plan::Held::About(have)) = plan::held(held, &[(id, 1)]);
+            let short = need.saturating_sub(have);
+            if short == 0 {
+                continue;
+            }
+            let offer = kakera
+                .and_then(|s| s.goods.iter().find(|g| g.id == id))
+                .and_then(|g| g.offers.first().copied().flatten());
+            match offer {
+                Some(offer) if offer.left == 0 => {}
+                Some(shop::OfferRow {
+                    left,
+                    shown: Some(rate),
+                    ..
+                }) => fragments += plan::fragments(short, rate, left),
+                _ => needs.unknown.push((id, plan::Part::Fragments)),
+            }
+        }
+        if fragments > 0
+            && let Some(coin) = self.coin_item(shop::LASTING, 0)
+        {
+            *needs.items.entry(coin).or_default() += fragments;
+        }
     }
 
     /// The item a shop's coin is (as `shop::Seen::held` tells it), where it is one.

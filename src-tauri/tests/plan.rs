@@ -4,8 +4,10 @@
 use std::{collections::BTreeMap, path::Path};
 
 use aoi::{
-    Recognizer,
-    plan::{Kind, Target},
+    Recognizer, Row,
+    plan::{Held, Kind, Part, Target},
+    quantity::Count,
+    shop::{GoodRow, OfferRow, ShopRow},
     student::{Gear, Training},
     watch::StudentRow,
 };
@@ -47,6 +49,7 @@ fn skills_from_lv1_to_the_top_take_the_known_credits_and_three_notes() {
         &[],
         &[],
         None,
+        &[],
     );
     assert!(unknown.is_empty(), "{unknown:?}");
     // EX Lv1 to 5, and three skills Lv1 to 10.
@@ -68,6 +71,7 @@ fn lv1_to_90_takes_the_game_tables_exp() {
         &[],
         &[],
         None,
+        &[],
     );
     assert_eq!(need(&rows, Kind::ReportExp, 0), 1_249_185);
     assert_eq!(need(&rows, Kind::Credits, 0), 1_249_185 * 7);
@@ -84,6 +88,7 @@ fn the_planned_goods_have_icons_and_the_tiered_kinds_families() {
         &[],
         &[],
         None,
+        &[],
     );
     let goods: Vec<_> = rows
         .iter()
@@ -102,4 +107,73 @@ fn the_planned_goods_have_icons_and_the_tiered_kinds_families() {
     let family = |id| rows.iter().find(|r| r.id == id).and_then(|r| r.family);
     assert_eq!(family(4031), Some((4030, 2)));
     assert_eq!(family(9999), None);
+}
+
+fn held(id: i64, count: u32) -> Row {
+    Row {
+        id,
+        name: String::new(),
+        icon: String::new(),
+        tier: None,
+        count: Count::Exact(count),
+    }
+}
+
+/// The カケラ(文字) shop selling Aru's elephs at `rate`, `left` more to buy.
+fn kakera(rate: Option<u32>, left: u32) -> ShopRow {
+    ShopRow {
+        name: "カケラ(文字)".to_owned(),
+        read_at: String::new(),
+        resets: false,
+        coins: Vec::new(),
+        goods: vec![GoodRow {
+            id: 10000,
+            name: String::new(),
+            icon: String::new(),
+            offers: vec![Some(OfferRow {
+                left,
+                price: None,
+                shown: rate,
+                coin: 0,
+            })],
+        }],
+    }
+}
+
+/// The elephs a star target is short of are bought with fragments at the
+/// rate the カケラ(文字) shop shows for the student.
+#[test]
+fn elephs_short_take_fragments_at_the_shops_rate() {
+    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let target = Target {
+        level: 1,
+        skills: [1; 4],
+        equipment: [1, 1, 1],
+        star: Some(5),
+    };
+    let targets = BTreeMap::from([(10000, target)]);
+    let plan = |elephs: u32, shops: &[ShopRow]| {
+        let items = [held(10000, elephs), held(23, 300)];
+        recognizer.plan_rows(&targets, &[aru(1)], &items, &[], None, shops)
+    };
+    // ★3 to ★5 takes 100 + 120 elephs; 50 held leaves 170 short: 20 at
+    // each of 1 to 4 fragments, then 90 at 5.
+    let (rows, unknown) = plan(50, &[kakera(Some(1), 720)]);
+    assert_eq!(need(&rows, Kind::Item, 10000), 220);
+    let fragments = rows.iter().find(|r| r.id == 23).unwrap();
+    assert_eq!(fragments.name, "神名のカケラ");
+    assert_eq!(fragments.need, 20 + 40 + 60 + 80 + 90 * 5);
+    assert_eq!(fragments.have, Some(Held::Exact(300)));
+    assert!(unknown.is_empty(), "{unknown:?}");
+    // Enough elephs, or none left in the shop, take no fragments.
+    assert_eq!(
+        need(&plan(220, &[kakera(Some(1), 720)]).0, Kind::Item, 23),
+        0
+    );
+    assert_eq!(need(&plan(50, &[kakera(None, 0)]).0, Kind::Item, 23), 0);
+    // Without the student's rate the fragments cannot be counted.
+    let (rows, unknown) = plan(50, &[]);
+    assert_eq!(need(&rows, Kind::Item, 23), 0);
+    assert_eq!(unknown.len(), 1);
+    assert_eq!((unknown[0].id, unknown[0].part), (10000, Part::Fragments));
 }

@@ -415,7 +415,7 @@
               <table class="tiers" data-state="success">
                 <thead class="hidden">
                   <tr>
-                    {#each ["初級", "中級", "上級", "最上級"] as tier (tier)}
+                    {#each TIERS as tier (tier)}
                       <th scope="col">{tier}</th>
                     {/each}
                   </tr>
