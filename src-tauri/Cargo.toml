@@ -39,10 +39,15 @@ all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 
 # Recognition tests decode and scan full screenshots; unoptimized they crawl.
+# No incremental history and no debug info for the dependencies: they piled
+# up to 109GB in target/debug (2026-10-14); panics keep their line numbers.
 [profile.dev]
 opt-level = 2
+incremental = false
+debug = "line-tables-only"
 [profile.dev.package."*"]
 opt-level = 3
+debug = false
 
 [profile.release]
 strip = true
