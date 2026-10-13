@@ -1,6 +1,6 @@
-# Aoi（あおい）
+# Aoi（アオイ）
 
-<p align="center"><img src="docs/aoi.png" width="320" alt="Aoi のイメージイラスト"></p>
+<p align="center"><img src="docs/aoi.png" width="320" alt="アオイのイラスト"></p>
 
 Aoi は、PC 版ブルーアーカイブの画面を横から見て、アイテムや装備の所持数、生徒の育成状況、
 ショップの残り購入回数を数えるアプリです。ゲームの横に開いておき、ゲームの一覧画面を
