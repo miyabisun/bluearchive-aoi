@@ -9,16 +9,17 @@ use crate::{
         bank::{Bank, Word},
         word::{self, Ink},
     },
+    screen,
     student::{NAME, rect},
 };
 
-/// The name's columns on the plate, in window heights from the left: past the
+/// The name's columns on the plate, in units (`screen::unit`) from the left: past the
 /// bond heart (it ends at 0.09) and short of the stars (from 0.37), measured on
 /// 2026-10-14 over the student fixtures at 2222x1250. A long name is drawn
 /// smaller to fit.
 const COLUMNS: (f32, f32) = (0.10, 0.365);
-/// Parts of the letters smaller than this share of the window height squared
-/// are specks (6 pixels at 1250 rows; a voiced mark's dots are 8 or more).
+/// Parts of the letters smaller than this share of the unit squared are specks
+/// (6 pixels at 1250 rows; a voiced mark's dots are 8 or more).
 const SPECK: f32 = 6.0 / (1250.0 * 1250.0);
 /// The farthest a letter of the plate may lie from the name's own letter.
 /// Measured on 2026-10-14 over the student fixtures: a right name's farthest
@@ -35,13 +36,13 @@ fn white(c: [u8; 3]) -> bool {
 /// The name's letters on the plate of `image` (none where the window is too
 /// narrow for it).
 pub fn plate(image: &RgbImage) -> Option<Ink> {
-    let h = image.height() as f32;
+    let unit = screen::unit(image.width(), image.height());
     let (_, top, _, bottom) = rect(image, NAME)?;
-    let (left, right) = ((COLUMNS.0 * h) as u32, (COLUMNS.1 * h) as u32);
+    let (left, right) = ((COLUMNS.0 * unit) as u32, (COLUMNS.1 * unit) as u32);
     if right > image.width() {
         return None;
     }
-    let least = (SPECK * h * h).round().max(1.0) as usize;
+    let least = (SPECK * unit * unit).round().max(1.0) as usize;
     Some(Ink::parts(image, (left, top, right, bottom), white, least))
 }
 

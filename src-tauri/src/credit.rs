@@ -5,6 +5,7 @@ use image::RgbImage;
 
 use crate::{
     glyph::{self, Fonts, Style},
+    screen::Anchor,
     student::{Area, rect},
 };
 
@@ -20,13 +21,14 @@ pub const DARK_DIGITS: Style = Style {
     skew: 0.0,
 };
 
-/// The credits, a number up to the bar's next field (window heights from the
-/// right edge and the top; measured on 2026-10-12 at 2222x1250: the digits of
+/// The credits, a number up to the bar's next field (units from the right
+/// edge and the top; measured on 2026-10-12 at 2222x1250: the digits of
 /// "243,797,319" span 0.777 to 0.621 from the right, 0.020 to 0.044 down).
 pub const NUMBER: Area = Area {
     from_right: true,
     x: (0.779, 0.556),
     y: (0.012, 0.050),
+    anchor: Anchor::Top,
 };
 
 /// The yellow card standing for credits, left of the number.
@@ -34,6 +36,7 @@ pub const ICON: Area = Area {
     from_right: true,
     x: (0.834, 0.797),
     y: (0.020, 0.047),
+    anchor: Anchor::Top,
 };
 
 /// The card's yellow covers at least this share of its area.

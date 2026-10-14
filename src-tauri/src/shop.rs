@@ -22,6 +22,7 @@ use crate::{
     icon::{IconMatcher, Mask},
     price::{Price, Prices},
     quantity::Count,
+    screen::{self, Anchor},
     student::Area,
     tally::CONFIRM,
 };
@@ -37,8 +38,10 @@ pub const SHOPS: [&str; 6] = [
     "熟達証書",
 ];
 
-/// Where the parts of the screen lie, in window heights (measured on
-/// 2026-10-12 at 2222x1250 over the six shops). The menu down the left, its
+/// Where the parts of the screen lie, in units (window heights at 16:9, see
+/// `screen::unit`; measured on 2026-10-12 at 2222x1250 over the six shops).
+/// Rows count from the top, but for the ends of the menu and of the cards'
+/// view, which keep to the bottom (see `rows`). The menu down the left, its
 /// chosen entry painted navy, the entry's name right of its icon and short of
 /// the entry's slanting end (read up to either end, see `Goods::read`):
 const MENU_START: f32 = 0.072;
@@ -85,9 +88,11 @@ const DARKENED: f32 = 0.85;
 const LIGHT: u8 = 160;
 /// The farthest a part of the chosen menu entry may lie from the shop's name
 /// as the tuning fixtures draw it (see `glyph::word`). Measured on 2026-10-14
-/// over the shop fixtures: an entry lies within 4 of its own shop's name (a
-/// capture the names were not cut from), and 55 or farther from any other's.
-const MENU_WORST: f32 = 12.0;
+/// over the shop fixtures: an entry lies within 4 of its own shop's name in a
+/// window (a capture the names were not cut from), within 15 on a phone,
+/// scaled up to the references (see `screen::normalize`), and 54 or farther
+/// from any other's.
+const MENU_WORST: f32 = 24.0;
 /// Parts of the menu's letters smaller than this share of the window height
 /// squared are specks.
 const SPECK: f32 = 6.0 / (1250.0 * 1250.0);
@@ -152,25 +157,41 @@ pub fn areas() -> Vec<Area> {
             from_right: false,
             x: (0.0, MENU_ENDS[1]),
             y: MENU_ROWS,
+            anchor: Anchor::Top,
         },
         Area {
             from_right: true,
             x: (COINS[0] + coins, COINS[1] - HELD.1),
             y: (COINS_ROW - HELD_ROWS, COINS_ROW + HELD_ROWS),
+            anchor: Anchor::Top,
         },
     ]
 }
 
+/// The unit the screen is drawn at (see `screen::unit`).
+fn unit(image: &RgbImage) -> f32 {
+    screen::unit(image.width(), image.height())
+}
+
+/// The rows `span` covers, its start kept to the top and its end to the bottom.
+fn rows(image: &RgbImage, span: Span) -> (f32, f32) {
+    let unit = unit(image);
+    (
+        span.0 * unit,
+        Anchor::Bottom.origin(image.height(), unit) + span.1 * unit,
+    )
+}
+
 /// The digits of how many are held of the coin whose icon is centred `at`
-/// window heights from the right edge.
+/// units from the right edge.
 pub fn held_shapes(image: &RgbImage, at: f32) -> Option<Vec<Vec<f32>>> {
-    let (w, h) = (image.width() as f32, image.height() as f32);
-    let x = w - at * h;
+    let (w, u) = (image.width() as f32, unit(image));
+    let x = w - at * u;
     let rect = (
-        x + HELD.0 * h,
-        (COINS_ROW - HELD_ROWS) * h,
-        x + HELD.1 * h,
-        (COINS_ROW + HELD_ROWS) * h,
+        x + HELD.0 * u,
+        (COINS_ROW - HELD_ROWS) * u,
+        x + HELD.1 * u,
+        (COINS_ROW + HELD_ROWS) * u,
     );
     let inside = rect.0 >= 0.0 && rect.2 <= w && rect.0 < rect.2;
     inside.then(|| {
@@ -179,8 +200,8 @@ pub fn held_shapes(image: &RgbImage, at: f32) -> Option<Vec<Vec<f32>>> {
     })
 }
 
-/// How many are held of the coin whose icon is centred `at` window heights
-/// from the right edge.
+/// How many are held of the coin whose icon is centred `at` units from the
+/// right edge.
 fn held(image: &RgbImage, fonts: &Fonts, at: f32) -> Option<u64> {
     number(&fonts.read("digits", &held_shapes(image, at)?)?)
 }
@@ -315,7 +336,7 @@ impl Goods {
         coins: &[[f32; 3]],
         read_price: bool,
     ) -> Option<Offer> {
-        let h = image.height() as f32;
+        let u = unit(image);
         let (left, _, _, _) = card_area(image, bar)?;
         let bottom = bar.bottom as f32;
         let times = times_left(fonts, &bar_shapes(image, bar))?;
@@ -326,8 +347,8 @@ impl Goods {
         };
         let id = decide(self.icon(image, bar), &self.drawn)?;
         let coin_at = (
-            left + f32::midpoint(COIN.0, COIN.1) * h,
-            bottom + f32::midpoint(PRICE.0, PRICE.1) * h,
+            left + f32::midpoint(COIN.0, COIN.1) * u,
+            bottom + f32::midpoint(PRICE.0, PRICE.1) * u,
         );
         Some(Offer {
             id,
@@ -344,14 +365,14 @@ impl Goods {
     /// The icon of the card over `bar` (see `IconMatcher::identify`), the card
     /// brightened back first when it is bought up.
     fn icon(&self, image: &RgbImage, bar: &Bar) -> Result<usize, Vec<usize>> {
-        let h = image.height() as f32;
+        let u = unit(image);
         let all: Vec<usize> = (0..self.drawn.len()).collect();
         let (cx, cy) = (
             (bar.left + bar.right) as f32 / 2.0,
-            bar.top as f32 + SLOT_CENTRE * h,
+            bar.top as f32 + SLOT_CENTRE * u,
         );
         // The slot with room for the matcher's position search.
-        let reach = SLOT_HEIGHT * h;
+        let reach = SLOT_HEIGHT * u;
         let Some(mut around) = crop(image, cx - reach, cy - reach, cx + reach, cy + reach) else {
             return Err(Vec::new());
         };
@@ -361,7 +382,7 @@ impl Goods {
                 p.0 = p.0.map(|v| (f32::from(v) / darkening).min(255.0) as u8);
             }
         }
-        let height = (SLOT_HEIGHT * h) as u32;
+        let height = (SLOT_HEIGHT * u) as u32;
         let card = Card {
             left: reach - height as f32 / 2.0,
             width: height as f32,
@@ -375,15 +396,11 @@ impl Goods {
 /// What the card over `bar` is read from, `(x0, y0, x1, y1)`: from its name to
 /// its price, between the bar's ends. `None` where the viewport cuts it.
 pub fn card_area(image: &RgbImage, bar: &Bar) -> Option<(f32, f32, f32, f32)> {
-    let h = image.height() as f32;
-    let top = bar.top as f32 + NAME.0 * h;
-    let bottom = bar.bottom as f32 + PRICE.1 * h;
-    (top >= VIEW.0 * h && bottom <= VIEW.1 * h).then_some((
-        bar.left as f32,
-        top,
-        bar.right as f32,
-        bottom,
-    ))
+    let u = unit(image);
+    let top = bar.top as f32 + NAME.0 * u;
+    let bottom = bar.bottom as f32 + PRICE.1 * u;
+    let (first, last) = rows(image, VIEW);
+    (top >= first && bottom <= last).then_some((bar.left as f32, top, bar.right as f32, bottom))
 }
 
 /// The letters of the chosen menu entry, when the menu shows one.
@@ -393,12 +410,12 @@ pub fn menu_ink(image: &RgbImage) -> Option<Ink> {
 
 /// The letters of the chosen menu entry, whose rows are `(top, bottom)`.
 fn entry_ink(image: &RgbImage, (top, bottom): (u32, u32)) -> Option<Ink> {
-    let h = image.height() as f32;
-    let (left, right) = ((MENU_START * h) as u32, (MENU_ENDS[1] * h) as u32);
+    let u = unit(image);
+    let (left, right) = ((MENU_START * u) as u32, (MENU_ENDS[1] * u) as u32);
     if right > image.width() {
         return None;
     }
-    let least = (SPECK * h * h).round().max(1.0) as usize;
+    let least = (SPECK * u * u).round().max(1.0) as usize;
     Some(Ink::parts(
         image,
         (left, top, right, bottom + 1),
@@ -446,12 +463,12 @@ pub fn times_left(fonts: &Fonts, shapes: &[Vec<f32>]) -> Option<u32> {
 
 /// The digits of the price under the bar of the card over `bar`.
 pub fn price_shapes(image: &RgbImage, bar: &Bar) -> Option<Vec<Vec<f32>>> {
-    let h = image.height() as f32;
+    let u = unit(image);
     let (left, _, right, price_bottom) = card_area(image, bar)?;
     let rect = (
-        left + DIGITS.0 * h,
-        bar.bottom as f32 + PRICE.0 * h,
-        right + DIGITS.1 * h,
+        left + DIGITS.0 * u,
+        bar.bottom as f32 + PRICE.0 * u,
+        right + DIGITS.1 * u,
         price_bottom,
     );
     (rect.0 < rect.2).then(|| {
@@ -475,29 +492,28 @@ fn darkening(image: &RgbImage, bar: &Bar) -> f32 {
 
 /// The rows `(top, bottom)` of the chosen menu entry.
 fn menu_entry(image: &RgbImage) -> Option<(u32, u32)> {
-    let h = image.height() as f32;
-    let x1 = (MENU_ENDS[0] * h) as u32;
+    let u = unit(image);
+    let x1 = (MENU_ENDS[0] * u) as u32;
     // Mostly navy: the icon and the name cover the rest.
     let filled =
         |y: u32| (0..x1).filter(|&x| navy(image.get_pixel(x, y).0)).count() * 2 >= x1 as usize;
-    let rows: Vec<u32> = ((MENU_ROWS.0 * h) as u32..(MENU_ROWS.1 * h) as u32)
-        .filter(|&y| filled(y))
-        .collect();
-    let (&top, &bottom) = (rows.first()?, rows.last()?);
-    // A single entry, about a twelfth of the window tall.
-    ((0.06..0.12).contains(&((bottom - top) as f32 / h))).then_some((top, bottom))
+    let (first, last) = rows(image, MENU_ROWS);
+    let navy_rows: Vec<u32> = (first as u32..last as u32).filter(|&y| filled(y)).collect();
+    let (&top, &bottom) = (navy_rows.first()?, navy_rows.last()?);
+    // A single entry, about a twelfth of a unit tall.
+    ((0.06..0.12).contains(&((bottom - top) as f32 / u))).then_some((top, bottom))
 }
 
 /// The card panel with the coins over it, row by row: all a shop is read from
 /// but the menu, which moves on a still screen. Another shop chosen shows
 /// other cards and coins.
 fn panel(image: &RgbImage) -> Vec<u8> {
-    let (w, h) = (image.width() as usize, image.height() as f32);
-    let from = w.saturating_sub((PANEL * h) as usize) * 3;
+    let w = image.width() as usize;
+    let from = w.saturating_sub((PANEL * unit(image)) as usize) * 3;
     image
         .as_raw()
         .chunks_exact(w * 3)
-        .take((VIEW.1 * h) as usize)
+        .take(rows(image, VIEW).1 as usize)
         .flat_map(|row| &row[from..])
         .copied()
         .collect()
@@ -515,11 +531,12 @@ pub struct Bar {
 /// The cards' bars, row by row. The white letters cut the navy, so a bar is
 /// navy runs bridging short gaps, its rows joined across the letters.
 pub fn bars(image: &RgbImage) -> Vec<Bar> {
-    let (w, h) = (image.width(), image.height() as f32);
-    let from = w.saturating_sub((PANEL * h) as u32);
-    let width = (BAR_WIDTH * h) as u32;
+    let (w, u) = (image.width(), unit(image));
+    let from = w.saturating_sub((PANEL * u) as u32);
+    let width = (BAR_WIDTH * u) as u32;
+    let (first, last) = rows(image, VIEW);
     let mut out: Vec<Bar> = Vec::new();
-    for y in (VIEW.0 * h) as u32..(VIEW.1 * h) as u32 {
+    for y in first as u32..last as u32 {
         let mut runs: Vec<(u32, u32)> = Vec::new();
         for x in from..w {
             if navy(image.get_pixel(x, y).0) {
@@ -532,7 +549,7 @@ pub fn bars(image: &RgbImage) -> Vec<Bar> {
         for (left, right) in runs.into_iter().filter(|r| r.1 - r.0 >= width) {
             match out
                 .iter_mut()
-                .find(|b| b.bottom + (0.02 * h) as u32 >= y && b.left.abs_diff(left) < 8)
+                .find(|b| b.bottom + (0.02 * u) as u32 >= y && b.left.abs_diff(left) < 8)
             {
                 Some(bar) => {
                     bar.bottom = y;
@@ -547,7 +564,7 @@ pub fn bars(image: &RgbImage) -> Vec<Bar> {
             }
         }
     }
-    out.retain(|b| (b.bottom - b.top) as f32 >= 0.012 * h);
+    out.retain(|b| (b.bottom - b.top) as f32 >= 0.012 * u);
     out
 }
 
@@ -576,11 +593,11 @@ fn around_coin(c: [u8; 3]) -> bool {
     navy(c) || (r < 150 && g > 150 && b > 200) || c.iter().all(|&v| v > 200)
 }
 
-/// The mean colour of a coin's icon in a square `size` window heights wide
+/// The mean colour of a coin's icon in a square `size` units wide
 /// centred at `(x, y)`, what lies around it left out (a blue coin and a silver
 /// one look alike with it).
 fn mean(image: &RgbImage, x: f32, y: f32, size: f32) -> Option<[f32; 3]> {
-    let half = size * image.height() as f32 / 2.0;
+    let half = size * unit(image) / 2.0;
     let picture = crop(image, x - half, y - half, x + half, y + half)?;
     let coin: Vec<[u8; 3]> = picture
         .pixels()
@@ -593,10 +610,10 @@ fn mean(image: &RgbImage, x: f32, y: f32, size: f32) -> Option<[f32; 3]> {
 
 /// The mean colours of the shop's coin icons, left one first.
 fn coin_colours(image: &RgbImage) -> Vec<[f32; 3]> {
-    let (w, h) = (image.width() as f32, image.height() as f32);
+    let (w, u) = (image.width() as f32, unit(image));
     COINS
         .iter()
-        .filter_map(|x| mean(image, w - x * h, COINS_ROW * h, COIN_SIZE))
+        .filter_map(|x| mean(image, w - x * u, COINS_ROW * u, COIN_SIZE))
         .collect()
 }
 

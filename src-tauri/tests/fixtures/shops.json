@@ -154,5 +154,52 @@
       { "name": "アヤネ（水着）の神名文字", "coin": 0, "left": 0, "price": 50 },
       { "name": "ミチルの神名文字", "coin": 0, "left": 0, "price": 50 }
     ]
+  },
+  {
+    "image": "android/souryokusen.png",
+    "role": "tune",
+    "shop": "総力戦",
+    "held": [530, 3320],
+    "note": "2026-10-14 capture on a Pixel 9 (Android, 2424x1080) over adb's screenrecord, cut to its safe area (172..2252) and scaled to 2222 wide (screen::normalize). Labels by eye. The top row's names and the bottom row's prices are cut off.",
+    "offers": [
+      { "name": "中級技術ノート（ヴァルキューレ）", "coin": 1, "left": 40, "price": 5 },
+      { "name": "上級技術ノート（ヴァルキューレ）", "coin": 1, "left": 30, "price": 10 },
+      { "name": "最上級技術ノート（ヴァルキューレ）", "coin": 1, "left": 20, "price": 25 },
+      { "name": "初級技術ノート（アリウス）", "coin": 1, "left": 50, "price": 3 }
+    ]
+  },
+  {
+    "image": "android/goudou.png",
+    "role": "eval",
+    "shop": "合同火力演習",
+    "held": [953],
+    "note": "2026-10-14 capture on a Pixel 9 (Android, 2424x1080) over adb's screenrecord, cut to its safe area (172..2252) and scaled to 2222 wide (screen::normalize). Labels by eye. The fourth card of the middle row shines over its bar.",
+    "offers": [
+      { "name": "破損した古代の電池", "coin": 0, "left": 15, "price": 9 },
+      { "name": "摩耗した古代の電池", "coin": 0, "left": 20, "price": 12 },
+      { "name": "完全なる古代の電池", "coin": 0, "left": 10, "price": 25 },
+      { "name": "ミステリーストーンの欠片", "coin": 0, "left": 20, "price": 2 }
+    ]
+  },
+  {
+    "image": "android/shimeitehai.png",
+    "role": "eval",
+    "shop": "指名手配",
+    "held": [72],
+    "note": "2026-10-14 capture on a Pixel 9 (Android, 2424x1080) over adb's screenrecord, cut to its safe area (172..2252) and scaled to 2222 wide (screen::normalize). Labels by eye. No card is shown whole: the top row's names and the bottom row's prices are cut off.",
+    "offers": []
+  },
+  {
+    "image": "android/jukutatsu.png",
+    "role": "eval",
+    "shop": "熟達証書",
+    "held": [7949],
+    "note": "2026-10-14 capture on a Pixel 9 (Android, 2424x1080) over adb's screenrecord, cut to its safe area (172..2252) and scaled to 2222 wide (screen::normalize). Labels by eye. Every card is bought up, darkened; the top row's names are cut off.",
+    "offers": [
+      { "name": "ムツキ（正月）の神名文字", "coin": 0, "left": 0, "price": 1800 },
+      { "name": "ヒナ（水着）の神名文字", "coin": 0, "left": 0, "price": 1800 },
+      { "name": "イオリ（水着）の神名文字", "coin": 0, "left": 0, "price": 1800 },
+      { "name": "神名のカケラ", "coin": 0, "left": 0, "price": 600 }
+    ]
   }
 ]

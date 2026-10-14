@@ -725,7 +725,8 @@ impl Recognizer {
     /// any other screen gives `None`.
     pub fn read_student(&self, image: &RgbImage) -> Option<(Option<i64>, student::Training)> {
         let (title, tab, other_tab) = &self.student_screen;
-        let unit = (image.height() as f32 * screen::STUDENT_UNIT).round() as u32;
+        let unit =
+            (screen::unit(image.width(), image.height()) * screen::STUDENT_UNIT).round() as u32;
         screen::title(image, unit, std::slice::from_ref(title))?;
         let basic = screen::student_tab(image, tab);
         if !basic && !screen::student_tab(image, other_tab) {

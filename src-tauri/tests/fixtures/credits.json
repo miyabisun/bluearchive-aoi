@@ -4,5 +4,6 @@
 {"image": "credits/hoshino.png", "role": "tune", "credits": 243519019},
 {"image": "credits/levelup-1.png", "role": "tune", "credits": 243811319},
 {"image": "credits/levelup-2.png", "role": "eval", "credits": 243819369},
-{"image": "credits/dimmed.png", "role": "eval", "credits": null}
+{"image": "credits/dimmed.png", "role": "eval", "credits": null},
+{"image": "android/items-choco.png", "role": "eval", "credits": 198123286}
 ]

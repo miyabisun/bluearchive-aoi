@@ -1117,5 +1117,88 @@
         "quantity": "605"
       }
     ]
+  },
+  {
+    "image": "android/items-choco.png",
+    "list": "items",
+    "role": "eval",
+    "note": "2026-10-14 capture on a Pixel 9 (Android, 2424x1080) over adb's screenrecord, cut to its safe area (172..2252) and scaled to 2222 wide (screen::normalize). The list scrolled to the chocolates. Labels by eye.",
+    "cells": [
+      {
+        "id": 180009,
+        "quantity": "1",
+        "ignored": true
+      },
+      {
+        "id": 180010,
+        "quantity": "1",
+        "ignored": true
+      },
+      {
+        "id": 180011,
+        "quantity": "1",
+        "ignored": true
+      },
+      {
+        "id": 180012,
+        "quantity": "1",
+        "ignored": true
+      },
+      {
+        "id": 180013,
+        "quantity": "1",
+        "ignored": true
+      },
+      {
+        "id": 180014,
+        "quantity": "1",
+        "ignored": true
+      },
+      {
+        "id": 180015,
+        "quantity": "1",
+        "ignored": true
+      },
+      {
+        "id": 180016,
+        "quantity": "1",
+        "ignored": true
+      },
+      {
+        "id": 180017,
+        "quantity": "1",
+        "ignored": true
+      },
+      {
+        "id": 180018,
+        "quantity": "1",
+        "ignored": true
+      },
+      {
+        "id": 180019,
+        "quantity": "1",
+        "ignored": true
+      },
+      {
+        "id": 180020,
+        "quantity": "1",
+        "ignored": true
+      },
+      {
+        "id": 180021,
+        "quantity": "1",
+        "ignored": true
+      },
+      {
+        "id": 180022,
+        "quantity": "1",
+        "ignored": true
+      },
+      {
+        "id": 180023,
+        "quantity": "1",
+        "ignored": true
+      }
+    ]
   }
 ]

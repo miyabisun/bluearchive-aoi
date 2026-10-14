@@ -8,34 +8,79 @@
 //! compared with `data/sort-default.png` and `data/title-*.png`, written by
 //! `cargo run --example make_templates`.
 
-use image::{RgbImage, imageops::FilterType};
+use image::{
+    RgbImage,
+    imageops::{self, FilterType},
+};
+
+/// How large the game draws a screen: the height of a 16:9 window as wide as
+/// the screen, or the screen's own height where it is no wider than 16:9. A
+/// phone's screen is wider, and the game's parts keep the size the width gives
+/// them, each kept to the top, the middle or the bottom (see `Anchor`): the
+/// parts measured in window heights at 16:9 are measured in this.
+pub fn unit(width: u32, height: u32) -> f32 {
+    if u64::from(width) * 9 > u64::from(height) * 16 {
+        width as f32 * 9.0 / 16.0
+    } else {
+        height as f32
+    }
+}
+
+/// Which edge a part of the screen keeps to where the screen is wider than
+/// 16:9 and so shorter than `unit` (measured on 2026-10-14 on a Pixel 9 against
+/// a 16:9 window): the top bar and the lists to the top, the student screen's
+/// panel to the middle, its name plate to the bottom.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Anchor {
+    Top,
+    Middle,
+    Bottom,
+}
+
+impl Anchor {
+    /// Where a 16:9 window's top lies for the parts kept to this edge, in a
+    /// screen `height` tall drawn at `unit`.
+    pub fn origin(self, height: u32, unit: f32) -> f32 {
+        let spare = height as f32 - unit;
+        match self {
+            Anchor::Top => 0.0,
+            Anchor::Middle => spare / 2.0,
+            Anchor::Bottom => spare,
+        }
+    }
+}
 
 /// A part of the screen measured in card heights from a top corner: across
-/// from `x.0` to `x.1` away from the left (or right) edge, down from `y.0` to `y.1`.
+/// from `x.0` to `x.1` away from the left (or right) edge, down from `y.0` to
+/// `y.1`, kept to `anchor`.
 #[derive(Debug, Clone, Copy)]
 pub struct Region {
     pub from_right: bool,
     pub x: (f32, f32),
     pub y: (f32, f32),
+    pub anchor: Anchor,
 }
 
 pub const SORT_BUTTONS: Region = Region {
     from_right: true,
     x: (3.2, 0.4),
     y: (0.95, 1.42),
+    anchor: Anchor::Top,
 };
 /// The title; below it the 4:3 screen draws a yellow underline (0.41 and down).
 pub const TITLE: Region = Region {
     from_right: false,
     x: (1.0, 2.35),
     y: (0.06, 0.4),
+    anchor: Anchor::Top,
 };
 /// The selected "基本情報" tab of the student screen, which has no cards: there
-/// a card height is `STUDENT_UNIT` window heights (what it is on the lists).
+/// a card height is `STUDENT_UNIT` units (what it is on the lists).
 pub const STUDENT_TAB: Region = Region {
     from_right: true,
     x: (6.47, 4.59),
     y: (1.24, 1.76),
+    anchor: Anchor::Middle,
 };
 pub const STUDENT_UNIT: f32 = 165.0 / 1250.0;
 /// The buttons may sit this far off (card heights), across and down.
@@ -79,8 +124,11 @@ pub fn crop(
     } else {
         ((region.x.0 - slack.0) * unit, (region.x.1 + slack.0) * unit)
     };
-    let y0 = (region.y.0 - slack.1) * unit;
-    let y1 = (region.y.1 + slack.1) * unit;
+    let origin = region
+        .anchor
+        .origin(image.height(), self::unit(image.width(), image.height()));
+    let y0 = origin + (region.y.0 - slack.1) * unit;
+    let y1 = origin + (region.y.1 + slack.1) * unit;
     if x0 < 0.0 || y0 < 0.0 || x1 > width || y1 > image.height() as f32 {
         return None;
     }
@@ -97,6 +145,85 @@ pub fn crop(
         ((x1 - x0) * scale).round() as u32,
         ((y1 - y0) * scale).round() as u32,
         FilterType::Triangle,
+    ))
+}
+
+/// The top bar's white starts this share of the game's width in (right of
+/// the back button) and runs to its right end, at `BAR_ROW` window heights
+/// down, over the bar's icons.
+const BAR_START: f32 = 163.0 / 2222.0;
+const BAR_ROW: f32 = 0.003;
+/// The bar's white, and the least share of the window it spans.
+const BAR_WHITE: u32 = 235;
+const BAR_SPAN: f32 = 0.5;
+/// Insets narrower than this share of the window are a pixel of the bar's
+/// soft ends, not a phone's.
+const INSET_SLACK: f32 = 0.01;
+
+/// The columns `(left, right)` the game draws its screens in: all of a window,
+/// a phone's safe area short of its rounded corners and camera, as far in on
+/// either side. The top bar's white starts a set share of the safe area's
+/// width in from its left end, which tells the inset. (The bar runs past the
+/// safe area's right end: measured on 2026-10-14 on a Pixel 9, the student
+/// panel's parts lie as at 16:9 in 2082 columns from 170 or so, the bar's
+/// white runs to 2263.) A screen without the bar keeps it all, and so does one
+/// no wider than 16:9, which the game fills.
+pub fn safe_area(image: &RgbImage) -> (u32, u32) {
+    let (width, height) = image.dimensions();
+    if u64::from(width) * 9 <= u64::from(height) * 16 {
+        return (0, width);
+    }
+    let row = (BAR_ROW * height as f32).round() as u32;
+    let white = |x: u32| {
+        let [r, g, b] = image.get_pixel(x, row).0;
+        (299 * u32::from(r) + 587 * u32::from(g) + 114 * u32::from(b)) / 1000 > BAR_WHITE
+    };
+    let mut runs = Vec::new();
+    let mut from = None;
+    for x in 0..=width {
+        match (x < width && white(x), from) {
+            (true, None) => from = Some(x),
+            (false, Some(start)) => {
+                runs.push((start, x));
+                from = None;
+            }
+            _ => {}
+        }
+    }
+    let Some(&(start, end)) = runs.iter().max_by_key(|(a, b)| b - a) else {
+        return (0, width);
+    };
+    let span = width as f32;
+    if ((end - start) as f32) < BAR_SPAN * span {
+        return (0, width);
+    }
+    let inset = (start as f32 - BAR_START * span) / (1.0 - 2.0 * BAR_START);
+    if inset <= INSET_SLACK * span {
+        return (0, width);
+    }
+    let inset = inset.round() as u32;
+    (inset, width - inset)
+}
+
+/// The width a phone's safe area is scaled to: the game's parts are then as
+/// large as in the 2222x1250 window the references were drawn from (a phone
+/// draws its letters smaller, too far from them to read).
+const REFERENCE_WIDTH: u32 = 2222;
+
+/// The frame as the game lays it out: a phone's safe area (see `safe_area`)
+/// scaled to `REFERENCE_WIDTH`; a window's frame as it is.
+pub fn normalize(image: &RgbImage) -> std::borrow::Cow<'_, RgbImage> {
+    let (left, right) = safe_area(image);
+    if (left, right) == (0, image.width()) {
+        return std::borrow::Cow::Borrowed(image);
+    }
+    let area = imageops::crop_imm(image, left, 0, right - left, image.height());
+    let height = (image.height() as f32 * REFERENCE_WIDTH as f32 / (right - left) as f32).round();
+    std::borrow::Cow::Owned(imageops::resize(
+        &*area,
+        REFERENCE_WIDTH,
+        height as u32,
+        FilterType::Nearest,
     ))
 }
 
@@ -184,7 +311,7 @@ pub fn title(image: &RgbImage, card_height: u32, titles: &[RgbImage]) -> Option<
 /// How alike the student screen's "基本情報" tab is to `template` (the tab
 /// selected), at the unit `STUDENT_UNIT` gives.
 pub fn student_tab(image: &RgbImage, template: &RgbImage) -> bool {
-    let unit = (image.height() as f32 * STUDENT_UNIT).round() as u32;
+    let unit = (self::unit(image.width(), image.height()) * STUDENT_UNIT).round() as u32;
     best_match(
         image,
         unit,
@@ -229,7 +356,7 @@ mod tests {
 
     use image::RgbImage;
 
-    use super::sorted_by_default;
+    use super::{normalize, safe_area, sorted_by_default};
     use crate::grid::find_panel;
 
     fn root() -> &'static Path {
@@ -274,6 +401,38 @@ mod tests {
             "other/event-stages.png",
         ] {
             assert!(!shows_default(&fixture(name)), "{name}");
+        }
+    }
+
+    /// A phone keeps the game in from its rounded corners and its camera, as
+    /// far on either side: the top bar shows how far (measured on 2026-10-14
+    /// on a Pixel 9 at 2424x1080: the student panel's parts lie as at 16:9 in
+    /// 2082 columns from 170 or so, the back button and the bar 172). A
+    /// window keeps it all.
+    #[test]
+    fn the_safe_area_is_as_far_in_as_the_top_bar_starts() {
+        let (left, right) = safe_area(&fixture("android/top-bar.png"));
+        assert!(
+            left.abs_diff(171) <= 2 && left + right == 2424,
+            "{left}..{right}"
+        );
+        // Scaled to the window the references were drawn from.
+        let phone = fixture("android/top-bar.png");
+        let normal = normalize(&phone);
+        let height = 1080.0 * 2222.0 / f64::from(right - left);
+        assert_eq!(normal.width(), 2222);
+        assert!((f64::from(normal.height()) - height).abs() < 1.0);
+        for name in [
+            "items-16x9-list-top.png",
+            "items-4x3-ooparts.png",
+            "credits/credit-02.png",
+        ] {
+            let image = fixture(name);
+            assert_eq!(safe_area(&image), (0, image.width()), "{name}");
+            assert!(
+                matches!(normalize(&image), std::borrow::Cow::Borrowed(_)),
+                "{name}"
+            );
         }
     }
 

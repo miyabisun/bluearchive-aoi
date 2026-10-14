@@ -16,15 +16,83 @@ use aoi::{
     Recognizer, credit,
     glyph::bank::Bank,
     screen::{self, Region},
-    shop,
-    student::{self, Area},
+    shop, student,
 };
 
-/// Room kept around each area, in window heights.
+/// Room kept around each area, in units (see `screen::unit`).
 const ROOM: f32 = 0.02;
 /// Room kept around the title and the tab, in card heights (beyond the slack
 /// the screen is searched with).
 const SCREEN_ROOM: f32 = 0.5;
+
+/// The rectangles kept of `image` (see the top), for `only` one part or none.
+fn kept(image: &image::RgbImage, only: Option<&str>) -> Vec<(f32, f32, f32, f32)> {
+    let w = image.width() as f32;
+    let u = screen::unit(image.width(), image.height());
+    let areas = match only {
+        Some("level") => vec![student::LEVEL],
+        Some("shop") => shop::areas(),
+        Some(_) => vec![credit::NUMBER, credit::ICON],
+        None => student::areas(),
+    };
+    let room = ROOM * u;
+    let mut kept: Vec<(f32, f32, f32, f32)> = areas
+        .into_iter()
+        .filter_map(|area| student::rect(image, area))
+        .map(|(x0, y0, x1, y1)| {
+            (
+                x0 as f32 - room,
+                y0 as f32 - room,
+                x1 as f32 + room,
+                y1 as f32 + room,
+            )
+        })
+        .collect();
+    if only == Some("shop") {
+        // The cards read whole, each with a little room, and every card's bar,
+        // which tells the screen a shop with none whole.
+        let room = 0.005 * u;
+        for bar in shop::bars(image) {
+            kept.push((
+                bar.left as f32 - room,
+                bar.top as f32 - room,
+                bar.right as f32 + room,
+                bar.bottom as f32 + room,
+            ));
+            if let Some((x0, y0, x1, y1)) = shop::card_area(image, &bar) {
+                kept.push((x0 - room, y0 - room, x1 + room, y1 + room));
+            }
+        }
+    }
+    let unit = screen::STUDENT_UNIT * u;
+    let screens: &[Region] = if only.is_some() {
+        &[]
+    } else {
+        &[screen::TITLE, screen::STUDENT_TAB]
+    };
+    for &Region {
+        from_right,
+        x,
+        y,
+        anchor,
+    } in screens
+    {
+        let (x0, x1) = if from_right {
+            (w - x.0 * unit, w - x.1 * unit)
+        } else {
+            (x.0 * unit, x.1 * unit)
+        };
+        let origin = anchor.origin(image.height(), u);
+        let room = SCREEN_ROOM * unit;
+        kept.push((
+            x0 - room,
+            origin + y.0 * unit - room,
+            x1 + room,
+            origin + y.1 * unit + room,
+        ));
+    }
+    kept
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -36,52 +104,7 @@ fn main() {
         _ => panic!("usage: mask_fixture <screenshot.png> <fixture.png> [level|credit|shop]"),
     };
     let image = image::open(from).unwrap().to_rgb8();
-    let (w, h) = (image.width() as f32, image.height() as f32);
-    let areas = match only {
-        Some("level") => vec![student::LEVEL],
-        Some("shop") => shop::areas(),
-        Some(_) => vec![credit::NUMBER, credit::ICON],
-        None => student::areas(),
-    };
-    let mut kept: Vec<(f32, f32, f32, f32)> = areas
-        .into_iter()
-        .map(|Area { from_right, x, y }| {
-            let (x0, x1) = if from_right {
-                (w - x.0 * h, w - x.1 * h)
-            } else {
-                (x.0 * h, x.1 * h)
-            };
-            (
-                x0 - ROOM * h,
-                y.0 * h - ROOM * h,
-                x1 + ROOM * h,
-                y.1 * h + ROOM * h,
-            )
-        })
-        .collect();
-    if only == Some("shop") {
-        // The cards read whole, each with a little room.
-        let room = 0.005 * h;
-        kept.extend(shop::bars(&image).iter().filter_map(|bar| {
-            let (x0, y0, x1, y1) = shop::card_area(&image, bar)?;
-            Some((x0 - room, y0 - room, x1 + room, y1 + room))
-        }));
-    }
-    let unit = screen::STUDENT_UNIT * h;
-    let screens: &[Region] = if only.is_some() {
-        &[]
-    } else {
-        &[screen::TITLE, screen::STUDENT_TAB]
-    };
-    for &Region { from_right, x, y } in screens {
-        let (x0, x1) = if from_right {
-            (w - x.0 * unit, w - x.1 * unit)
-        } else {
-            (x.0 * unit, x.1 * unit)
-        };
-        let room = SCREEN_ROOM * unit;
-        kept.push((x0 - room, y.0 * unit - room, x1 + room, y.1 * unit + room));
-    }
+    let kept = kept(&image, only);
     let masked = image::RgbImage::from_fn(image.width(), image.height(), |px, py| {
         let (fx, fy) = (px as f32, py as f32);
         if kept

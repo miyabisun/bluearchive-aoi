@@ -65,7 +65,7 @@ fn main() {
         .expect("title"),
     );
     let image = image::open(&student).unwrap().to_rgb8();
-    let unit = (image.height() as f32 * screen::STUDENT_UNIT).round() as u32;
+    let unit = (screen::unit(image.width(), image.height()) * screen::STUDENT_UNIT).round() as u32;
     save(
         "title-students.png",
         screen::crop(
@@ -89,7 +89,7 @@ fn main() {
         .expect("tab"),
     );
     let image = image::open(&other_tab).unwrap().to_rgb8();
-    let unit = (image.height() as f32 * screen::STUDENT_UNIT).round() as u32;
+    let unit = (screen::unit(image.width(), image.height()) * screen::STUDENT_UNIT).round() as u32;
     save(
         "student-tab-other.png",
         screen::crop(

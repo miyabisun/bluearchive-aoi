@@ -154,12 +154,16 @@ fn each_list_is_told_apart_and_other_screens_give_nothing() {
 
 /// The labeled screenshots shown one after another, each for a few frames, with
 /// other screens between them, tally to exactly the labeled counts of each list.
+/// The phone's were taken another day, of another inventory.
 #[test]
 fn a_run_of_frames_tallies_to_the_labels() {
     let recognizer = recognizer();
     let mut tallies: HashMap<List, Tally> = HashMap::new();
     let mut expected: HashMap<List, HashMap<i64, String>> = HashMap::new();
-    for fixture in fixtures() {
+    for fixture in fixtures()
+        .into_iter()
+        .filter(|f| !f.image.starts_with("android/"))
+    {
         for name in [fixture.image.as_str(), OTHER_SCREENS[0]] {
             let image = open(name);
             for _ in 0..CONFIRM {

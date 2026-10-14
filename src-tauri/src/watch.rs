@@ -23,6 +23,7 @@ use crate::{
     Frame as Shown, List, Recognizer, Row,
     keep::{Kept, now},
     quantity::Count,
+    screen,
     shop::{Shelves, ShopRow},
     student::{Training, roster::Roster},
     tally::{CONFIRM, Tally},
@@ -289,6 +290,8 @@ pub fn start(
                 if paused.load(Ordering::Relaxed) {
                     continue;
                 }
+                // A phone's frame as the game lays it out (a window's as it is).
+                let shot = screen::normalize(&shot);
                 let read = recognizer.read_frame(&shot);
                 // The credits change seldom.
                 if frames.fetch_add(1, Ordering::Relaxed) % CREDITS_EVERY == 0

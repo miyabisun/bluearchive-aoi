@@ -13,7 +13,10 @@ pub mod roster;
 use image::RgbImage;
 use serde::{Deserialize, Serialize};
 
-use crate::glyph::{self, Fonts, Ink, Rect, Style};
+use crate::{
+    glyph::{self, Fonts, Ink, Rect, Style},
+    screen::{self, Anchor},
+};
 
 /// A student's training as the 基本情報 tab shows it; `None` where a field
 /// could not be read.
@@ -62,74 +65,80 @@ pub struct Gear {
     pub level: u8,
 }
 
-/// A part of the screen in window heights: across from `x.0` to `x.1` away from
-/// the left (or the right) edge, down from `y.0` to `y.1`.
+/// A part of the screen in units (window heights at 16:9, see `screen::unit`):
+/// across from `x.0` to `x.1` away from the left (or the right) edge, down from
+/// `y.0` to `y.1`, kept to `anchor`.
 #[derive(Debug, Clone, Copy)]
 pub struct Area {
     pub from_right: bool,
     pub x: (f32, f32),
     pub y: (f32, f32),
+    pub anchor: Anchor,
 }
 
-const fn left(x: (f32, f32), y: (f32, f32)) -> Area {
+/// A part of the name plate, at the bottom left.
+const fn on_plate(x: (f32, f32), y: (f32, f32)) -> Area {
     Area {
         from_right: false,
         x,
         y,
+        anchor: Anchor::Bottom,
     }
 }
 
-const fn right(x: (f32, f32), y: (f32, f32)) -> Area {
+/// A part of the panel, at the middle right.
+const fn on_panel(x: (f32, f32), y: (f32, f32)) -> Area {
     Area {
         from_right: true,
         x,
         y,
+        anchor: Anchor::Middle,
     }
 }
 
 /// The name plate's row: the bond heart, the name and the rarity stars (the
 /// name's own columns are `name::COLUMNS`).
-pub const NAME: Area = left((0.04, 0.48), (0.76, 0.83));
-const BOND: Area = left((0.0624, 0.0944), (0.786, 0.807));
-const RARITY: Area = left((0.364, 0.474), (0.789, 0.818));
+pub const NAME: Area = on_plate((0.04, 0.48), (0.76, 0.83));
+const BOND: Area = on_plate((0.0624, 0.0944), (0.786, 0.807));
+const RARITY: Area = on_plate((0.364, 0.474), (0.789, 0.818));
 /// The level on the name plate, which every tab of the student screen shows.
-pub const LEVEL: Area = left((0.048, 0.116), (0.827, 0.856));
+pub const LEVEL: Area = on_plate((0.048, 0.116), (0.827, 0.856));
 /// HP and attack on the first row, healing on the second, each with its
 /// ability release ("Lv.25") after the value.
 /// Below the "MAX" tag that tops a fully released badge.
 const ABILITY: [Area; 3] = [
-    right((0.834, 0.498), (0.324, 0.350)),
-    right((0.498, 0.258), (0.324, 0.350)),
-    right((0.498, 0.258), (0.373, 0.398)),
+    on_panel((0.834, 0.498), (0.324, 0.350)),
+    on_panel((0.498, 0.258), (0.324, 0.350)),
+    on_panel((0.498, 0.258), (0.373, 0.398)),
 ];
 const SKILLS: [Area; 4] = [
-    right((0.815, 0.727), (0.558, 0.590)),
-    right((0.666, 0.578), (0.558, 0.590)),
-    right((0.519, 0.431), (0.558, 0.590)),
-    right((0.372, 0.284), (0.558, 0.590)),
+    on_panel((0.815, 0.727), (0.558, 0.590)),
+    on_panel((0.666, 0.578), (0.558, 0.590)),
+    on_panel((0.519, 0.431), (0.558, 0.590)),
+    on_panel((0.372, 0.284), (0.558, 0.590)),
 ];
 const SKILL_MAX: [u8; 4] = [5, 10, 10, 10];
-const WEAPON_LEVEL: Area = right((0.698, 0.614), (0.629, 0.659));
+const WEAPON_LEVEL: Area = on_panel((0.698, 0.614), (0.629, 0.659));
 /// Room for four stars, which stand right-aligned.
-const WEAPON_STARS: Area = right((0.400, 0.258), (0.706, 0.740));
+const WEAPON_STARS: Area = on_panel((0.400, 0.258), (0.706, 0.740));
 /// Up to the "E" badge of the equipped piece.
 const EQUIPMENT_LEVEL: [Area; 3] = [
-    right((0.822, 0.738), (0.774, 0.797)),
-    right((0.690, 0.606), (0.774, 0.797)),
-    right((0.558, 0.474), (0.774, 0.797)),
+    on_panel((0.822, 0.738), (0.774, 0.797)),
+    on_panel((0.690, 0.606), (0.774, 0.797)),
+    on_panel((0.558, 0.474), (0.774, 0.797)),
 ];
 /// The tier badges at the bottom left of the pieces, whole with a few pixels
 /// to spare (measured on 2026-10-12: the gear's badge spans 0.444 to 0.406
 /// from the right, 0.854 to 0.879 down); a badge cut at its edge reads no
 /// longer once the capture moves a pixel.
 const EQUIPMENT_TIER: [Area; 3] = [
-    right((0.834, 0.770), (0.851, 0.883)),
-    right((0.705, 0.638), (0.851, 0.883)),
-    right((0.576, 0.506), (0.851, 0.883)),
+    on_panel((0.834, 0.770), (0.851, 0.883)),
+    on_panel((0.705, 0.638), (0.851, 0.883)),
+    on_panel((0.576, 0.506), (0.851, 0.883)),
 ];
 /// The favorite item's badge, "T1" or "T2"; its picture, blue in places,
 /// stands right of and above it.
-const GEAR_TIER: Area = right((0.447, 0.402), (0.851, 0.883));
+const GEAR_TIER: Area = on_panel((0.447, 0.402), (0.851, 0.883));
 
 /// Every area the screen is read in.
 pub fn areas() -> Vec<Area> {
@@ -152,13 +161,15 @@ pub fn areas() -> Vec<Area> {
 /// The pixel rectangle of `area` in `image`.
 pub fn rect(image: &RgbImage, area: Area) -> Option<Rect> {
     let (w, h) = (image.width() as f32, image.height() as f32);
+    let unit = screen::unit(image.width(), image.height());
     let (x0, x1) = if area.from_right {
-        (w - area.x.0 * h, w - area.x.1 * h)
+        (w - area.x.0 * unit, w - area.x.1 * unit)
     } else {
-        (area.x.0 * h, area.x.1 * h)
+        (area.x.0 * unit, area.x.1 * unit)
     };
-    let (y0, y1) = (area.y.0 * h, area.y.1 * h);
-    (x0 >= 0.0 && x1 <= w && y1 <= h && x0 < x1)
+    let origin = area.anchor.origin(image.height(), unit);
+    let (y0, y1) = (origin + area.y.0 * unit, origin + area.y.1 * unit);
+    (x0 >= 0.0 && x1 <= w && y0 >= 0.0 && y1 <= h && x0 < x1)
         .then_some((x0 as u32, y0 as u32, x1 as u32, y1 as u32))
 }
 
@@ -277,7 +288,7 @@ fn stars(image: &RgbImage, area: Area, ink: Ink, pitch: f32) -> Option<u8> {
     let Some(right) = (x0..x1).rev().find(|&x| inked(x) > 0) else {
         return Some(0);
     };
-    let step = pitch * image.height() as f32;
+    let step = pitch * screen::unit(image.width(), image.height());
     let star = |k: u8| {
         let end = right as f32 + 1.0 - f32::from(k) * step;
         let start = end - step;
