@@ -41,7 +41,7 @@ fn skills_from_lv1_to_the_top_take_the_known_credits_and_three_notes() {
         equipment: [1, 1, 1],
         ..Target::default()
     };
-    let (rows, unknown) = recognizer.plan_rows(
+    let (rows, _, unknown) = recognizer.plan_rows(
         &BTreeMap::from([(10000, target)]),
         &[aru(1)],
         &[],
@@ -62,7 +62,7 @@ fn lv1_to_90_takes_the_game_tables_exp() {
         equipment: [1, 1, 1],
         ..Target::default()
     };
-    let (rows, _) = recognizer.plan_rows(
+    let (rows, _, _) = recognizer.plan_rows(
         &BTreeMap::from([(10000, target)]),
         &[aru(1)],
         &[],
@@ -78,28 +78,57 @@ fn lv1_to_90_takes_the_game_tables_exp() {
 #[test]
 fn the_planned_goods_have_icons_and_the_tiered_kinds_families() {
     let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
-    let (rows, _) = recognizer.plan_rows(
+    let (rows, blueprints, _) = recognizer.plan_rows(
         &BTreeMap::from([(10000, Target::default())]),
         &[aru(1)],
         &[],
         &[],
         None,
     );
-    let goods: Vec<_> = rows
+    let goods: Vec<(&str, &str)> = rows
         .iter()
-        .filter(|r| matches!(r.kind, Kind::Item | Kind::Equipment))
+        .filter(|r| r.kind == Kind::Item)
+        .map(|r| (r.name.as_str(), r.icon.as_str()))
         .collect();
     assert!(goods.len() > 10, "{goods:?}");
-    for row in goods {
-        assert!(
-            aoi::icon(&row.icon).is_some(),
-            "{} {:?}",
-            row.name,
-            row.icon
-        );
+    let slots = blueprints
+        .iter()
+        .map(|b| (b.name.as_str(), b.icon.as_str()));
+    let tiers = blueprints
+        .iter()
+        .flat_map(|b| b.tiers.iter().chain([&b.universal]))
+        .map(|t| (t.name.as_str(), t.icon.as_str()));
+    for (name, icon) in goods.iter().copied().chain(slots).chain(tiers) {
+        assert!(aoi::icon(icon).is_some(), "{name} {icon:?}");
     }
     // Aru's skills take Gehenna's tech notes, 4030 the first tier.
     let family = |id| rows.iter().find(|r| r.id == id).and_then(|r| r.family);
     assert_eq!(family(4031), Some((4030, 2)));
     assert_eq!(family(9999), None);
+}
+
+#[test]
+fn equipment_from_t1_to_t10_takes_each_slots_blueprints_the_universal_ones_paying_t2_to_t9() {
+    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let target = Target {
+        level: 1,
+        skills: [1; 4],
+        ..Target::default()
+    };
+    let (rows, blueprints, _) = recognizer.plan_rows(
+        &BTreeMap::from([(10000, target)]),
+        &[aru(1)],
+        &[],
+        &[],
+        None,
+    );
+    // Aru's hat, hairpin and watch, none of their blueprints listed alone.
+    let names: Vec<&str> = blueprints.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, ["帽子", "ヘアピン", "腕時計"]);
+    assert!(rows.iter().all(|r| r.kind != Kind::Equipment));
+    // A hat: 60 T10 blueprints, and T2 to T9's 5,175 universal ones
+    // (schale-calc's equipment-upgrade.md), none held.
+    let hat = &blueprints[0];
+    assert_eq!(hat.tiers.len(), 9);
+    assert_eq!((hat.short, hat.universal.need, hat.paid), (60, 5175, 0));
 }

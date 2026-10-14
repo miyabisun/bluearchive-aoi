@@ -12,7 +12,7 @@ use tauri::{Emitter, Manager};
 use crate::{
     List, Recognizer, Row, export,
     keep::{self, Kept, ReadAt, now},
-    plan::{NeedRow, Target, UnknownRow},
+    plan::{BlueprintRow, NeedRow, Target, UnknownRow},
     shop::ShopRow,
     student::Training,
     supply::ProcureLine,
@@ -35,6 +35,8 @@ pub struct Snapshot {
     targets: Vec<TargetRow>,
     /// What the targets take against what is held, and what could not be counted.
     plan: Vec<NeedRow>,
+    /// The blueprints the targets take, slot by slot.
+    blueprints: Vec<BlueprintRow>,
     plan_unknown: Vec<UnknownRow>,
     /// The plan's lines that fall short, with what could make each up.
     procure: Vec<ProcureLine>,
@@ -95,6 +97,7 @@ impl Snapshot {
             shops: recognizer.shop_rows(&kept.shops, &kept.items.clone().into_iter().collect()),
             targets: Vec::new(),
             plan: Vec::new(),
+            blueprints: Vec::new(),
             plan_unknown: Vec::new(),
             procure: Vec::new(),
             plan_version: 0,
@@ -149,14 +152,20 @@ impl Snapshot {
             .keys()
             .filter_map(|&id| student(id).cloned())
             .collect();
-        (self.plan, self.plan_unknown) = recognizer.plan_rows(
+        (self.plan, self.blueprints, self.plan_unknown) = recognizer.plan_rows(
             targets,
             &students,
             &ground.items,
             &ground.equipment,
             ground.credits,
         );
-        self.procure = recognizer.procure_rows(&self.plan, &ground.items, &ground.shops, &now());
+        self.procure = recognizer.procure_rows(
+            &self.plan,
+            &self.blueprints,
+            &ground.items,
+            &ground.shops,
+            &now(),
+        );
     }
 
     /// Counts the daily plays again from what was read.

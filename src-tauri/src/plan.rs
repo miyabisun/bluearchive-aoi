@@ -2,11 +2,23 @@
 //! their targets (levels, skills and equipment tiers), and how that compares
 //! with what is held.
 
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    hash::BuildHasher,
+};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{quantity::Count, student::Training};
+use crate::{Item, quantity::Count, student::Training};
+
+/// The universal blueprints one blueprint of each tier is made from (by tier,
+/// T2 to T10; the Blue Archive wiki as schale-calc's equipment-upgrade.md has
+/// it, 2026-10-13).
+pub const RATE: [u64; 11] = [0, 0, 2, 3, 5, 7, 10, 15, 20, 30, 50];
+/// What a universal blueprint's name ends with, after its slot's ("帽子").
+pub const UNIVERSAL: &str = "の万能設計図";
+/// Blueprint and universal blueprint ids start here; below are the pieces.
+pub const BLUEPRINTS: i64 = 100_000;
 
 /// How far a student is to be trained: level, the four skills (EX first) and
 /// the three equipment slots' tiers. What a target leaves out is the default's.
@@ -140,12 +152,18 @@ pub enum Held {
     About(u64),
 }
 
+impl Held {
+    /// How many, whether exact or about.
+    pub fn amount(self) -> u64 {
+        match self {
+            Held::Exact(n) | Held::About(n) => n,
+        }
+    }
+}
+
 /// What `counts` hold of the ids in `worth`, each counted at its worth (the
 /// exp of a report, or 1 for an item); an id not counted is none.
-pub fn held<S: std::hash::BuildHasher>(
-    counts: &HashMap<i64, Count, S>,
-    worth: &[(i64, u64)],
-) -> Held {
+pub fn held<S: BuildHasher>(counts: &HashMap<i64, Count, S>, worth: &[(i64, u64)]) -> Held {
     let (mut sum, mut about) = (0, false);
     for &(id, each) in worth {
         let count = match counts.get(&id) {
@@ -218,6 +236,85 @@ pub struct NeedRow {
     pub family: Option<(i64, u8)>,
     pub need: u64,
     pub have: Option<Held>,
+}
+
+/// A slot's blueprints a plan takes, for the window: the slot, named as its
+/// universal blueprints are ("帽子") and shown by its T1 piece; its blueprints
+/// of T2 to T10; and how they are paid: the blueprints held first (`paid` of
+/// them), then the rest of T2 to T9 from the universal ones at `RATE` (their
+/// `need`), the rest of T10 (`short`) left for the player to make up.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BlueprintRow {
+    pub name: String,
+    pub icon: String,
+    pub tiers: Vec<TierBlueprint>,
+    pub paid: u64,
+    pub universal: TierBlueprint,
+    pub short: u64,
+}
+
+/// A tier's blueprints (0 the universal ones): needed and held.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TierBlueprint {
+    pub tier: u8,
+    pub id: i64,
+    pub name: String,
+    pub icon: String,
+    pub need: u64,
+    pub have: Held,
+}
+
+/// The slots whose blueprints `needs` takes, in the order of their T1 pieces,
+/// each as `BlueprintRow` tells; the `entries` name the equipment.
+pub fn blueprints<S: BuildHasher>(
+    needs: &BTreeMap<i64, u64>,
+    pieces: &[Piece],
+    entries: &[Item],
+    counts: &HashMap<i64, Count, S>,
+) -> Vec<BlueprintRow> {
+    let entry = |id: i64| entries.iter().find(|e| e.id == id);
+    let blueprint = |p: &Piece| {
+        let e = entry(p.id)?;
+        Some(TierBlueprint {
+            tier: p.tier,
+            id: p.id,
+            name: e.name.clone(),
+            icon: e.icon.clone(),
+            need: needs.get(&p.id).copied().unwrap_or(0),
+            have: held(counts, &[(p.id, 1)]),
+        })
+    };
+    let firsts = pieces.iter().filter(|p| p.id < BLUEPRINTS && p.tier == 1);
+    firsts
+        .filter_map(|first| {
+            let slot = |p: &&Piece| p.category == first.category && p.id >= BLUEPRINTS;
+            let tiers = pieces.iter().filter(slot).filter(|p| p.tier >= 2);
+            let mut tiers: Vec<TierBlueprint> = tiers.map(blueprint).collect::<Option<_>>()?;
+            if tiers.iter().all(|t| t.need == 0) {
+                return None;
+            }
+            tiers.sort_by_key(|t| t.tier);
+            let mut universal = blueprint(pieces.iter().filter(slot).find(|p| p.tier == 0)?)?;
+            let (mut paid, mut short) = (0, 0);
+            for t in &tiers {
+                let own = t.need.min(t.have.amount());
+                paid += own;
+                if t.tier == 10 {
+                    short = t.need - own;
+                } else {
+                    universal.need += (t.need - own) * RATE[usize::from(t.tier)];
+                }
+            }
+            Some(BlueprintRow {
+                name: universal.name.strip_suffix(UNIVERSAL)?.to_owned(),
+                icon: entry(first.id)?.icon.clone(),
+                tiers,
+                paid,
+                universal,
+                short,
+            })
+        })
+        .collect()
 }
 
 /// A part of a target's training that could not be counted, for the window.
@@ -586,6 +683,72 @@ pub(crate) mod tests {
         assert_eq!(n.orb_exp, 60);
         assert_eq!(n.equipment, BTreeMap::from([(101_001, 20), (101_002, 20)]));
         assert_eq!(n.credits, 60 * 4 + 1500 + 3000);
+    }
+
+    #[test]
+    fn a_slots_blueprints_pay_from_themselves_then_below_t10_from_the_universal_ones() {
+        let (pieces, entries) = hat_blueprints();
+        let needs = BTreeMap::from([(101_001, 15), (101_002, 20), (101_009, 60)]);
+        let held = HashMap::from([
+            (101_001, Count::Exact(10)),
+            (101_002, Count::Exact(30)),
+            (101_009, Count::Exact(17)),
+            (501_000, Count::Thousands(1)),
+        ]);
+        let rows = blueprints(&needs, &pieces, &entries, &held);
+        assert_eq!(rows.len(), 1);
+        let hat = &rows[0];
+        assert_eq!(
+            (hat.name.as_str(), hat.icon.as_str()),
+            ("帽子", "icon_1000")
+        );
+        let tiers: Vec<(u8, u64)> = hat.tiers.iter().map(|t| (t.tier, t.need)).collect();
+        let mut want = vec![(2, 15), (3, 20)];
+        want.extend((4..=9).map(|tier| (tier, 0)));
+        want.push((10, 60));
+        assert_eq!(tiers, want);
+        // 10 of T2's own, 20 of T3's and 17 of T10's; T2's other 5 from 10
+        // universal ones; T10's other 43 left short.
+        let u = &hat.universal;
+        assert_eq!(
+            (hat.paid, u.need, u.have, hat.short),
+            (47, 10, Held::About(1000), 43)
+        );
+        assert_eq!(u.name, "帽子の万能設計図");
+        // A slot nothing is asked of is left out.
+        assert!(blueprints(&BTreeMap::new(), &pieces, &entries, &held).is_empty());
+    }
+
+    /// A hat's T1 piece, its blueprints of T2 to T10 and its universal ones.
+    fn hat_blueprints() -> (Vec<Piece>, Vec<crate::Item>) {
+        let mut ids = vec![(1000, 1, "無地のキャップ".to_owned())];
+        ids.extend(
+            (2..=10).map(|tier| (100_999 + i64::from(tier), tier, format!("T{tier}の設計図"))),
+        );
+        ids.push((501_000, 0, "帽子の万能設計図".to_owned()));
+        let pieces = ids
+            .iter()
+            .map(|(id, tier, _)| Piece {
+                id: *id,
+                category: "Hat".into(),
+                tier: *tier,
+                max_level: 1,
+                recipe: Vec::new(),
+                recipe_cost: 0,
+            })
+            .collect();
+        let entries = ids
+            .into_iter()
+            .map(|(id, tier, name)| crate::Item {
+                id,
+                name,
+                icon: format!("icon_{id}"),
+                category: "Hat".into(),
+                tier,
+                rarity: None,
+            })
+            .collect();
+        (pieces, entries)
     }
 
     #[test]

@@ -372,8 +372,8 @@ impl Recognizer {
     }
 
     /// What the `targets` take against what is held, line by line (credits,
-    /// report exp, orb exp, then items and blueprints in id order), and the
-    /// parts that could not be counted, their students named.
+    /// report exp, orb exp, then items in id order); the blueprints slot by
+    /// slot; and the parts that could not be counted, their students named.
     pub fn plan_rows(
         &self,
         targets: &BTreeMap<i64, plan::Target>,
@@ -381,7 +381,11 @@ impl Recognizer {
         items: &[Row],
         equipment: &[Row],
         credits: Option<u64>,
-    ) -> (Vec<plan::NeedRow>, Vec<plan::UnknownRow>) {
+    ) -> (
+        Vec<plan::NeedRow>,
+        Vec<plan::BlueprintRow>,
+        Vec<plan::UnknownRow>,
+    ) {
         use plan::{Held, Kind, NeedRow, held};
         let trained = students.iter().map(|s| (s.id, s.training)).collect();
         let needs = self.planner.needs(targets, &trained);
@@ -435,10 +439,12 @@ impl Recognizer {
                 Some(held(&items_held, &[(id, 1)])),
             )
         }));
-        rows.extend(needs.equipment.iter().map(|(&id, &need)| {
-            let have = Some(held(&equipment_held, &[(id, 1)]));
-            line(Kind::Equipment, id, entry(List::Equipment, id), need, have)
-        }));
+        let blueprints = plan::blueprints(
+            &needs.equipment,
+            &self.planner.pieces,
+            self.equipment.entries(),
+            &equipment_held,
+        );
         let unknown = needs
             .unknown
             .into_iter()
@@ -452,7 +458,7 @@ impl Recognizer {
                 part,
             })
             .collect();
-        (rows, unknown)
+        (rows, blueprints, unknown)
     }
 
     /// The lines of the `plan` that fall short, each with what could make it
@@ -460,10 +466,11 @@ impl Recognizer {
     /// `items` counting those held), for elephs the fragments at the rate the
     /// カケラ(文字) shop showed, and the goods the `shops` read this month
     /// (`now` local time) sell, shop by shop in the menu's order, each coin from
-    /// the plain one.
+    /// the plain one; then the `blueprints` short (see `supply::blueprint_lines`).
     pub fn procure_rows(
         &self,
         plan: &[plan::NeedRow],
+        blueprints: &[plan::BlueprintRow],
         items: &[Row],
         shops: &[shop::ShopRow],
         now: &str,
@@ -478,20 +485,19 @@ impl Recognizer {
         let entries = self.items.entries();
         let named = |id: i64| entries.iter().find(|e| e.id == id);
         let fragments = self.coin_item(shop::LASTING, 0);
-        supply::shorts(plan)
+        let source = |b: &supply::ChoiceBox| supply::Source::Box {
+            id: b.id,
+            name: named(b.id).map(|e| e.name.clone()).unwrap_or_default(),
+            icon: named(b.id).map(|e| e.icon.clone()).unwrap_or_default(),
+            held: held(b.id),
+            choices: b.choices.len(),
+        };
+        let mut lines: Vec<supply::ProcureLine> = supply::shorts(plan)
             .into_iter()
             .map(|(kind, id, short)| {
                 let line = plan.iter().find(|r| r.kind == kind && r.id == id);
-                let mut sources: Vec<supply::Source> = supply::boxes_for(kind, id, &self.boxes)
-                    .into_iter()
-                    .map(|b| supply::Source::Box {
-                        id: b.id,
-                        name: named(b.id).map(|e| e.name.clone()).unwrap_or_default(),
-                        icon: named(b.id).map(|e| e.icon.clone()).unwrap_or_default(),
-                        held: held(b.id),
-                        choices: b.choices.len(),
-                    })
-                    .collect();
+                let boxes = supply::boxes_for(kind, id, &self.boxes).into_iter();
+                let mut sources: Vec<supply::Source> = boxes.map(source).collect();
                 let eleph = kind == plan::Kind::Item && self.prices.is_kind(id, "神名文字");
                 if let (true, Some(coin), Some(offer)) = (eleph, fragments, kakera_offer(shops, id))
                     && let (Some(rate), true) = (offer.shown, offer.left > 0)
@@ -525,7 +531,9 @@ impl Recognizer {
                     sources,
                 }
             })
-            .collect()
+            .collect();
+        lines.extend(supply::blueprint_lines(blueprints, &self.boxes, source));
+        lines
     }
 
     /// The goods the `shops` sell, each coin from the plain one and the goods

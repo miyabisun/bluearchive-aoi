@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     Item,
     icon::Rarity,
-    plan::{Grower, Growth, Piece},
+    plan::{BLUEPRINTS, Grower, Growth, Piece, RATE, UNIVERSAL},
     quantity::Count,
 };
 
@@ -95,13 +95,6 @@ pub struct Stock {
     pub pieces: f64,
 }
 
-const UNIVERSAL: &str = "の万能設計図";
-/// The universal blueprints one blueprint of each tier is made from (by tier,
-/// T2 to T10; the Blue Archive wiki as schale-calc's equipment-upgrade.md has
-/// it, 2026-10-13).
-const RATE: [u64; 11] = [0, 0, 2, 3, 5, 7, 10, 15, 20, 30, 50];
-/// Blueprint and universal blueprint ids start here; below are the pieces.
-const BLUEPRINTS: i64 = 100_000;
 /// The golden ratio (オニア先生の黄金比, as schale-calc's onia-golden-ratio.md
 /// has it): how many students' pieces from T1 to T10 to keep of each slot.
 const GOLDEN: [(&str, u32); 9] = [

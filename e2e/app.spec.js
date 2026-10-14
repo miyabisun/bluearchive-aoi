@@ -758,6 +758,103 @@ test("shows the targets and what they take against what is held", async ({ page 
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ id: 20019, target: null }]);
 });
 
+test("shows a slot's blueprints by tier, and pays T10 from a box or the universal ones", async ({
+  page,
+}) => {
+  const tier = (tier, need, have) => ({
+    tier,
+    id: 100999 + tier,
+    name: `T${tier}の設計図`,
+    icon: `equipment_icon_hat_tier${tier}_piece`,
+    need,
+    have: { exact: have },
+  });
+  const universal = {
+    tier: 0,
+    id: 501000,
+    name: "帽子の万能設計図",
+    icon: "equipment_icon_hat_useall_piece",
+    need: 10,
+    have: { about: 51000 },
+  };
+  const tiers = [tier(2, 15, 10)];
+  for (let t = 3; t <= 9; t++) tiers.push(tier(t, 0, 0));
+  tiers.push(tier(10, 60, 17));
+  const snapshot = {
+    status: { state: "other_screen" },
+    items,
+    equipment,
+    students,
+    targets: [{ id: 20019, target }],
+    plan: [],
+    blueprints: [
+      { name: "帽子", icon: "equipment_icon_hat_tier1", tiers, paid: 27, universal, short: 43 },
+    ],
+    plan_unknown: [],
+    procure: [
+      {
+        kind: "equipment",
+        id: 101009,
+        name: "帽子のT10設計図",
+        icon: "equipment_icon_hat_tier10_piece",
+        short: 43,
+        sources: [
+          {
+            type: "box",
+            id: 150048,
+            name: "T10装備設計図選択ボックス",
+            icon: "item_icon_equipment_selection_10",
+            held: 2,
+            choices: 9,
+          },
+          {
+            type: "universal",
+            id: 501000,
+            name: "帽子の万能設計図",
+            icon: "equipment_icon_hat_useall_piece",
+            held: 50990,
+            rate: 50,
+          },
+        ],
+      },
+    ],
+    plan_version: 1,
+  };
+  await open(page, snapshot);
+  await page.getByRole("tab", { name: "育成" }).click();
+  // The slot by its T1 piece, then T2 to T10: what is needed over what is held.
+  const slot = page.locator("table.blueprints tbody");
+  await expect(slot.getByRole("img", { name: "帽子", exact: true })).toBeVisible();
+  await expect(slot.locator("th[scope=col]")).toHaveText([
+    "T2",
+    "T3",
+    "T4",
+    "T5",
+    "T6",
+    "T7",
+    "T8",
+    "T9",
+    "T10",
+  ]);
+  const cells = slot.locator("tr").nth(1).locator("td");
+  await expect(cells).toHaveText(["15 / 10", "", "", "", "", "", "", "", "60 / 17"]);
+  // Below T10 the universal ones pay the rest: only T10 says it is short.
+  await expect(cells.first()).not.toHaveClass(/short/);
+  await expect(cells.last()).toHaveClass(/short/);
+  await expect(slot.locator(".pay")).toHaveText(
+    "設計図で支払い 27 枚 ／ T2〜T9 の残りに帽子の万能設計図 10 枚（所持 約51,000 枚）",
+  );
+  // T10 asked in the procurement: from the T10 box, or 50 universal ones each.
+  await expect(page.locator("table.procure tr.line")).toHaveText(["帽子のT10設計図4343"]);
+  const chips = page.locator("table.procure .source");
+  await expect(chips).toHaveText(["2", "50,990"]);
+  await chips.last().click({ modifiers: ["Shift"] });
+  await expect(chips.last()).toHaveText("48,840+43");
+  await expect(page.locator("table.settle tbody tr")).toHaveText([
+    "帽子の万能設計図50,990-2,15048,840",
+  ]);
+});
+
 test("a target being typed is kept while the game is read", async ({ page }) => {
   const snapshot = {
     status: reading("items"),

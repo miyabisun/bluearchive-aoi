@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  blueprintCells,
   filterRows,
   filterShops,
   groupPlan,
@@ -346,6 +347,65 @@ describe("plan", () => {
     });
   });
 
+  it("writes a slot's blueprints by tier, and how they are paid", () => {
+    const tier = (tier, need, have) => ({
+      tier,
+      id: 100999 + tier,
+      name: `T${tier}の設計図`,
+      icon: `t${tier}`,
+      need,
+      have: { exact: have },
+    });
+    const universal = {
+      tier: 0,
+      id: 501000,
+      name: "帽子の万能設計図",
+      icon: "u",
+      need: 1200,
+      have: { about: 1000 },
+    };
+    const row = {
+      name: "帽子",
+      icon: "hat",
+      tiers: [tier(2, 15, 10), tier(3, 0, 30), tier(10, 60, 17)],
+      paid: 27,
+      universal,
+      short: 43,
+    };
+    expect(blueprintCells(row)).toEqual({
+      name: "帽子",
+      icon: "hat",
+      tiers: [
+        // Below T10 the universal ones pay the rest: no colour.
+        { key: 101001, label: "T2", name: "T2の設計図", icon: "t2", text: "15 / 10", tone: "" },
+        // Not needed: nothing to show.
+        { key: 101002, label: "T3", name: "T3の設計図", icon: "t3", text: "", tone: "" },
+        {
+          key: 101009,
+          label: "T10",
+          name: "T10の設計図",
+          icon: "t10",
+          text: "60 / 17",
+          tone: "short",
+        },
+      ],
+      paid: "27",
+      universal: {
+        name: "帽子の万能設計図",
+        icon: "u",
+        need: "1,200",
+        held: "約1,000",
+        short: "200",
+      },
+    });
+    const enough = blueprintCells({
+      ...row,
+      tiers: [tier(10, 60, 60)],
+      universal: { ...universal, need: 10 },
+    });
+    expect([enough.tiers[0].tone, enough.universal.short]).toEqual(["enough", ""]);
+  });
+
   it("names a star: the student's 1 to 5, then the unique weapon's", () => {
     // A teacher calls ★5 by its weapon's first star.
     expect([1, 4, 5, 6, 8].map(starName)).toEqual(["★1", "★4", "固有1", "固有2", "固有4"]);
@@ -404,6 +464,45 @@ describe("procure", () => {
     rate: 1,
     left: 586,
   };
+
+  const universal = {
+    type: "universal",
+    id: 501000,
+    name: "帽子の万能設計図",
+    icon: "u",
+    held: 4825,
+    rate: 50,
+  };
+
+  it("pays T10 blueprints from the universal ones, 50 each", () => {
+    const hat = {
+      kind: "equipment",
+      id: 101009,
+      name: "帽子のT10設計図",
+      icon: "t10",
+      short: 60,
+      sources: [universal],
+    };
+    expect(step(universal, 0, 60, { shift: true })).toBe(60);
+    const settled = settle([hat], { "equipment-101009|universal:501000": 3 });
+    expect([settled.lines[0].given, settled.lines[0].left]).toEqual([3, 57]);
+    expect(settled.resources).toEqual([
+      {
+        key: "universal:501000",
+        name: "帽子の万能設計図",
+        icon: "u",
+        held: 4825,
+        spent: 150,
+        after: 4675,
+      },
+    ]);
+    expect(procureCells(settled).lines[0].chips[0]).toMatchObject({
+      text: "4,675",
+      given: "+3",
+      out: false,
+      title: "帽子の万能設計図: T10設計図 1 枚に 50 枚（T2〜T9 に使った残り 4,825 枚）",
+    });
+  });
 
   it("prices elephs in fragments: 20 at each rate up to 4, then 5 each", () => {
     expect([0, 10, 30, 100].map((n) => fragmentCost(1, n))).toEqual([0, 10, 40, 300]);

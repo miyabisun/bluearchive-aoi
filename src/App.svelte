@@ -15,6 +15,7 @@
   import {
     LISTS,
     commissionCells,
+    blueprintCells,
     filterRows,
     filterShops,
     formatCount,
@@ -115,6 +116,8 @@
     shops: [],
     targets: [],
     plan: [],
+    /** The blueprints the targets take, slot by slot. */
+    blueprints: [],
     plan_unknown: [],
     /** The plan's lines short, with what could make each up. */
     procure: [],
@@ -478,7 +481,7 @@
             <p class="unknown">{line} は数えられません</p>
           {/each}
           <h2 class="section">必要素材</h2>
-          {#if (snapshot.plan ?? []).length === 0}
+          {#if (snapshot.plan ?? []).length === 0 && (snapshot.blueprints ?? []).length === 0}
             <p class="empty" data-state="reached">目標までに要る素材はありません</p>
           {:else}
             {@const plan = groupPlan(snapshot.plan)}
@@ -537,6 +540,60 @@
                     </tr>
                   {/each}
                 </tbody>
+              </table>
+            {/if}
+            {#if (snapshot.blueprints ?? []).length > 0}
+              <!-- A slot's blueprints: its T1 piece, a tier a column with what is needed over
+                   what is held, then how they are paid. -->
+              <table class="blueprints" data-state="success">
+                {#each snapshot.blueprints as row (row.name)}
+                  {@const cells = blueprintCells(row)}
+                  <tbody>
+                    <tr>
+                      <th scope="rowgroup" rowspan="3" class="slot"
+                        ><img
+                          src={iconUrl(cells.icon)}
+                          alt={cells.name}
+                          title={cells.name}
+                          width="48"
+                          height="48"
+                        /></th
+                      >
+                      {#each cells.tiers as tier (tier.key)}
+                        <th scope="col">{tier.label}</th>
+                      {/each}
+                    </tr>
+                    <tr>
+                      {#each cells.tiers as tier (tier.key)}
+                        <td
+                          class:enough={tier.tone === "enough"}
+                          class:short={tier.tone === "short"}
+                        >
+                          {#if tier.text}<img
+                              src={iconUrl(tier.icon)}
+                              alt={tier.name}
+                              title={tier.name}
+                              width="32"
+                              height="32"
+                            /><span>{tier.text}</span>{/if}
+                        </td>
+                      {/each}
+                    </tr>
+                    <tr>
+                      <td colspan={cells.tiers.length} class="pay"
+                        >設計図で支払い <strong>{cells.paid}</strong> 枚 ／ T2〜T9 の残りに<img
+                          src={iconUrl(cells.universal.icon)}
+                          alt=""
+                          width="20"
+                          height="20"
+                        />{cells.universal.name} <strong>{cells.universal.need}</strong> 枚（所持
+                        <strong>{cells.universal.held}</strong> 枚{#if cells.universal.short}<span
+                            class="short">・不足 {cells.universal.short}</span
+                          >{/if}）</td
+                      >
+                    </tr>
+                  </tbody>
+                {/each}
               </table>
             {/if}
             <h2 class="section">不足分の調達</h2>
@@ -1401,6 +1458,42 @@
         vertical-align: middle
         margin-right: var(--sp-2)
         object-fit: contain
+
+  // A slot's blueprints: its T1 piece at the left, a tier a column, how they are paid below.
+  .blueprints
+    margin-top: var(--sp-4)
+    tbody
+      border-bottom: 1px solid var(--c-border)
+    th, td
+      padding: var(--sp-1)
+      text-align: center
+      font-variant-numeric: tabular-nums
+      white-space: nowrap
+    th[scope="col"]
+      color: var(--c-muted)
+      font-size: var(--fs-caption)
+      font-weight: 600
+    td
+      font-size: var(--fs-sm)
+      img
+        display: block
+        margin: 0 auto
+        object-fit: contain
+    .slot
+      width: 56px
+      vertical-align: middle
+      img
+        object-fit: contain
+    .pay
+      text-align: left
+      white-space: normal
+      color: var(--c-muted)
+      strong
+        color: var(--c-on-surface)
+      img
+        display: inline
+        vertical-align: middle
+        margin: 0 2px
 
   // Each tier on its colour, from the grey of the first to the purple of the last.
   .tiers

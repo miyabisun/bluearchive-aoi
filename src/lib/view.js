@@ -213,21 +213,23 @@ export function fragmentCost(rate, n) {
 /** A line of the plan by its kind and id ("item-4033"). */
 const lineKey = (line) => `${line.kind}-${line.id}`;
 
-/** A source of a line: a box, a shop's coin, or the fragments. */
-const sourceKey = (source) =>
-  source.type === "box"
-    ? `box:${source.id}`
-    : source.type === "shop"
-      ? `shop:${source.shop}:${source.coin}`
-      : "fragments";
+/** A source of a line: a box, a shop's coin, a slot's universal blueprints, or the fragments. */
+function sourceKey(source) {
+  switch (source.type) {
+    case "box":
+      return `box:${source.id}`;
+    case "shop":
+      return `shop:${source.shop}:${source.coin}`;
+    case "universal":
+      return `universal:${source.id}`;
+    default:
+      return "fragments";
+  }
+}
 
-/** What a source spends: the box, the coin (shops share it) or the fragments. */
+/** What a source spends: the coin, which shops share; else the source itself. */
 const resourceKey = (source) =>
-  source.type === "box"
-    ? `box:${source.id}`
-    : source.type === "shop"
-      ? `coin:${source.coin}`
-      : "fragments";
+  source.type === "shop" ? `coin:${source.coin}` : sourceKey(source);
 
 /** What paying `n` from `source` gives its line and costs its resource. */
 function paid(source, n) {
@@ -236,22 +238,28 @@ function paid(source, n) {
       return { gives: n * source.gives, cost: n * source.price };
     case "fragments":
       return { gives: n, cost: fragmentCost(source.rate, n) };
+    case "universal":
+      return { gives: n, cost: n * source.rate };
     default:
       return { gives: n, cost: n };
   }
 }
 
+/** Whether a source sells only so many: a shop this month, or the fragments. */
+const limited = (source) => source.type === "shop" || source.type === "fragments";
+
 /**
  * How many to pay from `source` after a click, `n` paid and `lacking` still
  * short: one more, or with shift as many as make the line up; one fewer with
  * a right click, none with shift. A box may be opened past those held (the
- * rest can be tailor-made); a shop sells no more than it has left.
+ * rest can be tailor-made), and universal blueprints spent past them (the
+ * rest can be farmed); a shop sells no more than it has left.
  */
 export function step(source, n, lacking, { right = false, shift = false } = {}) {
   if (right) return shift ? 0 : Math.max(0, n - 1);
   const each = source.type === "shop" ? source.gives : 1;
   const more = shift ? Math.ceil(Math.max(0, lacking) / each) : 1;
-  return Math.min(source.type === "box" ? Infinity : source.left, n + more);
+  return Math.min(limited(source) ? source.left : Infinity, n + more);
 }
 
 /**
@@ -300,6 +308,8 @@ function sourceTitle(source) {
       return `${source.shop}: ${source.coin} ${exact.format(source.price)} で ×${exact.format(source.gives)}、今月あと ${exact.format(source.left)} 回`;
     case "fragments":
       return `${source.name}: 1 文字 ${source.rate} カケラから、あと ${exact.format(source.left)} 文字`;
+    case "universal":
+      return `${source.name}: T10設計図 1 枚に ${source.rate} 枚（T2〜T9 に使った残り ${exact.format(source.held)} 枚）`;
     default:
       return `${source.name}（${source.choices} 種から 1 つ）`;
   }
@@ -325,7 +335,7 @@ export function procureCells(settled) {
       done: l.left === 0,
       chips: l.chips.map((c) => {
         // A shop's purchases this month, or the fragments' exchanges, all paid.
-        const out = c.source.type !== "box" && c.n >= c.source.left;
+        const out = limited(c.source) && c.n >= c.source.left;
         return {
           key: c.key,
           icon: c.source.icon,
@@ -369,6 +379,40 @@ export function groupPlan(rows) {
     families.set(id, family);
   }
   return { families: [...families.values()].sort((a, b) => a.id - b.id), rest };
+}
+
+/**
+ * A slot's blueprints (see the plan's `BlueprintRow`) as cells: each tier
+ * "needed / held" (nothing where none is needed), T10 coloured by whether it
+ * is enough, the tiers below paid the rest by the universal ones; what the
+ * blueprints pay, and the universal ones needed, held and short ("" none).
+ */
+export function blueprintCells(row) {
+  const universal = held(row.universal);
+  const lacking = universal.have === null ? 0 : row.universal.need - universal.have;
+  return {
+    name: row.name,
+    icon: row.icon,
+    tiers: row.tiers.map((t) => {
+      const cell = tierCell(t);
+      return {
+        key: t.id,
+        label: `T${t.tier}`,
+        name: t.name,
+        icon: t.icon,
+        text: t.need > 0 ? cell.text : "",
+        tone: t.tier === 10 && t.need > 0 ? (cell.enough ? "enough" : "short") : "",
+      };
+    }),
+    paid: exact.format(row.paid),
+    universal: {
+      name: row.universal.name,
+      icon: row.universal.icon,
+      need: exact.format(row.universal.need),
+      held: universal.have === null ? "?" : universal.mark + exact.format(universal.have),
+      short: lacking > 0 ? exact.format(lacking) : "",
+    },
+  };
 }
 
 /** A tier of a kind as "needed / held", and whether that is enough. */

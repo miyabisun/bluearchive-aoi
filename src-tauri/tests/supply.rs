@@ -8,10 +8,12 @@ use std::{
 
 use aoi::{
     Recognizer, Row,
-    plan::{Held, Kind, NeedRow},
+    plan::{Held, Kind, NeedRow, Target},
     quantity::Count,
     shop::{Offer, Shelf},
+    student::{Gear, Training},
     supply::Source,
+    watch::StudentRow,
 };
 
 fn row(id: i64, count: u32) -> Row {
@@ -53,7 +55,48 @@ fn text(source: &Source) -> String {
             ..
         } => format!("{shop} {coin} {held:?} @{price} x{gives} {left}"),
         Source::Fragments { .. } => "fragments".to_owned(),
+        Source::Universal { id, held, rate, .. } => format!("universal {id} {held} @{rate}"),
     }
+}
+
+#[test]
+fn a_slot_short_of_t10_blueprints_lists_the_t10_box_and_the_universal_ones_left() {
+    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let aru = StudentRow {
+        id: 10000,
+        name: "アル".to_owned(),
+        training: Training {
+            level: Some(90),
+            rarity: Some(3),
+            bond: Some(1),
+            skills: [Some(10); 4],
+            weapon: Some(None),
+            equipment: [Some(Gear { tier: 1, level: 1 }); 3],
+            gear: Some(0),
+            ability: [Some(0); 3],
+        },
+    };
+    let target = Target {
+        skills: [1; 4],
+        ..Target::default()
+    };
+    // 10,000 hat universal blueprints, 5,175 of them T2 to T9's; 2 T10 boxes.
+    let equipment = [row(501_000, 10_000)];
+    let items = [row(150_048, 2)];
+    let (plan, blueprints, _) = recognizer.plan_rows(
+        &BTreeMap::from([(10000, target)]),
+        &[aru],
+        &items,
+        &equipment,
+        None,
+    );
+    let lines = recognizer.procure_rows(&plan, &blueprints, &items, &[], "2026-10-14 12:00:00");
+    let hat = lines.iter().find(|l| l.id == 101_009).unwrap();
+    assert_eq!((hat.name.as_str(), hat.short), ("帽子のT10設計図", 60));
+    let sources: Vec<String> = hat.sources.iter().map(text).collect();
+    assert_eq!(sources, ["box 150048 2 of 9", "universal 501000 4825 @50"]);
+    // The hairpin's universal ones, none held, fall short for T2 to T9.
+    assert!(lines.iter().any(|l| l.id == 506_000 && l.short > 0));
 }
 
 #[test]
@@ -126,7 +169,7 @@ fn a_line_short_lists_its_boxes_fragments_and_this_months_shops() {
     ];
     let held: HashMap<i64, Count> = items_held.iter().map(|r| (r.id, r.count)).collect();
     let shops = recognizer.shop_rows(&shelves, &held);
-    let lines = recognizer.procure_rows(&plan, &items_held, &shops, "2026-10-13 20:00:00");
+    let lines = recognizer.procure_rows(&plan, &[], &items_held, &shops, "2026-10-13 20:00:00");
     assert_eq!(
         lines.iter().map(|l| (l.id, l.short)).collect::<Vec<_>>(),
         [(notes, 29), (mutsuki, 386)]

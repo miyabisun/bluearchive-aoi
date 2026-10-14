@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::plan::{Held, Kind, NeedRow};
+use crate::plan::{BlueprintRow, Held, Kind, NeedRow, RATE};
 
 /// A choice box (`data/schaledb/boxes.json`): one box gives one of its
 /// choices, items or (`equipment`) blueprints.
@@ -92,6 +92,15 @@ pub enum Source {
         gives: u64,
         left: u32,
     },
+    /// A slot's universal blueprints, `held` those T2 to T9 leave: `rate` of
+    /// them make a T10 blueprint.
+    Universal {
+        id: i64,
+        name: String,
+        icon: String,
+        held: u64,
+        rate: u64,
+    },
     /// The カケラ(文字) shop: an eleph a purchase, for fragments from `rate`
     /// on (20 at each rate up to 4, then 5), `left` more.
     Fragments {
@@ -103,9 +112,57 @@ pub enum Source {
     },
 }
 
+/// The lines a plan's blueprints fall short of: each slot's T10 ones, made up
+/// from the choice boxes (each as `source` tells it) or from the universal
+/// ones T2 to T9 leave; and the universal ones T2 to T9 take beyond those held.
+pub fn blueprint_lines(
+    rows: &[BlueprintRow],
+    boxes: &[ChoiceBox],
+    source: impl Fn(&ChoiceBox) -> Source,
+) -> Vec<ProcureLine> {
+    let mut lines = Vec::new();
+    for row in rows {
+        let universal = &row.universal;
+        let (need, have) = (universal.need, universal.have.amount());
+        let top = row.tiers.iter().find(|t| t.tier == 10);
+        if let (Some(top), true) = (top, row.short > 0) {
+            let boxes = boxes_for(Kind::Equipment, top.id, boxes).into_iter();
+            let mut sources: Vec<Source> = boxes.map(&source).collect();
+            sources.push(Source::Universal {
+                id: universal.id,
+                name: universal.name.clone(),
+                icon: universal.icon.clone(),
+                held: have.saturating_sub(need),
+                rate: RATE[10],
+            });
+            lines.push(ProcureLine {
+                kind: Kind::Equipment,
+                id: top.id,
+                name: format!("{}のT10設計図", row.name),
+                icon: top.icon.clone(),
+                short: row.short,
+                sources,
+            });
+        }
+        if need > have {
+            let boxes = boxes_for(Kind::Equipment, universal.id, boxes).into_iter();
+            lines.push(ProcureLine {
+                kind: Kind::Equipment,
+                id: universal.id,
+                name: universal.name.clone(),
+                icon: universal.icon.clone(),
+                short: need - have,
+                sources: boxes.map(&source).collect(),
+            });
+        }
+    }
+    lines
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plan::{BlueprintRow, TierBlueprint};
 
     fn row(kind: Kind, id: i64, need: u64, have: Option<Held>) -> NeedRow {
         NeedRow {
@@ -132,6 +189,65 @@ mod tests {
             shorts(&rows),
             [(Kind::Item, 4033, 29), (Kind::ReportExp, 0, 9000)]
         );
+    }
+
+    #[test]
+    fn a_slot_short_of_t10_blueprints_takes_them_from_a_box_or_the_universal_ones_left() {
+        let tier = |tier, id, need, have| TierBlueprint {
+            tier,
+            id,
+            name: format!("T{tier}"),
+            icon: format!("icon_{id}"),
+            need,
+            have: Held::Exact(have),
+        };
+        // T2 to T9 take 10 universal ones of 1,000; T10 is 43 short.
+        let row = |name: &str, universal_need, short| BlueprintRow {
+            name: name.into(),
+            icon: String::new(),
+            tiers: vec![tier(2, 101_001, 15, 10), tier(10, 101_009, 60, 60 - short)],
+            paid: 0,
+            universal: TierBlueprint {
+                name: format!("{name}の万能設計図"),
+                ..tier(0, 501_000, universal_need, 1000)
+            },
+            short,
+        };
+        let boxes = [ChoiceBox {
+            id: 150_048,
+            equipment: true,
+            choices: vec![101_009, 102_009],
+        }];
+        let source = |b: &ChoiceBox| Source::Box {
+            id: b.id,
+            name: String::new(),
+            icon: String::new(),
+            held: 3,
+            choices: b.choices.len(),
+        };
+        let lines = blueprint_lines(&[row("帽子", 10, 43)], &boxes, source);
+        assert_eq!(lines.len(), 1);
+        let line = &lines[0];
+        assert_eq!(
+            (line.kind, line.id, line.name.as_str(), line.short),
+            (Kind::Equipment, 101_009, "帽子のT10設計図", 43)
+        );
+        assert_eq!(line.sources[0], source(&boxes[0]));
+        assert_eq!(
+            line.sources[1],
+            Source::Universal {
+                id: 501_000,
+                name: "帽子の万能設計図".into(),
+                icon: "icon_501000".into(),
+                held: 990,
+                rate: 50,
+            }
+        );
+        // T2 to T9 taking more universal ones than held: those short too.
+        let lines = blueprint_lines(&[row("帽子", 1200, 0)], &boxes, source);
+        let short: Vec<(i64, u64)> = lines.iter().map(|l| (l.id, l.short)).collect();
+        assert_eq!(short, [(501_000, 200)]);
+        assert!(lines[0].sources.is_empty());
     }
 
     #[test]
