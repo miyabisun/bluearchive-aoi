@@ -1,9 +1,9 @@
 # Aoi for developers
 
-Aoi is a Tauri app (Rust and Svelte) for Windows 11. It captures Blue Archive's window
-with Windows Graphics Capture, reads the item and equipment lists, the student screen,
-the shops and the credits from each frame, and shows what it has read in a WebView2
-window. It sends no input to the game.
+Aoi is a Tauri app (Rust and Svelte) for Windows 11 and macOS. On Windows it captures Blue
+Archive's window with Windows Graphics Capture; it reads the item and equipment lists, the
+student screen, the shops and the credits from each frame, and shows what it has read in the
+system's web view (WebView2 on Windows). It sends no input to the game.
 
 It builds for macOS too, where there is no window to capture: the capture lives in
 `src-tauri/src/watch/window.rs` and its crates are Windows-only dependencies, so the macOS

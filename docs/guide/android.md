@@ -16,8 +16,8 @@ Android 版ブルーアーカイブの画面を、USB ケーブルか Wi-Fi で 
 - Wi-Fi でつなぐとき: PC とスマホが同じ Wi-Fi につながっていること。ゲスト用の Wi-Fi など、
   つながった機器どうしが通信できない回線では使えません。
 
-Windows の PC と、Pixel 9（Wi-Fi）・Legion Tab Y700（USB）で確かめています。Mac での動作は、
-まだ確かめていません。
+Windows の PC と Legion Tab Y700（USB）で確かめています。Wi-Fi は今の画面の受け取り方ではまだ
+確かめておらず、Mac での動作も確かめていません。
 
 ## 初めてつなぐ
 

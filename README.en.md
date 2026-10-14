@@ -16,8 +16,8 @@ goes online only to look for and download a newer version when you ask it to.
 
 ## Requirements
 
-- Windows 11
-- The Japanese PC version of Blue Archive. Names are shown in Japanese.
+- The Japanese PC version of Blue Archive on Windows 11, or the Japanese Android or iPhone
+  version, with Aoi on Windows 11 or macOS (see below). Names are shown in Japanese.
 
 Aoi also reads the Android version of the game: the phone sends its screen over a USB cable
 or Wi-Fi, with no app on the phone (USB or wireless debugging, Android 11 or later; steps in
