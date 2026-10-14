@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use aoi::{Recognizer, Row, quantity::Count};
+use aoi::{Recognizer, Row, quantity::Count, work::Stages};
 
 fn recognizer() -> Recognizer {
     Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap()
@@ -47,6 +47,59 @@ fn the_farm_reaches_the_golden_ratio_from_nothing_in_normal_missions() {
             "{}",
             slot.name
         );
+    }
+}
+
+#[test]
+fn the_farm_plays_for_t10_blueprints_and_gives_the_rest_where_the_ratio_wants_it() {
+    // By slot, hat to necklace: hats and hairpins far short of the ratio's
+    // T10 blueprints, watches and necklaces a little, bags and badges well
+    // over; and the universal ones, in thousands.
+    let top = [17, 154, 534, 441, 203, 36, 185, 139, 85];
+    let universal = [51, 16, 82, 64, 30, 19, 29, 26, 19];
+    let equipment: Vec<Row> = (1..=9)
+        .zip(top.into_iter().zip(universal))
+        .flat_map(|(n, (top, universal))| {
+            [
+                row(100_009 + n * 1000, top),
+                row(500_000 + n * 1000, universal * 1000),
+            ]
+        })
+        .collect();
+    let work = recognizer().work_rows(&[], &equipment, None);
+    let farm = work.farm.unwrap();
+    let names: Vec<&str> = farm.stages.iter().map(|s| s.name.as_str()).collect();
+    // 28-4 drops hairpins as 29-2 does, but bags and badges with them.
+    assert!(
+        names.contains(&"29-2") && !names.contains(&"28-4"),
+        "{names:?}"
+    );
+    // Each slot's T10 blueprints reach the ratio's from their drops alone,
+    // a piece taking 60.
+    let stages: Stages = serde_json::from_str(
+        &std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("data/schaledb/stages.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    for ((n, slot), held) in (1..=9).zip(&work.slots).zip(top) {
+        let dropped: f64 = farm
+            .stages
+            .iter()
+            .map(|s| {
+                let mission = stages.missions.iter().find(|m| m.name == s.name).unwrap();
+                let each: f64 = mission
+                    .drops
+                    .iter()
+                    .filter(|d| d.0 == 100_009 + n * 1000)
+                    .map(|d| d.1)
+                    .sum();
+                each * 2.0 * f64::from(s.runs)
+            })
+            .sum();
+        let want = f64::from(slot.golden * 60);
+        assert!(f64::from(held) + dropped >= want, "{}", slot.name);
     }
 }
 
