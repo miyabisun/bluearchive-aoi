@@ -207,18 +207,19 @@ pub fn slots<S: BuildHasher>(
         .collect()
 }
 
-/// Where the farm's value of a column's level bends, in quarters of the ratio:
-/// from once to 16 times it, each a quarter more than the last.
-const BENDS: [u8; 14] = [4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48, 56, 64];
+/// How many missions the farm ranks to play past the ratio.
+const NEXT: usize = 3;
 
 /// The normal missions to play to bring every slot up to the golden ratio,
-/// what they give `multiplier` times over (a campaign doubles them).
+/// what they give `multiplier` times over (a campaign doubles them); and the
+/// missions to play past it, best first.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Farm {
     pub multiplier: u32,
     pub runs: u32,
     pub ap: u32,
     pub stages: Vec<FarmStage>,
+    pub next: Vec<NextStage>,
 }
 
 /// A mission of the farm: its runs and their AP, and the slots it serves, the
@@ -231,13 +232,21 @@ pub struct FarmStage {
     pub slots: Vec<String>,
 }
 
-/// The fewest AP of normal missions that, with the blueprints held, make every
-/// slot's golden-ratio pieces from T1 to T10: the T10 blueprints from their
-/// drops alone, the universal ones kept for T9 and below at `RATE`. Of the
-/// plans as cheap, the one that leaves the stock nearest the ratio, so what
-/// the runs give beyond it goes to the slots lowest against it (linear
-/// programs, the runs rounded up, as schale-calc's plan-onia-golden.js plans
-/// them); `None` where none can.
+/// A mission to play past the ratio, and the slots it serves, the one it
+/// drops most of first.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct NextStage {
+    pub name: String,
+    pub slots: Vec<String>,
+}
+
+/// The normal missions to play, in the user's three steps of 2026-10-14: the
+/// fewest AP to the golden ratio's T10 blueprints, of those the runs worth
+/// most (see `Farming::worth`); then the fewest AP to T9 and below's, the
+/// universal blueprints making any of those tiers at `RATE`; and past the
+/// ratio, the missions dropping T10 blueprints worth most, to even the stock
+/// out. Linear programs, the runs rounded up (as schale-calc's
+/// plan-onia-golden.js plans them); `None` where none can.
 pub fn farm<S: BuildHasher>(
     pieces: &[Piece],
     equipment: &[Item],
@@ -245,50 +254,49 @@ pub fn farm<S: BuildHasher>(
     held: &HashMap<i64, Count, S>,
     multiplier: u32,
 ) -> Option<Farm> {
-    use microlp::{
-        ComparisonOp::Le,
-        OptimizationDirection::{Maximize, Minimize},
-        Problem,
-    };
-    let farming = Farming {
+    let mut farming = Farming {
         slots: slot_data(pieces, equipment),
         missions,
-        held,
+        stock: held
+            .iter()
+            .map(|(&id, &count)| (id, amount(Some(count)).0 as f64))
+            .collect(),
         multiplier,
     };
-    let ap: Vec<f64> = missions.iter().map(|m| f64::from(m.ap)).collect();
-    let mut least = Problem::new(Minimize);
-    let now = runs(&mut least, &ap);
-    farming.reach(&mut least, &now);
-    let solution = least.solve().ok()?.into_solution().ok()?;
-    let mut counts: Vec<f64> = now.iter().map(|&run| solution.var_value(run)).collect();
-    let mut nearest = Problem::new(Maximize);
-    let now = runs(&mut nearest, &vec![0.0; missions.len()]);
-    let most = solution.objective();
-    nearest.add_constraint(terms(&now, &ap), Le, most + 1e-9 * most.max(1.0));
-    farming.reach(&mut nearest, &now);
-    farming.balance(&mut nearest, &now);
-    if let Some(solution) = nearest.solve().ok().and_then(|s| s.into_solution().ok()) {
-        counts = now.iter().map(|&run| solution.var_value(run)).collect();
-    }
+    let top = farming.least(true)?;
+    farming.add(&top);
+    let lower = farming.least(false)?;
+    farming.add(&lower);
     let stages: Vec<FarmStage> = missions
         .iter()
-        .zip(&counts)
-        .filter_map(|(m, &count)| {
-            let count = (count - 1e-4).ceil().max(0.0) as u32;
-            (count > 0).then(|| FarmStage {
-                name: m.name.clone(),
-                runs: count,
-                ap: count * m.ap,
-                slots: served(&farming.slots, m),
-            })
+        .zip(top.iter().zip(&lower).map(|(a, b)| a + b))
+        .filter(|(_, count)| *count > 0)
+        .map(|(m, count)| FarmStage {
+            name: m.name.clone(),
+            runs: count,
+            ap: count * m.ap,
+            slots: served(&farming.slots, m),
         })
         .collect();
+    let mut next: Vec<(f64, &Mission)> = missions
+        .iter()
+        .map(|m| (farming.worth(m), m))
+        .filter(|(worth, _)| *worth > 0.0)
+        .collect();
+    next.sort_by(|a, b| b.0.total_cmp(&a.0));
     Some(Farm {
         multiplier,
         runs: stages.iter().map(|s| s.runs).sum(),
         ap: stages.iter().map(|s| s.ap).sum(),
         stages,
+        next: next
+            .into_iter()
+            .take(NEXT)
+            .map(|(_, m)| NextStage {
+                name: m.name.clone(),
+                slots: served(&farming.slots, m),
+            })
+            .collect(),
     })
 }
 
@@ -311,7 +319,8 @@ fn served(slots: &[Slot], mission: &Mission) -> Vec<String> {
         .collect()
 }
 
-/// A variable of runs for each mission, each run costing as `by_run` has it.
+/// A variable of runs for each mission, each run counting as `by_run` has it
+/// in the objective.
 fn runs(problem: &mut microlp::Problem, by_run: &[f64]) -> Vec<microlp::Variable> {
     let var = |&cost| problem.add_var(cost, (0.0, f64::INFINITY));
     by_run.iter().map(var).collect()
@@ -325,18 +334,19 @@ fn terms(runs: &[microlp::Variable], by_run: &[f64]) -> Vec<(microlp::Variable, 
         .collect()
 }
 
-/// What the farm plans with: the slots, the missions, what is held, and how
-/// many times over the missions give.
-struct Farming<'a, S> {
+/// What the farm plans with: the slots, the missions, the blueprints held with
+/// what the runs planned so far give, and how many times over the missions
+/// give.
+struct Farming<'a> {
     slots: Vec<Slot>,
     missions: &'a [Mission],
-    held: &'a HashMap<i64, Count, S>,
+    stock: HashMap<i64, f64>,
     multiplier: u32,
 }
 
-impl<S: BuildHasher> Farming<'_, S> {
+impl Farming<'_> {
     fn has(&self, id: i64) -> f64 {
-        amount(self.held.get(&id).copied()).0 as f64
+        self.stock.get(&id).copied().unwrap_or(0.0)
     }
 
     /// What a run of each mission gives of `id`.
@@ -352,16 +362,79 @@ impl<S: BuildHasher> Farming<'_, S> {
         self.missions.iter().map(|m| drops(m) * times).collect()
     }
 
-    /// Asks that what is held and what `runs` give make the ratio.
-    fn reach(&self, problem: &mut microlp::Problem, runs: &[microlp::Variable]) {
+    /// Adds to the stock what `counts` runs of each mission give.
+    fn add(&mut self, counts: &[u32]) {
+        let times = f64::from(self.multiplier);
+        for (mission, &count) in self.missions.iter().zip(counts) {
+            for &(id, rate) in &mission.drops {
+                *self.stock.entry(id).or_default() += rate * times * f64::from(count);
+            }
+        }
+    }
+
+    /// What a run of `mission` is worth to the T10 blueprints: each it drops
+    /// over how many times its slot has reached the ratio (at least once), so
+    /// one twice over the ratio counts half (the user's of 2026-10-14).
+    fn worth(&self, mission: &Mission) -> f64 {
+        let times = f64::from(self.multiplier);
+        let tops = self.slots.iter().flat_map(|slot| {
+            let tops = slot.prints.iter().filter(|p| p.1 == 10);
+            tops.map(move |&(id, _, per)| (id, f64::from(slot.golden) * per as f64))
+        });
+        tops.filter(|&(_, need)| need > 0.0)
+            .map(|(id, need)| {
+                let rate: f64 = mission
+                    .drops
+                    .iter()
+                    .filter(|d| d.0 == id)
+                    .map(|d| d.1)
+                    .sum();
+                rate * times / (self.has(id) / need).max(1.0)
+            })
+            .sum()
+    }
+
+    /// The fewest runs to the ratio's T10 blueprints (`top`), of those the
+    /// runs worth most; or to T9 and below's. Rounded up.
+    fn least(&self, top: bool) -> Option<Vec<u32>> {
+        use microlp::{
+            ComparisonOp::Le,
+            OptimizationDirection::{Maximize, Minimize},
+            Problem,
+        };
+        let ap: Vec<f64> = self.missions.iter().map(|m| f64::from(m.ap)).collect();
+        let mut least = Problem::new(Minimize);
+        let now = runs(&mut least, &ap);
+        self.reach(&mut least, &now, top);
+        let solution = least.solve().ok()?.into_solution().ok()?;
+        let mut counts: Vec<f64> = now.iter().map(|&run| solution.var_value(run)).collect();
+        if top {
+            let worth: Vec<f64> = self.missions.iter().map(|m| self.worth(m)).collect();
+            let mut best = Problem::new(Maximize);
+            let now = runs(&mut best, &worth);
+            let most = solution.objective();
+            best.add_constraint(terms(&now, &ap), Le, most + 1e-9 * most.max(1.0));
+            self.reach(&mut best, &now, true);
+            if let Some(solution) = best.solve().ok().and_then(|s| s.into_solution().ok()) {
+                counts = now.iter().map(|&run| solution.var_value(run)).collect();
+            }
+        }
+        let round = |count: f64| (count - 1e-4).ceil().max(0.0) as u32;
+        Some(counts.into_iter().map(round).collect())
+    }
+
+    /// Asks that the stock and what `runs` give make the ratio's T10
+    /// blueprints (`top`), or those of T9 and below, the universal ones making
+    /// any of them.
+    fn reach(&self, problem: &mut microlp::Problem, runs: &[microlp::Variable], top: bool) {
         use microlp::ComparisonOp::{Ge, Le};
         for slot in &self.slots {
             // What the universal blueprints make, against what they hold and drop.
             let given: Vec<f64> = self.each(slot.universal).iter().map(|n| -n).collect();
             let mut universal = terms(runs, &given);
-            for &(id, tier, per) in &slot.prints {
+            for &(id, tier, per) in slot.prints.iter().filter(|p| (p.1 == 10) == top) {
                 let mut supply = terms(runs, &self.each(id));
-                if tier < 10 {
+                if !top {
                     let made = problem.add_var(0.0, (0.0, f64::INFINITY));
                     supply.push((made, 1.0));
                     universal.push((made, RATE[usize::from(tier)] as f64));
@@ -369,42 +442,8 @@ impl<S: BuildHasher> Farming<'_, S> {
                 let want = f64::from(slot.golden) * per as f64 - self.has(id);
                 problem.add_constraint(supply, Ge, want);
             }
-            problem.add_constraint(universal, Le, self.has(slot.universal));
-        }
-    }
-
-    /// Values the stock nearest the ratio: each column's level (its pieces
-    /// over the ratio's) at its logarithm, drawn in tangents, which pays the
-    /// most for the lowest.
-    fn balance(&self, problem: &mut microlp::Problem, runs: &[microlp::Variable]) {
-        for slot in &self.slots {
-            for column in slot.columns() {
-                let worth = |&(_, each, per): &(i64, u64, u64)| (each * per) as f64;
-                let need = f64::from(slot.golden) * column.iter().map(worth).sum::<f64>();
-                if need == 0.0 {
-                    continue;
-                }
-                let base = column
-                    .iter()
-                    .map(|c| c.1 as f64 * self.has(c.0))
-                    .sum::<f64>()
-                    / need;
-                let mut gain = vec![0.0; self.missions.len()];
-                for &(id, worth, _) in &column {
-                    for (g, n) in gain.iter_mut().zip(self.each(id)) {
-                        *g += n * worth as f64 / need;
-                    }
-                }
-                let free = (f64::NEG_INFINITY, f64::INFINITY);
-                let value = problem.add_var(f64::from(slot.golden), free);
-                for bend in BENDS.map(|b| f64::from(b) / 4.0) {
-                    // value ≤ ln bend + (level − bend) / bend
-                    let slope: Vec<f64> = gain.iter().map(|g| -g / bend).collect();
-                    let mut tangent = terms(runs, &slope);
-                    tangent.push((value, 1.0));
-                    let rhs = bend.ln() - 1.0 + base / bend;
-                    problem.add_constraint(tangent, microlp::ComparisonOp::Le, rhs);
-                }
+            if !top {
+                problem.add_constraint(universal, Le, self.has(slot.universal));
             }
         }
     }
@@ -684,15 +723,9 @@ mod tests {
     }
 
     #[test]
-    fn of_missions_alike_the_farm_plays_the_one_that_leaves_the_stock_nearest_the_ratio() {
+    fn of_missions_alike_the_farm_plays_the_one_whose_drops_the_ratio_lacks_most() {
         // Hats from none to 3; bags 8 times over 2, shoes just over 4.
-        let (mut pieces, mut entries) = (Vec::new(), Vec::new());
-        for (category, name, n) in [("Hat", "帽子", 1), ("Bag", "カバン", 4), ("Shoes", "靴", 3)]
-        {
-            let (p, e) = t10_slot(category, name, n);
-            pieces.extend(p);
-            entries.extend(e);
-        }
+        let (pieces, entries) = three_slots();
         let mission = |name: &str, other: i64| Mission {
             name: name.into(),
             ap: 10,
@@ -707,6 +740,48 @@ mod tests {
             .map(|s| (s.name.as_str(), s.runs))
             .collect();
         assert_eq!(runs, [("29-2", 180)]);
+    }
+
+    #[test]
+    fn past_the_ratio_the_farm_ranks_three_t10_missions_by_their_drops_over_the_ratio_reached() {
+        let (pieces, entries) = three_slots();
+        let mission = |name: &str, drops: &[i64]| Mission {
+            name: name.into(),
+            ap: 10,
+            drops: drops.iter().map(|&id| (id, 0.5)).collect(),
+        };
+        let missions = [
+            mission("28-4", &[101_009, 104_009]),
+            mission("29-2", &[101_009, 103_009]),
+            mission("29-8", &[104_009]),
+            mission("29-9", &[104_009, 103_009]),
+            // No T10 blueprints: nothing to rank.
+            mission("25-1", &[501_000]),
+        ];
+        // Hats at the ratio, bags 8 times over it, shoes twice: a hat counts
+        // whole, a shoe half, a bag an eighth.
+        let held = HashMap::from([
+            (101_009, Count::Exact(180)),
+            (104_009, Count::Exact(1000)),
+            (103_009, Count::Exact(480)),
+        ]);
+        let farm = farm(&pieces, &entries, &missions, &held, 2).unwrap();
+        assert!(farm.stages.is_empty());
+        let next: Vec<&str> = farm.next.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(next, ["29-2", "28-4", "29-9"]);
+        assert_eq!(farm.next[0].slots, ["帽子", "靴"]);
+    }
+
+    /// Hats, bags and shoes, of T10 pieces only.
+    fn three_slots() -> (Vec<Piece>, Vec<Item>) {
+        let (mut pieces, mut entries) = (Vec::new(), Vec::new());
+        for (category, name, n) in [("Hat", "帽子", 1), ("Bag", "カバン", 4), ("Shoes", "靴", 3)]
+        {
+            let (p, e) = t10_slot(category, name, n);
+            pieces.extend(p);
+            entries.extend(e);
+        }
+        (pieces, entries)
     }
 
     /// A slot's T10 piece, taking 60 of its T10 blueprints, and its universal

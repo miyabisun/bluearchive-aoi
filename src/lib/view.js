@@ -493,16 +493,21 @@ export function heldTone(held, need) {
   return n < need ? "short" : n < 2 * need ? "fair" : "enough";
 }
 
-/** The farm to the golden ratio: each mission's runs, AP and the slots it serves, and the totals. */
+/**
+ * The farm to the golden ratio: each mission's runs, AP and the slots it serves, and the
+ * totals; and the missions past the ratio with the slots they serve.
+ */
 export function farmCells(farm) {
+  const slots = (s) => s.slots.join("・");
   return {
     lines: farm.stages.map((s) => ({
       name: s.name,
       runs: `${exact.format(s.runs)}回`,
       ap: `${exact.format(s.ap)}AP`,
-      slots: s.slots.join("・"),
+      slots: slots(s),
     })),
     total: { runs: `${exact.format(farm.runs)}回`, ap: `${exact.format(farm.ap)}AP` },
+    next: farm.next.map((s) => ({ name: s.name, slots: slots(s) })),
   };
 }
 

@@ -709,7 +709,7 @@ describe("work", () => {
     expect(heldTone({ exact: 3 }, null)).toBe("");
   });
 
-  it("writes the farm to the golden ratio, a line a mission", () => {
+  it("writes the farm to the golden ratio, a line a mission, and the missions past it", () => {
     const farm = {
       multiplier: 2,
       runs: 71,
@@ -718,6 +718,7 @@ describe("work", () => {
         { name: "29-1", runs: 60, ap: 600, slots: ["お守り", "時計"] },
         { name: "25-1", runs: 11, ap: 110, slots: ["帽子"] },
       ],
+      next: [{ name: "29-2", slots: ["ヘアピン", "シューズ", "腕時計"] }],
     };
     expect(farmCells(farm)).toEqual({
       lines: [
@@ -725,6 +726,7 @@ describe("work", () => {
         { name: "25-1", runs: "11回", ap: "110AP", slots: "帽子" },
       ],
       total: { runs: "71回", ap: "710AP" },
+      next: [{ name: "29-2", slots: "ヘアピン・シューズ・腕時計" }],
     });
   });
 

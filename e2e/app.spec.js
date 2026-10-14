@@ -946,6 +946,10 @@ const work = {
       { name: "29-1", runs: 60, ap: 600, slots: ["お守り", "時計"] },
       { name: "25-1", runs: 11, ap: 110, slots: ["帽子"] },
     ],
+    next: [
+      { name: "29-2", slots: ["ヘアピン", "シューズ", "腕時計"] },
+      { name: "29-5", slots: ["ネックレス", "バッグ", "ヘアピン"] },
+    ],
   },
   bounties: [
     {
@@ -1026,14 +1030,19 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   await expect(page.locator(".slots strong.low")).toHaveText(["2.5個分"]);
   // How many times to play each mission, in the campaign, to the golden ratio.
   // The totals under a double rule.
-  await expect(page.locator(".farm tr")).toHaveText([
+  await expect(page.locator(".farm:not(.next) tr")).toHaveText([
     "29-160回600APお守り・時計",
     "25-111回110AP帽子",
     "計71回710AP",
   ]);
+  // Past the ratio, the missions that even it out most, best first.
+  await expect(page.locator(".farm.next tr")).toHaveText([
+    "29-2ヘアピン・シューズ・腕時計",
+    "29-5ネックレス・バッグ・ヘアピン",
+  ]);
   await expect(page.locator(".farm tfoot th")).toHaveCSS("border-top-style", "double");
   // Every cell of a mission's row fills the row, the slots it serves too.
-  for (const row of await page.locator(".farm tbody tr").all()) {
+  for (const row of await page.locator(".farm:not(.next) tbody tr").all()) {
     const boxes = await row.locator("td").evaluateAll((cells) =>
       cells.map((c) => {
         const box = c.getBoundingClientRect();
@@ -1045,6 +1054,7 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   // Each place's drops by tier with what is held, "—" where none is counted.
   await expect(page.locator(".work h3")).toHaveText([
     "黄金比までの周回（2倍キャンペーン中）",
+    "その後に黄金比を整える周回",
     "ハイウェイ",
     "トリニティ",
   ]);

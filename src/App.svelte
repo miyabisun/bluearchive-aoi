@@ -750,7 +750,6 @@
               {@const farm = farmCells(work.farm)}
               <!-- How many times to play each normal mission, in a doubled-drop campaign, to stock the golden ratio. -->
               <h3>黄金比までの周回（2倍キャンペーン中）</h3>
-              <p class="detail">手持ちの万能設計図で作れる設計図は作る前提の周回です</p>
               {#if farm.lines.length === 0}
                 <p class="detail">どの部位も黄金比に届いています</p>
               {:else}
@@ -773,6 +772,20 @@
                       <td></td>
                     </tr>
                   </tfoot>
+                </table>
+              {/if}
+              {#if farm.next.length > 0}
+                <!-- Past the ratio, the missions that even it out most, best first. -->
+                <h3>その後に黄金比を整える周回</h3>
+                <table class="farm next">
+                  <tbody>
+                    {#each farm.next as line (line.name)}
+                      <tr>
+                        <td>{line.name}</td>
+                        <td class="serves">{line.slots}</td>
+                      </tr>
+                    {/each}
+                  </tbody>
                 </table>
               {/if}
             {/if}
