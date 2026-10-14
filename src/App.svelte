@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
+  import { fade } from "svelte/transition";
   import {
     applyUpdate,
     checkUpdate,
@@ -140,15 +141,39 @@
   let exported = $state(null);
   /** Where checking for an update stands (see `updateText`), none before asked. */
   let update = $state(/** @type {any} */ (null));
+  /** A passing notice at the window's foot (see `.toast`), none while there is none. */
+  let toast = $state(/** @type {string | null} */ (null));
+  /** How long a toast stays before it fades, in milliseconds. */
+  const TOAST_STAYS = 3000;
+  /** How long it takes to fade, none for those who would see less motion. */
+  const TOAST_FADES = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 400;
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let toastTimer;
 
+  /** Shows `text` as a toast, gone after `stays` milliseconds (staying while it is null). */
+  function notify(/** @type {string | null} */ text, stays = /** @type {number | null} */ (null)) {
+    clearTimeout(toastTimer);
+    toast = text;
+    if (text !== null && stays !== null) toastTimer = setTimeout(() => (toast = null), stays);
+  }
+
+  /**
+   * Checks for an update: while checking and when up to date, a toast says so; a
+   * newer version (with the button to take it) and a failure stay in the page.
+   */
   async function check() {
-    update = { state: "checking" };
+    update = null;
+    notify(updateText({ state: "checking" }));
     try {
       const found = await checkUpdate();
-      update = found.latest
-        ? { state: "available", ...found }
-        : { state: "latest", current: found.current };
+      if (found.latest) {
+        notify(null);
+        update = { state: "available", ...found };
+      } else {
+        notify(updateText({ state: "latest", current: found.current }), TOAST_STAYS);
+      }
     } catch (error) {
+      notify(null);
       update = { state: "failed", error: String(error) };
     }
   }
@@ -992,6 +1017,13 @@
   </div>
 </main>
 
+<!-- Passing notices: the region stays so screen readers hear what comes in. -->
+<div class="toasts" aria-live="polite">
+  {#if toast}
+    <p class="toast" out:fade={{ duration: TOAST_FADES }}>{toast}</p>
+  {/if}
+</div>
+
 <style lang="sass">
   // The page itself never scrolls: the top and the search field stay, and the
   // table scrolls in its own box under them, its headings held at the box's top.
@@ -1105,6 +1137,26 @@
     color: var(--c-accent)
     font: inherit
     cursor: pointer
+
+  // A passing notice at the window's foot, over the content: the menu's face.
+  .toasts
+    position: fixed
+    left: var(--sp-4)
+    right: var(--sp-4)
+    bottom: var(--sp-4)
+    z-index: 3
+    display: flex
+    justify-content: center
+    pointer-events: none
+  .toast
+    margin: 0
+    padding: var(--sp-2) var(--sp-4)
+    border: 1px solid var(--c-border)
+    border-radius: var(--radius-sm)
+    background: var(--c-surface)
+    color: var(--c-on-surface)
+    font-size: var(--fs-sm)
+    overflow-wrap: anywhere
 
   .exported
     margin: 0 0 var(--sp-4)

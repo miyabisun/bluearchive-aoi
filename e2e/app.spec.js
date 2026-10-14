@@ -1129,7 +1129,10 @@ test("the menu checks for an update and takes it", async ({ page }) => {
   await expect(page.getByText("v0.1.30 に更新しています…")).toBeVisible();
 });
 
-test("tells the app is up to date, or why it could not check", async ({ page }) => {
+test("tells the app is up to date in a passing toast, or why it could not check", async ({
+  page,
+}) => {
+  await page.clock.install();
   await open(page, {
     status: { state: "no_game" },
     items,
@@ -1138,8 +1141,15 @@ test("tells the app is up to date, or why it could not check", async ({ page }) 
   });
   await page.getByRole("button", { name: "メニュー" }).click();
   await page.getByRole("menuitem", { name: "アップデートを確認" }).click();
-  await expect(page.getByText("最新の版です（v0.1.29）")).toBeVisible();
+  // Up to date: a toast says so for a while, and nothing stays in the page.
+  const toast = page.locator(".toast");
+  await expect(toast).toHaveText("最新の版です（v0.1.29）");
+  await expect(page.locator(".update")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "更新して再起動" })).toHaveCount(0);
+  await page.clock.runFor(2500);
+  await expect(toast).toBeVisible();
+  await page.clock.runFor(1000);
+  await expect(toast).toHaveCount(0);
 
   await open(page, {
     status: { state: "no_game" },
