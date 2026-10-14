@@ -2,19 +2,18 @@
 //!
 //! The screen keeps its layout at any 16:9 window size, so each field sits at
 //! a fixed place measured in window heights from the left or the right edge.
-//! The name is read by the OCR built into Windows (`ocr`); the short italic
-//! texts it cannot read ("Lv.65", "T10", "MAX") are read character by character
-//! against references from labeled screenshots (`glyph`). A field that cannot
-//! be read for sure is left unknown.
+//! The name is told among the students' names (`name`); the short texts
+//! ("Lv.65", "T10", "MAX") are read character by character against references
+//! from labeled screenshots (`glyph`). A field that cannot be read for sure is
+//! left unknown.
 
-pub mod glyph;
 pub mod name;
 pub mod roster;
 
 use image::RgbImage;
 use serde::{Deserialize, Serialize};
 
-use glyph::{Fonts, Ink, Rect, Style};
+use crate::glyph::{self, Fonts, Ink, Rect, Style};
 
 /// A student's training as the 基本情報 tab shows it; `None` where a field
 /// could not be read.
@@ -88,8 +87,8 @@ const fn right(x: (f32, f32), y: (f32, f32)) -> Area {
     }
 }
 
-/// The name with the bond heart and the stars around it: the OCR reads a name
-/// more surely with some of its surroundings.
+/// The name plate's row: the bond heart, the name and the rarity stars (the
+/// name's own columns are `name::COLUMNS`).
 pub const NAME: Area = left((0.04, 0.48), (0.76, 0.83));
 const BOND: Area = left((0.0624, 0.0944), (0.786, 0.807));
 const RARITY: Area = left((0.364, 0.474), (0.789, 0.818));
@@ -188,22 +187,6 @@ const GOLD: Ink = |c| c[0] > 200 && c[1] > 150 && c[2] < 120;
 const STAR: Ink = |c| c[0] > 220 && c[1] > 150 && c[2] < 100;
 /// The unique weapon's stars.
 const WEAPON_STAR: Ink = |c| c[2] > 220 && c[1] > 180 && c[0] < 180;
-/// The white letters of the name.
-const NAME_INK: Ink = |c| c.iter().all(|&v| v > 200);
-
-/// The picture of `NAME` for the OCR with its white letters alone, black on
-/// white: without the heart and the stars around them the OCR reads short
-/// names ("ミカ") it misses in the picture as it is.
-pub fn name_letters(name: &RgbImage) -> RgbImage {
-    RgbImage::from_fn(name.width(), name.height(), |x, y| {
-        if NAME_INK(name.get_pixel(x, y).0) {
-            image::Rgb([0, 0, 0])
-        } else {
-            image::Rgb([255, 255, 255])
-        }
-    })
-}
-
 const fn style(
     ink: Ink,
     tall: f32,

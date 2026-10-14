@@ -1,196 +1,58 @@
-//! Tells which student a screen shows from the name the OCR read.
-//!
-//! The OCR reads the name well, but around it picks up the bond heart (a ")" or
-//! "第" before the name) and the rarity stars ("☆食を" after it), and confuses a
-//! few look-alike characters. A name counts only when the text holds it with
-//! nothing but such noise around it: a base name never stands for its variant
-//! ("ホシノ" is not "ホシノ(臨戦)"), nor a shorter name for a longer one ("ハル" is
-//! not "コハル").
+//! Tells which student a screen shows from the name on its plate: the name's
+//! white letters, right of the bond heart and short of the rarity stars, told
+//! among the students' names (see `glyph::word`).
 
-/// Characters the OCR mixes up, each mapped to one of its group, small kana
-/// to large ones, and voiced kana to plain ones (the OCR loses the marks, or
-/// reads them as a "、"); applied to the read text and to every name alike.
-const FOLD: &[(char, char)] = &[
-    ('工', 'エ'),
-    ('力', 'カ'),
-    ('口', 'ロ'),
-    ('二', 'ニ'),
-    ('一', 'ー'),
-    ('フ', 'ラ'),
-    ('ァ', 'ア'),
-    ('ィ', 'イ'),
-    ('ゥ', 'ウ'),
-    ('ェ', 'エ'),
-    ('ォ', 'オ'),
-    ('ャ', 'ヤ'),
-    ('ュ', 'ユ'),
-    ('ョ', 'ヨ'),
-    ('ッ', 'ツ'),
-    ('ガ', 'カ'),
-    ('ギ', 'キ'),
-    ('グ', 'ク'),
-    ('ゲ', 'ケ'),
-    ('ゴ', 'コ'),
-    ('ザ', 'サ'),
-    ('ジ', 'シ'),
-    ('ズ', 'ス'),
-    ('ゼ', 'セ'),
-    ('ゾ', 'ソ'),
-    ('ダ', 'タ'),
-    ('ヂ', 'チ'),
-    ('ヅ', 'ツ'),
-    ('デ', 'テ'),
-    ('ド', 'ト'),
-    ('バ', 'ハ'),
-    ('パ', 'ハ'),
-    ('ビ', 'ヒ'),
-    ('ピ', 'ヒ'),
-    // "フ" goes with "ラ", and so do its voiced forms.
-    ('ブ', 'ラ'),
-    ('プ', 'ラ'),
-    ('ベ', 'ヘ'),
-    ('ペ', 'ヘ'),
-    ('ボ', 'ホ'),
-    ('ポ', 'ホ'),
-    ('ヴ', 'ウ'),
-    ('（', '('),
-    ('）', ')'),
-    ('＊', '*'),
-];
+use image::RgbImage;
 
-/// Marks the OCR puts between characters, and the "/" `crate::ocr` joins its
-/// lines with (the bond's number often reads as a line of its own, and a
-/// variant's costume can too); no name holds one.
-const MARKS: &[char] = &['、', '。', '・', '/'];
+use crate::{
+    glyph::{
+        bank::{Bank, Word},
+        word::{self, Ink},
+    },
+    student::{NAME, rect},
+};
 
-/// The text without spaces and marks, with look-alike characters folded together.
-pub fn fold(text: &str) -> String {
-    text.chars()
-        .filter(|c| !c.is_whitespace() && !MARKS.contains(c))
-        .map(|c| {
-            FOLD.iter()
-                .find(|(from, _)| *from == c)
-                .map_or(c, |&(_, to)| to)
-        })
-        .collect()
+/// The name's columns on the plate, in window heights from the left: past the
+/// bond heart (it ends at 0.09) and short of the stars (from 0.37), measured on
+/// 2026-10-14 over the student fixtures at 2222x1250. A long name is drawn
+/// smaller to fit.
+const COLUMNS: (f32, f32) = (0.10, 0.365);
+/// Parts of the letters smaller than this share of the window height squared
+/// are specks (6 pixels at 1250 rows; a voiced mark's dots are 8 or more).
+const SPECK: f32 = 6.0 / (1250.0 * 1250.0);
+/// The farthest a letter of the plate may lie from the name's own letter.
+/// Measured on 2026-10-14 over the student fixtures: a right name's farthest
+/// letter lies within 22.6 (an evaluation plate), and with each student left
+/// out in turn, the nearest other name has a letter 26.1 or farther ("ハルカ"
+/// for "ハルナ"). A name not told is safer than one told wrong.
+const WORST: f32 = 24.0;
+
+/// The white letters of the name.
+fn white(c: [u8; 3]) -> bool {
+    c.iter().all(|&v| v > 200)
 }
 
-fn katakana(c: char) -> bool {
-    ('\u{30A1}'..='\u{30FA}').contains(&c)
+/// The name's letters on the plate of `image` (none where the window is too
+/// narrow for it).
+pub fn plate(image: &RgbImage) -> Option<Ink> {
+    let h = image.height() as f32;
+    let (_, top, _, bottom) = rect(image, NAME)?;
+    let (left, right) = ((COLUMNS.0 * h) as u32, (COLUMNS.1 * h) as u32);
+    if right > image.width() {
+        return None;
+    }
+    let least = (SPECK * h * h).round().max(1.0) as usize;
+    Some(Ink::parts(image, (left, top, right, bottom), white, least))
 }
 
-/// The most characters of noise the OCR puts before a name (the bond heart).
-const MAX_PREFIX: usize = 2;
-
-/// Whether `name` (folded) stands alone in `text` (folded): noise before it is
-/// short and holds no katakana, and after it neither a "(" (a variant's
-/// costume) nor any katakana follows.
-fn stands_alone(text: &str, name: &str) -> bool {
-    text.match_indices(name).any(|(at, _)| {
-        let (before, after) = (&text[..at], &text[at + name.len()..]);
-        before.chars().count() <= MAX_PREFIX
-            && !before.chars().any(katakana)
-            && !after.starts_with('(')
-            && !after.chars().any(katakana)
-    })
-}
-
-/// The id of the one student whose name stands alone in the OCR's `text`.
-/// SchaleDB lists a few students twice under one name (one id per form, as
-/// "ホシノ（臨戦）"); such a name stands for its lowest id.
-pub fn find(text: &str, students: &[(i64, String)]) -> Option<i64> {
-    let text = fold(text);
-    let found: Vec<&(i64, String)> = students
-        .iter()
-        .filter(|(_, name)| stands_alone(&text, &fold(name)))
-        .collect();
-    let name = &found.first()?.1;
-    found
-        .iter()
-        .all(|(_, n)| n == name)
-        .then(|| found.iter().map(|(id, _)| *id).min())
-        .flatten()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn students() -> Vec<(i64, String)> {
-        [
-            "ホシノ",
-            "ホシノ（臨戦）",
-            "ハル",
-            "コハル",
-            "ヒナ",
-            "ヒナタ",
-            "カヨコ",
-            "トモエ",
-            "シロコ＊テラー",
-            "ツムギ",
-            "シズコ",
-            "ミモリ",
-            "アル",
-            "アル（ドレス）",
-            "ヨシミ",
-            "ヨシミ（バンド）",
-        ]
-        .iter()
-        .enumerate()
-        .map(|(i, n)| (i as i64, (*n).to_owned()))
-        .collect()
-    }
-
-    fn named(text: &str) -> Option<String> {
-        let students = students();
-        find(text, &students).map(|id| students[id as usize].1.clone())
-    }
-
-    #[test]
-    fn a_name_is_found_among_the_noise_of_the_heart_and_stars() {
-        assert_eq!(named(") ホ シ ノ"), Some("ホシノ".into()));
-        assert_eq!(named("第ホシノ(臨戦)☆"), Some("ホシノ（臨戦）".into()));
-        assert_eq!(named("STRIKER / ホ シ ノ ( 臨 戦 ) ☆"), None);
-        assert_eq!(named(") カ ョ コ"), Some("カヨコ".into()));
-        assert_eq!(named("ト モ 工"), Some("トモエ".into()));
-        assert_eq!(named("シロコ*テフー"), Some("シロコ＊テラー".into()));
-    }
-
-    #[test]
-    fn a_name_is_found_without_its_voicing_marks() {
-        assert_eq!(named("? ツ ム キ"), Some("ツムギ".into()));
-        assert_eq!(named("シ ス 、 コ"), Some("シズコ".into()));
-        assert_eq!(named("ア ル ( ト レ ス )"), Some("アル（ドレス）".into()));
-    }
-
-    #[test]
-    fn a_name_is_found_across_the_lines_of_the_ocr() {
-        assert_eq!(named("25/ミ モ リ"), Some("ミモリ".into()));
-        assert_eq!(
-            named("ヨ シ ミ/( バ ン ド )"),
-            Some("ヨシミ（バンド）".into())
-        );
-        assert_eq!(named("シ ュ リ/☆ 食 を 食 を"), None);
-        assert_eq!(named("20/☆ を 食 を"), None);
-    }
-
-    #[test]
-    fn a_shorter_name_never_stands_for_a_longer_one() {
-        let without = |gone: &str| -> Vec<(i64, String)> {
-            students().into_iter().filter(|(_, n)| n != gone).collect()
-        };
-        assert_eq!(find("ホシノ(臨戦)☆", &without("ホシノ（臨戦）")), None);
-        assert_eq!(find(") コ ハ ル", &without("コハル")), None);
-        assert_eq!(find("ヒナタ", &without("ヒナタ")), None);
-        assert_eq!(find("", &students()), None);
-    }
-
-    #[test]
-    fn a_name_listed_twice_stands_for_its_lowest_id() {
-        let students = vec![
-            (30, "ホシノ（臨戦）".to_owned()),
-            (12, "ホシノ（臨戦）".to_owned()),
-        ];
-        assert_eq!(find("ホシノ(臨戦)☆", &students), Some(12));
-    }
+/// The student among `names` whose name the plate of `image` shows. A name
+/// SchaleDB lists under two ids (one a form, as "ホシノ（臨戦）") is one word,
+/// under the lower id.
+pub fn read<'a>(
+    image: &RgbImage,
+    bank: &Bank,
+    names: impl IntoIterator<Item = &'a Word>,
+) -> Option<i64> {
+    let ink = plate(image)?;
+    word::nearest(&ink, names, &bank.tiles, &bank.index.letters, WORST).map(|w| w.id)
 }

@@ -1,6 +1,11 @@
-//! Reads the short texts of the student screen ("Lv.65", "T10", "34") one
+//! Reads the short texts of the screens ("Lv.65", "T10", "243,797,319") one
 //! character at a time: each character is a blob of one ink, scaled to a common
-//! height and compared with references taken from labeled screenshots.
+//! height and compared with references taken from labeled screenshots (kept in
+//! the glyph bank, `bank`). Longer texts drawn from a known list, the
+//! students' and the shops' names, are told whole (`word`).
+
+pub mod bank;
+pub mod word;
 
 use std::collections::BTreeMap;
 
@@ -229,14 +234,31 @@ pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
             let (gw, gh) = GLYPH;
             let scale = (b.bottom - b.top + 1) as f32 / gh as f32;
             let mut out = vec![0.0; gw * gh];
+            // Each cell the share of its area the ink covers, so a character
+            // drawn small and one drawn large come out alike.
+            let right = (b.right + 1) as f32;
             for gy in 0..gh {
                 for gx in 0..gw {
-                    let x = b.left as f32 + (gx as f32 + 0.5) * scale;
-                    let y = b.top as f32 + (gy as f32 + 0.5) * scale;
-                    if x <= b.right as f32 + 0.5 {
-                        out[gy * gw + gx] =
-                            f32::from(u8::from(on[y as usize * width + x as usize]));
+                    let (ax, ay) = (
+                        b.left as f32 + gx as f32 * scale,
+                        b.top as f32 + gy as f32 * scale,
+                    );
+                    let (bx, by) = ((ax + scale).min(right), ay + scale);
+                    if ax >= right {
+                        continue;
                     }
+                    let (mut ink, mut area) = (0.0, 0.0);
+                    for py in ay.floor() as usize..(by.ceil() as usize).min(height) {
+                        let wy = by.min(py as f32 + 1.0) - ay.max(py as f32);
+                        for px in ax.floor() as usize..bx.ceil() as usize {
+                            let wx = bx.min(px as f32 + 1.0) - ax.max(px as f32);
+                            area += wx * wy;
+                            if on[py * width + px] {
+                                ink += wx * wy;
+                            }
+                        }
+                    }
+                    out[gy * gw + gx] = if area > 0.0 { ink / area } else { 0.0 };
                 }
             }
             out
@@ -277,22 +299,33 @@ impl Fonts {
     /// The text the `shapes` spell in `style`, if every one is close to a
     /// reference and clearly nearer to it than to any other character.
     pub fn read(&self, style: &str, shapes: &[Vec<f32>]) -> Option<String> {
-        let font = self.0.get(style)?;
-        shapes
+        shapes.iter().map(|s| self.character(style, s)).collect()
+    }
+
+    /// How far `shape` lies from the nearest reference of `style`.
+    pub fn nearest(&self, style: &str, shape: &[f32]) -> Option<f32> {
+        let refs = self.0.get(style)?.values().flatten();
+        Some(
+            refs.map(|r| distance(r, shape))
+                .fold(f32::INFINITY, f32::min),
+        )
+    }
+
+    /// The character `shape` is in `style`, if it is close to a reference and
+    /// clearly nearer to it than to any other character.
+    pub fn character(&self, style: &str, shape: &[f32]) -> Option<char> {
+        let mut nearest: Vec<(char, f32)> = self
+            .0
+            .get(style)?
             .iter()
-            .map(|shape| {
-                let mut nearest: Vec<(char, f32)> = font
-                    .iter()
-                    .map(|(c, refs)| {
-                        let d = refs.iter().map(|r| distance(r, shape));
-                        (*c, d.fold(f32::INFINITY, f32::min))
-                    })
-                    .collect();
-                nearest.sort_by(|a, b| a.1.total_cmp(&b.1));
-                let (c, d) = *nearest.first()?;
-                let next = nearest.get(1).map_or(f32::INFINITY, |n| n.1);
-                (d <= MAX_DISTANCE && d <= LEAD * next).then_some(c)
+            .map(|(c, refs)| {
+                let d = refs.iter().map(|r| distance(r, shape));
+                (*c, d.fold(f32::INFINITY, f32::min))
             })
-            .collect()
+            .collect();
+        nearest.sort_by(|a, b| a.1.total_cmp(&b.1));
+        let (c, d) = *nearest.first()?;
+        let next = nearest.get(1).map_or(f32::INFINITY, |n| n.1);
+        (d <= MAX_DISTANCE && d <= LEAD * next).then_some(c)
     }
 }

@@ -1,6 +1,7 @@
 [
   {
     "image": "shops/souryokusen-end.png",
+    "role": "tune",
     "shop": "総力戦",
     "note": "2026-10-12 capture, 2222x1250, the end of the list: cards bought up, darkened. Left coin purple (530), right gold (5,940); the two 秘伝ノート differ only in their coin. The top row's names are cut off. Labels by eye.",
     "offers": [
@@ -11,6 +12,7 @@
   },
   {
     "image": "shops/daikessen.png",
+    "role": "tune",
     "shop": "大決戦",
     "note": "2026-10-12 capture, 2222x1250. Left coin blue (440), right silver (155): the Odyssey books take silver, the Hyakkiyako ones blue. Labels by eye.",
     "offers": [
@@ -26,6 +28,7 @@
   },
   {
     "image": "shops/goudou-end.png",
+    "role": "tune",
     "shop": "合同火力演習",
     "note": "2026-10-12 capture, 2222x1250, the end of the list: cards bought up. One coin. The top row's names are cut off. Labels by eye.",
     "offers": [
@@ -36,6 +39,7 @@
   },
   {
     "image": "shops/shimeitehai.png",
+    "role": "tune",
     "shop": "指名手配",
     "note": "2026-10-12 capture, 2222x1250. One coin. The bottom row's buttons are cut off, its prices shown. Labels by eye.",
     "offers": [
@@ -51,6 +55,7 @@
   },
   {
     "image": "shops/jukutatsu-end.png",
+    "role": "tune",
     "shop": "熟達証書",
     "note": "2026-10-12 capture, 2222x1250, the end of the list: cards bought up. One coin. The top row's names are cut off. Labels by eye.",
     "offers": [
@@ -62,6 +67,7 @@
   },
   {
     "image": "shops/kakera-1.png",
+    "role": "tune",
     "shop": "カケラ(文字)",
     "held": [2929],
     "note": "2026-10-13 capture, 2222x1250. A card's price is its student's rate (1 to 5). ユカリ's times left, 589, lost its 58 to the OCR at Otsu's split. Only the middle row is whole. Labels by eye.",
@@ -74,6 +80,7 @@
   },
   {
     "image": "shops/kakera-2.png",
+    "role": "eval",
     "shop": "カケラ(文字)",
     "held": [2929],
     "note": "2026-10-13 capture, 2222x1250, with a rate of 2. Two rows are whole. Labels by eye.",
@@ -90,6 +97,7 @@
   },
   {
     "image": "shops/kakera-3.png",
+    "role": "eval",
     "shop": "カケラ(文字)",
     "held": [2929],
     "note": "2026-10-13 capture, 2222x1250, with rates of 3. Two rows are whole. Labels by eye.",
@@ -106,6 +114,7 @@
   },
   {
     "image": "shops/jukutatsu.png",
+    "role": "eval",
     "shop": "熟達証書",
     "held": [4469],
     "note": "2026-10-13 capture, 2222x1250, the top of the list. The certificates held show only here, over the cards. Labels by eye.",
@@ -122,6 +131,7 @@
   },
   {
     "image": "shops/jukutatsu-credits.png",
+    "role": "eval",
     "shop": "熟達証書",
     "held": [5009],
     "note": "2026-10-13 capture, 2222x1250, the middle of the list: チタン撃針 is an equipment list entry and クレジットポイント a currency, neither an item. The rows above and below are cut off. Labels by eye.",

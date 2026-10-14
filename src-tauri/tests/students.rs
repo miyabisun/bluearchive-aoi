@@ -3,7 +3,10 @@
 
 use std::path::Path;
 
-use aoi::student::{self, Label, LevelLabel, Training, glyph::Fonts};
+use aoi::{
+    glyph::{Fonts, bank::Bank},
+    student::{self, Label, LevelLabel, Training},
+};
 
 fn root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -17,8 +20,7 @@ fn labels() -> Vec<Label> {
 }
 
 fn fonts() -> Fonts {
-    serde_json::from_str(&std::fs::read_to_string(root().join("data/student-fonts.json")).unwrap())
-        .unwrap()
+    Bank::load(&root().join("data")).unwrap().fonts()
 }
 
 /// The fields of a training, named, each `None` when unknown.
@@ -80,7 +82,7 @@ fn recognizer() -> aoi::Recognizer {
     aoi::Recognizer::load(&root().join("data")).unwrap()
 }
 
-/// Every student screen is told as such, with the student named from the OCR.
+/// Every student screen is told as such, with the student named.
 #[test]
 fn each_student_screen_names_its_student() {
     let recognizer = recognizer();
@@ -100,25 +102,22 @@ fn each_student_screen_names_its_student() {
 #[test]
 fn a_student_missing_from_the_snapshot_is_never_named_as_another() {
     let recognizer = recognizer();
-    let ocr = aoi::ocr::Ocr::japanese().unwrap();
+    let glyphs = recognizer.glyphs();
     for label in labels() {
         let image = image::open(root().join("tests/fixtures").join(&label.image))
             .unwrap()
             .to_rgb8();
-        let (x0, y0, x1, y1) = student::rect(&image, student::NAME).unwrap();
-        let text = ocr
-            .read(&image::imageops::crop_imm(&image, x0, y0, x1 - x0, y1 - y0).to_image())
-            .unwrap();
-        let without: Vec<(i64, String)> = recognizer
+        let name = &recognizer
             .students()
             .iter()
-            .filter(|(id, _)| *id != label.id)
-            .cloned()
-            .collect();
+            .find(|(id, _)| *id == label.id)
+            .unwrap()
+            .1;
+        let others = glyphs.index.names.iter().filter(|w| w.text != *name);
         assert_eq!(
-            student::name::find(&text, &without),
+            student::name::read(&image, glyphs, others),
             None,
-            "{}: {text}",
+            "{}",
             label.image
         );
     }
@@ -142,17 +141,15 @@ fn other_screens_are_no_student_screen() {
     }
 }
 
-/// Folding the characters the OCR mixes up never makes two different names one.
+/// The glyph bank holds every student's name: it was built again after
+/// SchaleDB's students last changed (`examples/build_glyphs.rs`).
 #[test]
-fn folded_names_stay_apart() {
+fn every_student_has_a_name_to_be_told_by() {
     let recognizer = recognizer();
-    let mut names: Vec<&String> = recognizer.students().iter().map(|(_, n)| n).collect();
-    names.sort();
-    names.dedup();
-    let mut folded: Vec<String> = names.iter().map(|n| student::name::fold(n)).collect();
-    folded.sort();
-    folded.dedup();
-    assert_eq!(folded.len(), names.len());
+    let words = &recognizer.glyphs().index.names;
+    for (id, name) in recognizer.students() {
+        assert!(words.iter().any(|w| w.text == *name), "{id} {name}");
+    }
 }
 
 /// A student SchaleDB does not list yet is named from the extra list
@@ -160,17 +157,16 @@ fn folded_names_stay_apart() {
 #[test]
 fn a_student_schaledb_lacks_is_named_from_the_extra_list() {
     let recognizer = recognizer();
-    let id = student::name::find("? ツ ム キ", recognizer.students()).expect("ツムギ");
-    assert!(id < 0, "{id}");
-    let name = recognizer
-        .students()
+    let word = recognizer
+        .glyphs()
+        .index
+        .names
         .iter()
-        .find(|(s, _)| *s == id)
-        .map(|(_, n)| n.as_str());
-    assert_eq!(name, Some("ツムギ"));
+        .find(|w| w.text == "ツムギ")
+        .unwrap();
+    assert!(word.id < 0, "{}", word.id);
 }
 
-/// Whether `c` is the light blue of the unique weapon's stars.
 fn weapon_blue(c: [u8; 3]) -> bool {
     c[2] > 220 && c[1] > 180 && c[0] < 180
 }

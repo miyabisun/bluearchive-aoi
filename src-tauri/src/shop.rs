@@ -1,20 +1,25 @@
 //! The shop screen: which shop the menu has chosen and, card by card, what it
-//! offers, the coin it is paid with and how many more times it can be bought,
-//! read by the OCR. What each costs is the shops' terms (`price`).
+//! offers (told by its icon), the coin it is paid with and how many more times
+//! it can be bought. What each costs is the shops' terms (`price`).
 
 use std::{
     collections::{BTreeMap, HashMap},
     sync::{Mutex, PoisonError},
 };
 
-use image::{Rgb, RgbImage, RgbaImage, imageops};
+use image::{RgbImage, RgbaImage, imageops};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     Item, catalog,
+    credit::DARK_DIGITS,
+    glyph::{
+        self, Fonts, Style,
+        bank::Bank,
+        word::{self, Ink},
+    },
     grid::Card,
     icon::{IconMatcher, Mask},
-    ocr::Ocr,
     price::{Price, Prices},
     quantity::Count,
     student::Area,
@@ -76,14 +81,44 @@ const SLOT_MASK: Mask = Mask {
 /// whole, its bar to about two thirds of this.
 const BAR: [f32; 3] = [40.0, 64.0, 88.0];
 const DARKENED: f32 = 0.85;
-/// The chosen menu entry's italics lean about this far right per row up (stood
-/// upright by either), and its letters are lighter than this on the navy.
-const ITALIC: [f32; 2] = [0.22, 0.15];
+/// The chosen menu entry's letters are lighter than this on the navy.
 const LIGHT: u8 = 160;
-/// Split at Otsu's luminance, the times left sometimes lose digits ("589" read
-/// "9", 2026-10-13); split here, they read whole, except on a bought-up card,
-/// whose darkened letters read only the first way. Both takes are read.
-const LIGHTER: u8 = 200;
+/// The farthest a part of the chosen menu entry may lie from the shop's name
+/// as the fixtures draw it (see `glyph::word`). Measured on 2026-10-14: an
+/// entry lies within 6.5 of its own shop's name and 19 or farther from any
+/// other shop's.
+const MENU_WORST: f32 = 12.0;
+/// Parts of the menu's letters smaller than this share of the window height
+/// squared are specks.
+const SPECK: f32 = 6.0 / (1250.0 * 1250.0);
+/// The letters of a bar lie farther than this from every digit (measured on
+/// 2026-10-14 over the shop fixtures: 27 or farther; the digits read lie
+/// within 10 of their references, one left unread at 11).
+const LETTER: f32 = 20.0;
+/// The light letters of a card's bar ("あと6回購入可能"), on a bar brightened
+/// back first when its card is bought up. Only their lightest pixels: with
+/// their soft edges the small digits touch ("57" one part; measured on
+/// 2026-10-14, above 150 a few touched, above 190 none).
+pub const BAR_STYLE: Style = Style {
+    ink: |c| luminance(c) > 190,
+    tall: 0.5,
+    framed: false,
+    clear_top: false,
+    widest: 1.3,
+    width: 1.2,
+    skew: 0.0,
+};
+/// The white digits of a card's price ("1,800") on the navy, apart from the
+/// light blue around; the comma is too short to count.
+pub const PRICE_STYLE: Style = Style {
+    ink: |c| c.iter().all(|&v| v > 200),
+    tall: 0.6,
+    framed: false,
+    clear_top: false,
+    widest: 1.3,
+    width: 1.2,
+    skew: 0.0,
+};
 
 type Span = (f32, f32);
 
@@ -126,21 +161,39 @@ pub fn areas() -> Vec<Area> {
     ]
 }
 
-/// How many are held of the coin whose icon is centred `at` window heights
-/// from the right edge.
-fn held(image: &RgbImage, ocr: &Ocr, at: f32) -> Option<u64> {
+/// The digits of how many are held of the coin whose icon is centred `at`
+/// window heights from the right edge.
+pub fn held_shapes(image: &RgbImage, at: f32) -> Option<Vec<Vec<f32>>> {
     let (w, h) = (image.width() as f32, image.height() as f32);
     let x = w - at * h;
-    let count = crop(
-        image,
+    let rect = (
         x + HELD.0 * h,
         (COINS_ROW - HELD_ROWS) * h,
         x + HELD.1 * h,
         (COINS_ROW + HELD_ROWS) * h,
-    )?;
-    let values: Vec<u8> = count.pixels().map(|p| luminance(p.0)).collect();
-    let text = ocr.read(&ink(&count, false, otsu(&values))).ok()?;
-    crate::credit::parse(&text)
+    );
+    let inside = rect.0 >= 0.0 && rect.2 <= w && rect.0 < rect.2;
+    inside.then(|| {
+        let rect = (rect.0 as u32, rect.1 as u32, rect.2 as u32, rect.3 as u32);
+        glyph::shapes(image, rect, DARK_DIGITS)
+    })
+}
+
+/// How many are held of the coin whose icon is centred `at` window heights
+/// from the right edge.
+fn held(image: &RgbImage, fonts: &Fonts, at: f32) -> Option<u64> {
+    number(&fonts.read("digits", &held_shapes(image, at)?)?)
+}
+
+/// The number `digits` spell, when there are some.
+fn number(digits: &str) -> Option<u64> {
+    (!digits.is_empty()).then(|| digits.parse().ok()).flatten()
+}
+
+/// Where the shop's coins are shown, from the right edge (see `COINS`), for a
+/// shop of `coins` coins.
+pub fn coins_at(coins: usize) -> &'static [f32] {
+    &COINS[COINS.len() - coins.min(COINS.len())..]
 }
 
 /// The navy of the chosen menu entry and of the bars, and the darker navy of
@@ -151,12 +204,11 @@ fn navy(c: [u8; 3]) -> bool {
 }
 
 /// What tells the goods of a shop apart: their icons, drawn as on the item
-/// list's cards, and their names.
+/// list's cards.
 pub struct Goods {
     matcher: IconMatcher,
     /// The items each icon draws.
     drawn: Vec<Vec<i64>>,
-    names: Names,
     /// The last frame's card panel (see `panel`) and what it read: a still
     /// screen's panel stays the same to the pixel, and so does its reading.
     last: Mutex<Option<(Vec<u8>, Option<Seen>)>>,
@@ -189,16 +241,22 @@ impl Goods {
                         .collect()
                 })
                 .collect(),
-            names: Names::new(items),
             last: Mutex::new(None),
         })
     }
 
     /// Reads the shop screen: the chosen shop, when it is one kept, and the
-    /// offers of the cards shown whole; `prices` tell how many coins it takes.
+    /// offers of the cards shown whole; `prices` tell how many coins it takes,
+    /// the `glyphs` and the `fonts` the shops' names and the digits.
     /// Any other screen gives `None`.
     /// A frame whose card panel is the last one's reads as it did.
-    pub fn read(&self, image: &RgbImage, ocr: &Ocr, prices: &Prices) -> Option<Seen> {
+    pub fn read(
+        &self,
+        image: &RgbImage,
+        glyphs: &Bank,
+        fonts: &Fonts,
+        prices: &Prices,
+    ) -> Option<Seen> {
         let entry = menu_entry(image)?;
         let bars = bars(image);
         if bars.is_empty() {
@@ -211,7 +269,7 @@ impl Goods {
         {
             return seen.clone();
         }
-        let seen = self.read_afresh(image, ocr, prices, entry, &bars);
+        let seen = self.read_afresh(image, (glyphs, fonts), prices, entry, &bars);
         *last = Some((panel, seen.clone()));
         seen
     }
@@ -219,22 +277,15 @@ impl Goods {
     fn read_afresh(
         &self,
         image: &RgbImage,
-        ocr: &Ocr,
+        (glyphs, fonts): (&Bank, &Fonts),
         prices: &Prices,
-        (top, bottom): (u32, u32),
+        entry: (u32, u32),
         bars: &[Bar],
     ) -> Option<Seen> {
-        let h = image.height() as f32;
-        // The OCR reads the name in one of a few takes, and a take reads as a
-        // kept shop's name or as nothing alike.
-        let shop = MENU_ENDS
-            .iter()
-            .flat_map(|&end| ITALIC.iter().map(move |&lean| (end, lean)))
-            .find_map(|(end, lean)| {
-                let entry = crop(image, MENU_START * h, top as f32, end * h, bottom as f32)?;
-                let menu = normalize(&ocr.read(&upright(&entry, lean)).ok()?);
-                SHOPS.into_iter().find(|s| normalize(s) == menu)
-            })?;
+        let ink = entry_ink(image, entry)?;
+        let none = BTreeMap::new();
+        let named = word::nearest(&ink, &glyphs.index.shops, &glyphs.tiles, &none, MENU_WORST)?;
+        let shop = SHOPS.get(usize::try_from(named.id).ok()?).copied()?;
         let coins = if prices.coins(shop).len() > 1 {
             coin_colours(image)
         } else {
@@ -243,13 +294,12 @@ impl Goods {
         let read_price = prices.reads_price(shop);
         let offers = bars
             .iter()
-            .filter_map(|bar| self.offer(image, ocr, bar, &coins, read_price))
+            .filter_map(|bar| self.offer(image, fonts, bar, &coins, read_price))
             .collect();
         // A shop with one coin shows it where a shop with two shows the right one.
-        let shown = prices.coins(shop).len();
-        let held = COINS[COINS.len() - shown.min(COINS.len())..]
+        let held = coins_at(prices.coins(shop).len())
             .iter()
-            .map(|&at| held(image, ocr, at))
+            .map(|&at| held(image, fonts, at))
             .collect();
         Some(Seen { shop, offers, held })
     }
@@ -260,41 +310,21 @@ impl Goods {
     fn offer(
         &self,
         image: &RgbImage,
-        ocr: &Ocr,
+        fonts: &Fonts,
         bar: &Bar,
         coins: &[[f32; 3]],
         read_price: bool,
     ) -> Option<Offer> {
         let h = image.height() as f32;
-        let (left, name_top, right, price_bottom) = card_area(image, bar)?;
-        let (top, bottom) = (bar.top as f32, bar.bottom as f32);
-        let name = crop(image, left, name_top, right, top + NAME.1 * h)?;
-        let count = crop(image, left, top - 2.0, right, bottom + 3.0)?;
-        let mut pictures = vec![
-            letters(&name, false),
-            letters(&count, true),
-            ink(&count, true, LIGHTER),
-        ];
-        if read_price {
-            // Read under the times left, a price's lone digit reads where alone
-            // it does not.
-            let digits = crop(
-                image,
-                left + DIGITS.0 * h,
-                bottom + PRICE.0 * h,
-                right + DIGITS.1 * h,
-                price_bottom,
-            )?;
-            pictures.push(letters(&digits, true));
-        }
-        let text = ocr.read(&stack(&pictures)).ok()?;
-        let lines: Vec<&str> = text.split('/').collect();
-        let (names, times, price) = card_text(&lines)?;
-        let id = decide(
-            self.icon(image, bar),
-            self.names.find_among(&lines[..names]),
-            &self.drawn,
-        )?;
+        let (left, _, _, _) = card_area(image, bar)?;
+        let bottom = bar.bottom as f32;
+        let times = times_left(fonts, &bar_shapes(image, bar))?;
+        let price = if read_price {
+            Some(u32::try_from(number(&fonts.read("price", &price_shapes(image, bar)?)?)?).ok()?)
+        } else {
+            None
+        };
+        let id = decide(self.icon(image, bar), &self.drawn)?;
         let coin_at = (
             left + f32::midpoint(COIN.0, COIN.1) * h,
             bottom + f32::midpoint(PRICE.0, PRICE.1) * h,
@@ -307,7 +337,7 @@ impl Goods {
                 nearest(&mean(image, coin_at.0, coin_at.1, COIN.1 - COIN.0)?, coins)?
             },
             left: times,
-            price: price.filter(|_| read_price),
+            price,
         })
     }
 
@@ -354,6 +384,80 @@ pub fn card_area(image: &RgbImage, bar: &Bar) -> Option<(f32, f32, f32, f32)> {
         bar.right as f32,
         bottom,
     ))
+}
+
+/// The letters of the chosen menu entry, when the menu shows one.
+pub fn menu_ink(image: &RgbImage) -> Option<Ink> {
+    entry_ink(image, menu_entry(image)?)
+}
+
+/// The letters of the chosen menu entry, whose rows are `(top, bottom)`.
+fn entry_ink(image: &RgbImage, (top, bottom): (u32, u32)) -> Option<Ink> {
+    let h = image.height() as f32;
+    let (left, right) = ((MENU_START * h) as u32, (MENU_ENDS[1] * h) as u32);
+    if right > image.width() {
+        return None;
+    }
+    let least = (SPECK * h * h).round().max(1.0) as usize;
+    Some(Ink::parts(
+        image,
+        (left, top, right, bottom + 1),
+        |c| luminance(c) > LIGHT,
+        least,
+    ))
+}
+
+/// The letters of the bar of the card over `bar` ("あと6回購入可能"),
+/// brightened back first when the card is bought up.
+pub fn bar_shapes(image: &RgbImage, bar: &Bar) -> Vec<Vec<f32>> {
+    let mut picture = imageops::crop_imm(
+        image,
+        bar.left,
+        bar.top,
+        bar.right - bar.left,
+        bar.bottom - bar.top + 1,
+    )
+    .to_image();
+    let darkening = darkening(image, bar);
+    if darkening < DARKENED {
+        for p in picture.pixels_mut() {
+            p.0 = p.0.map(|v| (f32::from(v) / darkening).min(255.0) as u8);
+        }
+    }
+    let (w, h) = picture.dimensions();
+    glyph::shapes(&picture, (0, 0, w, h), BAR_STYLE)
+}
+
+/// How many more times the card's bar says it can be bought: the digits among
+/// its letters, which are the only ones the bar's references know. A part
+/// near a digit but not told as one leaves it unread, as a number read short
+/// would be wrong.
+pub fn times_left(fonts: &Fonts, shapes: &[Vec<f32>]) -> Option<u32> {
+    let mut digits = String::new();
+    for shape in shapes {
+        match fonts.character("bar", shape) {
+            Some(c) => digits.push(c),
+            None if fonts.nearest("bar", shape)? <= LETTER => return None,
+            None => {}
+        }
+    }
+    u32::try_from(number(&digits)?).ok()
+}
+
+/// The digits of the price under the bar of the card over `bar`.
+pub fn price_shapes(image: &RgbImage, bar: &Bar) -> Option<Vec<Vec<f32>>> {
+    let h = image.height() as f32;
+    let (left, _, right, price_bottom) = card_area(image, bar)?;
+    let rect = (
+        left + DIGITS.0 * h,
+        bar.bottom as f32 + PRICE.0 * h,
+        right + DIGITS.1 * h,
+        price_bottom,
+    );
+    (rect.0 < rect.2).then(|| {
+        let rect = (rect.0 as u32, rect.1 as u32, rect.2 as u32, rect.3 as u32);
+        glyph::shapes(image, rect, PRICE_STYLE)
+    })
 }
 
 /// How much darker than on sale the bar is drawn (1: not at all).
@@ -463,115 +567,6 @@ fn crop(image: &RgbImage, x0: f32, y0: f32, x1: f32, y1: f32) -> Option<RgbImage
 
 fn luminance(c: [u8; 3]) -> u8 {
     ((299 * u32::from(c[0]) + 587 * u32::from(c[1]) + 114 * u32::from(c[2])) / 1000) as u8
-}
-
-/// The luminance that best splits `values` in two (Otsu's method): values
-/// above it are the light class.
-pub fn otsu(values: &[u8]) -> u8 {
-    let mut histogram = [0u64; 256];
-    for &v in values {
-        histogram[usize::from(v)] += 1;
-    }
-    let total = values.len() as f64;
-    let sum: f64 = histogram
-        .iter()
-        .enumerate()
-        .map(|(v, &n)| v as f64 * n as f64)
-        .sum();
-    let (mut below, mut below_sum, mut best, mut split) = (0.0, 0.0, -1.0, 0u8);
-    for (v, &n) in histogram.iter().enumerate() {
-        below += n as f64;
-        below_sum += v as f64 * n as f64;
-        let above = total - below;
-        if below == 0.0 || above == 0.0 {
-            continue;
-        }
-        let between = below * above * (below_sum / below - (sum - below_sum) / above).powi(2);
-        if between > best {
-            best = between;
-            split = v as u8;
-        }
-    }
-    split
-}
-
-/// The letters of `picture` black on white for the OCR, twice the size, with a
-/// margin: the `light` side of its Otsu split, or the dark letters of a name.
-/// A name's letters are only its darker half of the dark side: whole, the
-/// strokes of the condensed font run together ("術教" read "燉"); measured on
-/// 2026-10-12 over 234 names, 125 read as an item this way, 56 with the split.
-fn letters(picture: &RgbImage, light: bool) -> RgbImage {
-    let values: Vec<u8> = picture.pixels().map(|p| luminance(p.0)).collect();
-    let split = otsu(&values);
-    let dark: Vec<f32> = values
-        .iter()
-        .filter(|&&v| v <= split)
-        .map(|&v| f32::from(v))
-        .collect();
-    let dark_mean = dark.iter().sum::<f32>() / dark.len().max(1) as f32;
-    let threshold = if light {
-        split
-    } else {
-        f32::midpoint(dark_mean, f32::from(split)) as u8
-    };
-    ink(picture, light, threshold)
-}
-
-/// The letters of `picture` lighter (or darker) than `threshold`, black on
-/// white for the OCR, twice the size, with a margin.
-fn ink(picture: &RgbImage, light: bool, threshold: u8) -> RgbImage {
-    const MARGIN: u32 = 20;
-    let (w, h) = picture.dimensions();
-    let ink = RgbImage::from_fn(w, h, |x, y| {
-        let v = luminance(picture.get_pixel(x, y).0);
-        if (light && v > threshold) || (!light && v < threshold) {
-            Rgb([0, 0, 0])
-        } else {
-            Rgb([255, 255, 255])
-        }
-    });
-    let big = imageops::resize(&ink, w * 2, h * 2, imageops::FilterType::Triangle);
-    let mut out =
-        RgbImage::from_pixel(w * 2 + 2 * MARGIN, h * 2 + 2 * MARGIN, Rgb([255, 255, 255]));
-    imageops::overlay(&mut out, &big, i64::from(MARGIN), i64::from(MARGIN));
-    out
-}
-
-/// The chosen menu entry's name, light italics on navy, black on white for the
-/// OCR: stood upright, twice the size, with a margin. Leaning, "大決戦" and
-/// "熟達証書" read as nothing (2026-10-12).
-fn upright(entry: &RgbImage, italic: f32) -> RgbImage {
-    const MARGIN: u32 = 30;
-    let (w, h) = entry.dimensions();
-    let lean = (2.0 * h as f32 * italic) as u32;
-    let mut out = RgbImage::from_pixel(
-        2 * w + 2 * MARGIN + lean,
-        2 * h + 2 * MARGIN,
-        Rgb([255, 255, 255]),
-    );
-    for y in 0..2 * h {
-        // Rows higher up lean further right.
-        let shift = lean - ((2 * h - y) as f32 * italic) as u32;
-        for x in 0..2 * w {
-            if luminance(entry.get_pixel(x / 2, y / 2).0) > LIGHT {
-                out.put_pixel(x + MARGIN + shift, y + MARGIN, Rgb([0, 0, 0]));
-            }
-        }
-    }
-    out
-}
-
-/// Pictures one under another, on white.
-fn stack(pictures: &[RgbImage]) -> RgbImage {
-    let w = pictures.iter().map(RgbImage::width).max().unwrap_or(0);
-    let h = pictures.iter().map(RgbImage::height).sum();
-    let mut out = RgbImage::from_pixel(w, h, Rgb([255, 255, 255]));
-    let mut y = 0;
-    for p in pictures {
-        imageops::overlay(&mut out, p, 0, i64::from(y));
-        y += p.height();
-    }
-    out
 }
 
 /// What lies around a coin's icon: the navy of the price, the light blue of
@@ -835,149 +830,19 @@ fn month(at: &str) -> &str {
 }
 
 /// The item a card shows, from its icon (`Ok` the icon, `Err` the icons it
-/// could be) and the item its name reads as; icons index `drawn`, the items
-/// each draws. When the two disagree, or neither tells one item, none.
-pub fn decide(
-    icon: Result<usize, Vec<usize>>,
-    named: Option<i64>,
-    drawn: &[Vec<i64>],
-) -> Option<i64> {
-    match (icon, named) {
-        (Ok(icon), Some(id)) => drawn[icon].contains(&id).then_some(id),
-        (Ok(icon), None) => match drawn[icon].as_slice() {
-            [only] => Some(*only),
-            _ => None,
-        },
-        (Err(icons), Some(id)) if icons.is_empty() => Some(id),
-        (Err(icons), Some(id)) => icons.iter().any(|&i| drawn[i].contains(&id)).then_some(id),
-        (Err(_), None) => None,
-    }
-}
-
-/// Spelling the OCR cannot keep apart, made one: the voiced marks it drops
-/// ("メダル" read "メタル"), small kana it reads large and the other way, the
-/// widths of brackets, letters and digits, and spaces.
-pub fn normalize(text: &str) -> String {
-    text.chars()
-        .filter(|c| !c.is_whitespace())
-        .map(plain)
-        .collect()
-}
-
-/// Voiced kana, small kana and the kana each stands for.
-const KANA: [(&str, &str); 2] = [
-    (
-        "ガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポヴがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽ",
-        "カキクケコサシスセソタチツテトハヒフヘホハヒフヘホウかきくけこさしすせそたちつてとはひふへほはひふへほ",
-    ),
-    (
-        "ァィゥェォッャュョヮヵヶぁぃぅぇぉっゃゅょゎ",
-        "アイウエオツヤユヨワカケあいうえおつやゆよわ",
-    ),
-];
-
-fn plain(c: char) -> char {
-    match c {
-        // Full-width letters, digits and brackets are the ASCII ones shifted.
-        '！'..='～' => char::from_u32(c as u32 - 0xFEE0).unwrap_or(c),
-        _ => KANA
-            .iter()
-            .find_map(|(from, to)| from.chars().zip(to.chars()).find(|&(f, _)| f == c))
-            .map_or(c, |(_, t)| t),
-    }
-}
-
-/// What the OCR reads of a card, line by line: how many lines name the item,
-/// the times left (the most of the takes read, as a take may lose digits but
-/// adds none), and the price under them.
-fn card_text(lines: &[&str]) -> Option<(usize, u32, Option<u32>)> {
-    let names = lines.iter().position(|l| parse_left(l).is_some())?;
-    let times = lines[names..].iter().filter_map(|l| parse_left(l)).max()?;
-    let price = lines[names..]
-        .iter()
-        .find_map(|l| crate::credit::parse(l))
-        .and_then(|p| u32::try_from(p).ok());
-    Some((names, times, price))
-}
-
-/// "あと15回購入可能": how many more times the offer can be bought.
-pub fn parse_left(text: &str) -> Option<u32> {
-    let text: String = text.chars().filter(|c| !c.is_whitespace()).collect();
-    let digits = text.strip_prefix("あと")?.strip_suffix("回購入可能")?;
-    (!digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()))
-        .then(|| digits.parse().ok())
-        .flatten()
-}
-
-/// Item ids by their normalized names; a name two items share tells none.
-pub struct Names(HashMap<String, Option<i64>>);
-
-impl Names {
-    pub fn new(items: &[Item]) -> Self {
-        let mut names: HashMap<String, Option<i64>> = HashMap::new();
-        for item in items {
-            names
-                .entry(normalize(&item.name))
-                .and_modify(|id| {
-                    if *id != Some(item.id) {
-                        *id = None;
-                    }
-                })
-                .or_insert(Some(item.id));
-        }
-        Self(names)
-    }
-
-    /// The item the OCR's `text` names, its lines run together.
-    pub fn find(&self, text: &str) -> Option<i64> {
-        self.0
-            .get(&normalize(&text.replace('/', "")))
-            .copied()
-            .flatten()
-    }
-
-    /// The item named by the OCR's `lines` run together, or by them without a
-    /// stray first or last line (a speck read as "1").
-    pub fn find_among(&self, lines: &[&str]) -> Option<i64> {
-        let n = lines.len();
-        [(0, n), (1, n), (0, n.saturating_sub(1))]
-            .into_iter()
-            .filter(|(a, b)| a < b)
-            .find_map(|(a, b)| self.find(&lines[a..b].concat()))
+/// could be); icons index `drawn`, the items each draws. Measured on
+/// 2026-10-14 over the shop fixtures, the icon alone tells every offer that
+/// the names, read by Windows' OCR then, told.
+pub fn decide(icon: Result<usize, Vec<usize>>, drawn: &[Vec<i64>]) -> Option<i64> {
+    match drawn[icon.ok()?].as_slice() {
+        [only] => Some(*only),
+        _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn item(id: i64, name: &str) -> Item {
-        Item {
-            id,
-            name: name.into(),
-            icon: String::new(),
-            category: "Material".into(),
-            tier: 0,
-            rarity: None,
-        }
-    }
-
-    #[test]
-    fn spellings_the_ocr_confuses_are_one() {
-        assert_eq!(
-            normalize("破損した古代文明のメダル"),
-            normalize("破 損 し た 古 代 文/明 の メ タ ル").replace('/', "")
-        );
-        assert_eq!(
-            normalize("ユズ（メイド）の神名文字"),
-            normalize("ュス(メイト)の神名文字")
-        );
-        assert_eq!(
-            normalize("初級戦術教育BD（百鬼夜行）"),
-            normalize("初級戦術教育ＢＤ(百鬼夜行)")
-        );
-        assert_ne!(normalize("黄金の糸"), normalize("黄金の巻糸"));
-    }
 
     const NOW: &str = "2026-10-12 22:00:00";
 
@@ -1091,65 +956,11 @@ mod tests {
     }
 
     #[test]
-    fn the_icon_tells_the_item_and_the_name_settles_look_alikes() {
-        // Icon 0 draws item 1, icon 1 item 2, icon 2 both items 3 and 4.
+    fn the_icon_tells_the_item_when_it_draws_one() {
+        // Icon 0 draws item 1, icon 2 both items 3 and 4.
         let drawn = [vec![1], vec![2], vec![3, 4]];
-        assert_eq!(decide(Ok(0), None, &drawn), Some(1));
-        assert_eq!(decide(Ok(0), Some(1), &drawn), Some(1));
-        assert_eq!(decide(Ok(0), Some(2), &drawn), None);
-        assert_eq!(decide(Ok(2), None, &drawn), None);
-        assert_eq!(decide(Ok(2), Some(4), &drawn), Some(4));
-        assert_eq!(decide(Err(vec![0, 1]), Some(2), &drawn), Some(2));
-        assert_eq!(decide(Err(vec![0, 1]), Some(3), &drawn), None);
-        assert_eq!(decide(Err(vec![0, 1]), None, &drawn), None);
-        // An icon SchaleDB draws otherwise matches nothing; the name alone tells.
-        assert_eq!(decide(Err(vec![]), Some(3), &drawn), Some(3));
-    }
-
-    #[test]
-    fn the_times_left_read_only_from_the_whole_phrase() {
-        assert_eq!(parse_left("あ と 15 回 購 入 可 能"), Some(15));
-        assert_eq!(parse_left("あと0回購入可能"), Some(0));
-        assert_eq!(parse_left("あと回購入可能"), None);
-        assert_eq!(parse_left("あと1 5回購入"), None);
-        assert_eq!(parse_left("15"), None);
-    }
-
-    #[test]
-    fn a_card_reads_its_name_the_most_times_left_and_the_price_under_them() {
-        // The two takes of the times left: one drops digits ("589" read "9").
-        let lines = [
-            "ユカリの神名文",
-            "字",
-            "あと9回購入可能",
-            "あと589回購入可能",
-            "1",
-        ];
-        assert_eq!(card_text(&lines), Some((2, 589, Some(1))));
-        // A bought-up card's darkened letters read in the first take only.
-        assert_eq!(
-            card_text(&["名前", "あと0回購入可能", "5"]),
-            Some((1, 0, Some(5)))
-        );
-        assert_eq!(
-            card_text(&["名前", "あと12回購入可能"]),
-            Some((1, 12, None))
-        );
-        assert_eq!(card_text(&["名前", "1"]), None);
-    }
-
-    #[test]
-    fn a_name_is_found_whole_and_only_when_one_item_bears_it() {
-        let names = Names::new(&[
-            item(1, "秘伝ノート"),
-            item(2, "秘伝ノートの断片"),
-            item(3, "ヒビキ（応援団）の神名文字"),
-            item(4, "同じ名前"),
-            item(5, "同じ名前"),
-        ]);
-        assert_eq!(names.find("秘 伝 ノ ー ト"), Some(1));
-        assert_eq!(names.find("ヒ ヒ キ ( 応 援/団 ) の 神 名 文 字"), Some(3));
-        assert_eq!(names.find("伝ノート"), None);
-        assert_eq!(names.find("同じ名前"), None);
+        assert_eq!(decide(Ok(0), &drawn), Some(1));
+        assert_eq!(decide(Ok(2), &drawn), None);
+        assert_eq!(decide(Err(vec![0, 1]), &drawn), None);
     }
 }

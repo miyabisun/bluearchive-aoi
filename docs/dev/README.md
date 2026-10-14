@@ -21,7 +21,8 @@ npm run verify          # every check: format, lint, unit, browser and recogniti
 git config core.hooksPath .githooks   # run verify before pushing main or a tag
 ```
 
-Recognition is tested against labeled screenshots in `src-tauri/tests/fixtures`. A
+Recognition is tested against labeled screenshots in `src-tauri/tests/fixtures`; the
+references it reads text with are built from them ([Reading text](data.md#reading-text)). A
 student screenshot is added there with only the areas Aoi reads kept, a tenth of its
 size: `cargo run --release --example mask_fixture -- <screenshot.png> <fixture.png>`.
 Level samples (`levels.json`), taken on any tab of the student screen, keep the level

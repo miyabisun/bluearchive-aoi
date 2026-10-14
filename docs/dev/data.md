@@ -20,6 +20,27 @@ The shops' prices, how many come with a purchase and the monthly limits are writ
 a good they do not cover shows `@?`. In カケラ(文字) an eleph costs its student's rate,
 read off the card (1 to 5 fragments).
 
+## Reading text
+
+Aoi reads text without an OCR engine, so it reads alike on any system. Short texts (a
+level, a tier, the credits, a card's times left and price) are read a character at a time
+against references cut from the labeled fixtures; the students' names and the shops'
+names are told among the names that can be there, whole.
+
+The references are one glyph bank: grey 16x16 tiles in `src-tauri/data/glyphs.png`, and
+what each tile stands for in `src-tauri/data/glyphs.json`. The students' names in it are
+drawn with Noto Sans JP, the free font nearest the game's, with the game's own letters
+from the fixtures standing in where there are some. Rebuild the bank after the fixtures or
+SchaleDB's students change, with Noto Sans JP's Regular, Medium and Bold
+(`NotoSansJP-*.otf` from
+[noto-cjk](https://github.com/notofonts/noto-cjk/tree/main/Sans/SubsetOTF/JP), under the
+SIL Open Font License) in a folder:
+
+```powershell
+cd src-tauri
+cargo run --release --example build_glyphs -- <folder of the fonts>
+```
+
 ## What is counted
 
 - A list is read only in its default order (デフォルト, ascending). A count is taken once
@@ -35,7 +56,7 @@ read off the card (1 to 5 fragments).
 - Event items, from the event points to the Valentine chocolates, are never listed.
 - A student's training is taken once three frames in a row read alike; a field read later
   keeps its known value when a frame cannot read it.
-- A shop's goods are told by their icon and their name. How many more times one can be
+- A shop's goods are told by their icon. How many more times one can be
   bought is taken once three frames in a row read alike. A shop frame whose cards are the
   same to the pixel as the last one's reads as it did. All shops but カケラ(文字) reset as
   the month changes.

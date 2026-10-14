@@ -11,11 +11,11 @@ pub mod catalog;
 pub mod credit;
 pub mod equipment;
 pub mod export;
+pub mod glyph;
 pub mod grid;
 pub mod icon;
 pub mod items;
 pub mod keep;
-pub mod ocr;
 mod order;
 pub mod plan;
 pub mod price;
@@ -186,11 +186,30 @@ pub struct Recognizer {
     /// The student screen's title, its selected 基本情報 tab, and the same tab
     /// while another is selected.
     student_screen: (RgbImage, RgbImage, RgbImage),
-    /// References for the short texts of the student screen.
-    fonts: student::glyph::Fonts,
-    /// The OCR reading students' names; without it (no Japanese OCR on this
-    /// Windows) the student screen is not read.
-    ocr: Option<ocr::Ocr>,
+    /// The references of the texts read (see `glyph::bank`), and the text
+    /// styles' among them as `Fonts`.
+    glyphs: glyph::bank::Bank,
+    fonts: glyph::Fonts,
+}
+
+/// The students by id and name: SchaleDB's, then those it lacks
+/// (`data/extra/students.json`) under ids of Aoi's own, below zero.
+fn students(read: &Read) -> Result<Vec<(i64, String)>, String> {
+    Ok(json::<Vec<StudentEntry>>(read, "schaledb/students.json")?
+        .into_iter()
+        .map(|s| (s.id, s.name))
+        .chain(
+            json::<Vec<ExtraStudent>>(read, "extra/students.json")?
+                .into_iter()
+                .zip(1..)
+                .map(|(s, n): (ExtraStudent, i64)| (-n, s.name)),
+        )
+        .collect())
+}
+
+/// The students (see `Recognizer::students`) as the files under `data` list them.
+pub fn student_names(data: &Path) -> Result<Vec<(i64, String)>, String> {
+    students(&|path| std::fs::read(data.join(path)).map_err(|e| format!("{path}: {e}")))
 }
 
 impl Recognizer {
@@ -216,6 +235,9 @@ impl Recognizer {
     }
 
     fn build(read: &Read) -> Result<Self, String> {
+        let index = String::from_utf8(read("glyphs.json")?).map_err(|e| e.to_string())?;
+        let glyphs = glyph::bank::Bank::decode(&read("glyphs.png")?, &index)
+            .map_err(|e| format!("glyphs: {e}"))?;
         let template =
             |path: &str| picture(read, path).map(|p| image::DynamicImage::from(p).to_rgb8());
         let planner = plan::Planner {
@@ -266,23 +288,14 @@ impl Recognizer {
                 (List::Items, template("title-items.png")?),
                 (List::Equipment, template("title-equipment.png")?),
             ],
-            students: json::<Vec<StudentEntry>>(read, "schaledb/students.json")?
-                .into_iter()
-                .map(|s| (s.id, s.name))
-                .chain(
-                    json::<Vec<ExtraStudent>>(read, "extra/students.json")?
-                        .into_iter()
-                        .zip(1..)
-                        .map(|(s, n): (ExtraStudent, i64)| (-n, s.name)),
-                )
-                .collect(),
+            students: students(read)?,
             student_screen: (
                 template("title-students.png")?,
                 template("student-tab.png")?,
                 template("student-tab-other.png")?,
             ),
-            fonts: json(read, "student-fonts.json")?,
-            ocr: ocr::Ocr::japanese().ok(),
+            fonts: glyphs.fonts(),
+            glyphs,
         })
     }
 
@@ -674,14 +687,19 @@ impl Recognizer {
         self.prices.reads_price(shop)
     }
 
-    /// The shop screen (see `shop::Goods::read`); `None` on any other screen,
-    /// and without the OCR.
+    /// The shop screen (see `shop::Goods::read`); `None` on any other screen.
     pub fn read_shop(&self, image: &RgbImage) -> Option<shop::Seen> {
-        self.goods.read(image, self.ocr.as_ref()?, &self.prices)
+        self.goods
+            .read(image, &self.glyphs, &self.fonts, &self.prices)
     }
 
     pub fn students(&self) -> &[(i64, String)] {
         &self.students
+    }
+
+    /// The references of the texts read (see `glyph::bank`).
+    pub fn glyphs(&self) -> &glyph::bank::Bank {
+        &self.glyphs
     }
 
     /// Reads whatever the frame shows that can be read: a list in its default
@@ -699,20 +717,13 @@ impl Recognizer {
     /// The credits the top bar shows; `None` where there is no bar, or its
     /// number reads as no such number.
     pub fn read_credits(&self, image: &RgbImage) -> Option<u64> {
-        let ocr = self.ocr.as_ref()?;
-        if !credit::bar_shows(image) {
-            return None;
-        }
-        let (x0, y0, x1, y1) = student::rect(image, credit::NUMBER)?;
-        let number = image::imageops::crop_imm(image, x0, y0, x1 - x0, y1 - y0).to_image();
-        credit::parse(&ocr.read(&number).ok()?)
+        credit::read(image, &self.fonts)
     }
 
     /// Reads the student screen: all of its 基本情報 tab, and the name plate
     /// (level, rarity, bond) on its other tabs, where a student is levelled up;
     /// any other screen gives `None`.
     pub fn read_student(&self, image: &RgbImage) -> Option<(Option<i64>, student::Training)> {
-        let ocr = self.ocr.as_ref()?;
         let (title, tab, other_tab) = &self.student_screen;
         let unit = (image.height() as f32 * screen::STUDENT_UNIT).round() as u32;
         screen::title(image, unit, std::slice::from_ref(title))?;
@@ -720,15 +731,7 @@ impl Recognizer {
         if !basic && !screen::student_tab(image, other_tab) {
             return None;
         }
-        let (x0, y0, x1, y1) = student::rect(image, student::NAME)?;
-        let name = image::imageops::crop_imm(image, x0, y0, x1 - x0, y1 - y0).to_image();
-        // The letters alone read surest; a few names read only as they are.
-        let id = [student::name_letters(&name), name]
-            .iter()
-            .find_map(|picture| {
-                let text = ocr.read(picture).ok()?;
-                student::name::find(&text, &self.students)
-            });
+        let id = student::name::read(image, &self.glyphs, &self.glyphs.index.names);
         let training = if basic {
             student::read(image, &self.fonts)
         } else {

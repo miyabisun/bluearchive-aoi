@@ -19,8 +19,6 @@ tauri = { version = "2", features = [] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 windows-capture = "1.5"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_System_Threading", "Win32_UI_HiDpi", "Win32_UI_WindowsAndMessaging"] }
-# The same version windows-capture uses; the OCR built into Windows reads names.
-windows = { version = "0.61.3", features = ["Foundation", "Globalization", "Graphics_Imaging", "Media_Ocr", "Storage_Streams"] }
 serde_yaml = "0.9"
 microlp = "0.6"
 ureq = "2"
@@ -54,3 +52,6 @@ strip = true
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+
+[dev-dependencies]
+ab_glyph = "0.2"

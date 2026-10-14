@@ -468,7 +468,7 @@ pub fn start(
                     continue;
                 }
                 let read = recognizer.read_frame(&shot);
-                // The OCR is slow next to the rest; the credits change seldom.
+                // The credits change seldom.
                 if frames.fetch_add(1, Ordering::Relaxed) % CREDITS_EVERY == 0
                     && let Some(changed) = credits.observe(recognizer.read_credits(&shot))
                 {

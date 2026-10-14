@@ -14,9 +14,10 @@ use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 
 use aoi::{
     Recognizer, credit,
+    glyph::bank::Bank,
     screen::{self, Region},
     shop,
-    student::{self, Area, glyph::Fonts},
+    student::{self, Area},
 };
 
 /// Room kept around each area, in window heights.
@@ -94,9 +95,7 @@ fn main() {
     });
     let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
     if only == Some("level") {
-        let fonts: Fonts =
-            serde_json::from_slice(&std::fs::read(data.join("student-fonts.json")).unwrap())
-                .unwrap();
+        let fonts = Bank::load(&data).unwrap().fonts();
         let (whole, part) = (
             student::level(&image, &fonts),
             student::level(&masked, &fonts),
