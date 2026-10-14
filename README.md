@@ -19,9 +19,6 @@ English: [README.en.md](README.en.md)
 
 - Windows 11
 - PC 版ブルーアーカイブ（日本版）
-- Windows の日本語の文字認識（生徒の名前やショップを読むのに使います）。
-  日本語の Windows なら、たいてい最初から入っています。確かめ方は
-  [困ったとき](docs/guide/trouble.md#生徒やショップが出てこない) にあります。
 
 ## ダウンロードと起動
 

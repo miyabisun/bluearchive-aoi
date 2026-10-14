@@ -18,8 +18,6 @@ goes online only to look for and download a newer version when you ask it to.
 
 - Windows 11
 - The Japanese PC version of Blue Archive. Names are shown in Japanese.
-- Japanese text recognition of Windows, installed with the Japanese language. Aoi uses
-  it to read student names and the shops; without it, no student or shop is listed.
 
 ## Download and run
 
