@@ -306,12 +306,12 @@ fn set_paused(watcher: tauri::State<'_, watch::Watcher>, paused: bool) {
     watcher.pause(paused);
 }
 
-/// Shows a QR code to pair a phone with (see `android::Phone::pair`); the
-/// snapshot carries it.
+/// Shows a QR code to pair a phone with, and with `usb` takes one plugged in
+/// too (see `android::Phone::pair`); the snapshot carries it.
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)] // Tauri hands command arguments over by value.
-fn pair_phone(watcher: tauri::State<'_, watch::Watcher>) {
-    watcher.phone().pair();
+fn pair_phone(watcher: tauri::State<'_, watch::Watcher>, usb: bool) {
+    watcher.phone().pair(usb);
 }
 
 /// Connects to the paired phone, or leaves it unconnected.

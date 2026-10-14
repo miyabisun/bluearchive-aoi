@@ -1087,9 +1087,9 @@
       <button type="button" class="primary" onclick={() => connectPhone(true)}>接続</button>
     {/if}
     {#if phone.state === "failed"}
-      <button type="button" class="primary" onclick={pairPhone}>もう一度</button>
+      <button type="button" class="primary" onclick={() => pairPhone()}>もう一度</button>
     {:else if phone.state !== "pairing" && phone.state !== "unpaired"}
-      <button type="button" onclick={pairPhone}>別のスマホとペア設定</button>
+      <button type="button" onclick={() => pairPhone(false)}>別のスマホとペア設定</button>
     {/if}
     <button type="button" onclick={() => phoneDialog?.close()}>閉じる</button>
   </div>

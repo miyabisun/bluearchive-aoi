@@ -1214,7 +1214,7 @@ test("the menu opens the link to a phone: a QR code to pair, then the phone conn
   await page.getByRole("button", { name: "メニュー" }).click();
   await page.getByRole("menuitem", { name: "Androidとの通信" }).click();
   // None paired: a QR code is asked for at once.
-  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ pair: true }]);
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ pair: true, usb: true }]);
 
   const streaming = { state: "streaming", device: "Pixel 9", via: "wifi" };
   await open(page, { status: { state: "no_source" }, items, equipment, phone: streaming });
@@ -1223,6 +1223,12 @@ test("the menu opens the link to a phone: a QR code to pair, then the phone conn
   await expect(page.getByText("Pixel 9 の画面を Wi-Fi で受け取っています")).toBeVisible();
   await page.getByRole("button", { name: "切断" }).click();
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ connect: false }]);
+  // Another phone is paired over Wi-Fi alone: the one plugged in would take it.
+  await page.getByRole("button", { name: "別のスマホとペア設定" }).click();
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([
+    { connect: false },
+    { pair: true, usb: false },
+  ]);
 
   await open(page, {
     status: { state: "no_source" },

@@ -210,9 +210,10 @@ impl Phone {
         }
     }
 
-    /// Shows a QR code to pair a phone over Wi-Fi with, and takes a phone
-    /// plugged in by USB meanwhile; then keeps whichever came connected.
-    pub fn pair(&self) {
+    /// Shows a QR code to pair a phone over Wi-Fi with and, with `usb`, takes a
+    /// phone plugged in by USB meanwhile; then keeps whichever came connected.
+    /// Without, another phone is paired while one stays plugged in.
+    pub fn pair(&self, usb: bool) {
         let (name, password) = (format!("aoi-{}", word(6)), word(10));
         let code = match qrcode::QrCode::new(pairing_qr(&name, &password)) {
             Ok(code) => code,
@@ -232,12 +233,18 @@ impl Phone {
         };
         (self.link)(&Link::Pairing { qr });
         self.run(async move {
-            let guid = tokio::select! {
-                paired = pair_phone(&tools, &name, &password) => match paired {
-                    Ok(guid) => Some(guid),
-                    Err(message) => return (tools.link)(&Link::Failed { message }),
-                },
-                () = plugged() => None,
+            let paired = async { pair_phone(&tools, &name, &password).await.map(Some) };
+            let guid = if usb {
+                tokio::select! {
+                    guid = paired => guid,
+                    () = plugged() => Ok(None),
+                }
+            } else {
+                paired.await
+            };
+            let guid = match guid {
+                Ok(guid) => guid,
+                Err(message) => return (tools.link)(&Link::Failed { message }),
             };
             let paired = Paired {
                 guid,

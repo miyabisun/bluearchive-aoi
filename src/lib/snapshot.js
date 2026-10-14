@@ -95,16 +95,17 @@ export async function checkUpdate() {
 }
 
 /**
- * Shows a QR code to pair a phone with; the snapshot's `phone` carries it.
- * Outside the app it notes the call in `window.__AOI_CALLS__`.
+ * Shows a QR code to pair a phone with and, with `usb`, takes one plugged in
+ * too; the snapshot's `phone` carries it. Outside the app it notes the call in
+ * `window.__AOI_CALLS__`.
  */
-export async function pairPhone() {
+export async function pairPhone(usb = true) {
   if (!("__TAURI_INTERNALS__" in window)) {
     const w = /** @type {any} */ (window);
-    (w.__AOI_CALLS__ ??= []).push({ pair: true });
+    (w.__AOI_CALLS__ ??= []).push({ pair: true, usb });
     return;
   }
-  return invoke("pair_phone");
+  return invoke("pair_phone", { usb });
 }
 
 /**
