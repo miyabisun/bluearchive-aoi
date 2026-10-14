@@ -1014,7 +1014,7 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   await page.getByRole("tab", { name: "お仕事" }).click();
   // Each section folds as a shop does, closed until opened.
   const sections = page.locator(".work summary");
-  await expect(sections).toHaveText(["任務", "指名手配", "学園交流会", "特別依頼"]);
+  await expect(sections).toHaveText(["任務 Normal", "指名手配", "学園交流会", "特別依頼"]);
   await expect(page.locator(".work summary .chevron")).toHaveCount(4);
   await expect(page.locator(".slots")).toBeHidden();
   for (const section of await sections.all()) await section.click();

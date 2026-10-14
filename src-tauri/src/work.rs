@@ -221,7 +221,8 @@ pub struct Farm {
     pub stages: Vec<FarmStage>,
 }
 
-/// A mission of the farm: its runs and their AP, and the slots it serves.
+/// A mission of the farm: its runs and their AP, and the slots it serves, the
+/// one it drops most of first.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct FarmStage {
     pub name: String,
@@ -279,15 +280,7 @@ pub fn farm<S: BuildHasher>(
                 name: m.name.clone(),
                 runs: count,
                 ap: count * m.ap,
-                slots: farming
-                    .slots
-                    .iter()
-                    .filter(|s| {
-                        let ids = s.prints.iter().map(|p| p.0).chain([s.universal]);
-                        ids.into_iter().any(|id| m.drops.iter().any(|d| d.0 == id))
-                    })
-                    .map(|s| s.name.clone())
-                    .collect(),
+                slots: served(&farming.slots, m),
             })
         })
         .collect();
@@ -297,6 +290,25 @@ pub fn farm<S: BuildHasher>(
         ap: stages.iter().map(|s| s.ap).sum(),
         stages,
     })
+}
+
+/// The slots `mission` drops blueprints of, the one it drops most of first (a
+/// mission drops one slot a third more than the others).
+fn served(slots: &[Slot], mission: &Mission) -> Vec<String> {
+    let mut served: Vec<(f64, &str)> = slots
+        .iter()
+        .filter_map(|s| {
+            let ids: Vec<i64> = s.prints.iter().map(|p| p.0).chain([s.universal]).collect();
+            let drops = mission.drops.iter().filter(|d| ids.contains(&d.0));
+            let total: f64 = drops.map(|d| d.1).sum();
+            (total > 0.0).then_some((total, s.name.as_str()))
+        })
+        .collect();
+    served.sort_by(|a, b| b.0.total_cmp(&a.0));
+    served
+        .into_iter()
+        .map(|(_, name)| name.to_owned())
+        .collect()
 }
 
 /// A variable of runs for each mission, each run costing as `by_run` has it.

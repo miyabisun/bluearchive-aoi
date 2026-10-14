@@ -713,7 +713,7 @@
           <details class="fold" open={opened.has("work:任務")}>
             <summary onclick={(event) => toggle(event, "work:任務")}
               >{@render chevron()}
-              <h2>任務</h2></summary
+              <h2>任務 Normal</h2></summary
             >
             <!-- A slot's T10 blueprints, and apart its universal ones with those of T9 and below. -->
             <table class="slots">
@@ -1487,7 +1487,7 @@
       img
         object-fit: contain
     .pay
-      text-align: left
+      text-align: right
       color: var(--c-muted)
       img
         display: inline

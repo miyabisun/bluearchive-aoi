@@ -69,6 +69,14 @@ fn the_farm_plays_for_t10_blueprints_and_gives_the_rest_where_the_ratio_wants_it
     let work = recognizer().work_rows(&[], &equipment, None);
     let farm = work.farm.unwrap();
     let names: Vec<&str> = farm.stages.iter().map(|s| s.name.as_str()).collect();
+    // A mission's slots, the one it drops most of first: 29-2 hairpins.
+    let slots = |name| {
+        farm.stages
+            .iter()
+            .find(|s| s.name == name)
+            .map(|s| &s.slots)
+    };
+    assert_eq!(slots("29-2").unwrap(), &["ヘアピン", "シューズ", "腕時計"]);
     // 28-4 drops hairpins as 29-2 does, but bags and badges with them.
     assert!(
         names.contains(&"29-2") && !names.contains(&"28-4"),
