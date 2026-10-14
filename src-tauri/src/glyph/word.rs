@@ -32,9 +32,9 @@ impl Ink {
         self.on[(y * self.width + x) as usize]
     }
 
-    /// The parts of `ink` in `rect` (8-connected), but those touching its top
-    /// or bottom (the edge of what lies around) and those of fewer than
-    /// `least` pixels (specks).
+    /// The parts of `ink` in `rect` (8-connected), but those touching its
+    /// edges (what lies around, as the light end of a chosen menu entry) and
+    /// those of fewer than `least` pixels (specks).
     pub fn parts(image: &RgbImage, rect: Rect, ink: fn([u8; 3]) -> bool, least: usize) -> Self {
         let (x0, y0, x1, y1) = rect;
         let (width, height) = (x1 - x0, y1 - y0);
@@ -64,8 +64,8 @@ impl Ink {
                 }
             }
             let edge = part.iter().any(|&i| {
-                let y = i as u32 / width;
-                y == 0 || y + 1 == height
+                let (x, y) = (i as u32 % width, i as u32 / width);
+                x == 0 || y == 0 || x + 1 == width || y + 1 == height
             });
             if !edge && part.len() >= least {
                 for i in part {
@@ -272,10 +272,14 @@ mod tests {
     fn the_ink_is_its_parts_off_the_edges_and_specks_left_out() {
         let mut image = RgbImage::new(8, 6);
         let white = image::Rgb([255, 255, 255]);
-        // A part touching the top, a speck, and a part of four pixels.
+        // A part touching the top, one touching the right edge (the light
+        // end of a menu entry), a speck, and a part of four pixels.
         image.put_pixel(1, 0, white);
         image.put_pixel(1, 1, white);
-        image.put_pixel(6, 2, white);
+        for y in 2..5 {
+            image.put_pixel(7, y, white);
+        }
+        image.put_pixel(1, 4, white);
         for (x, y) in [(3, 2), (4, 2), (3, 3), (4, 3)] {
             image.put_pixel(x, y, white);
         }

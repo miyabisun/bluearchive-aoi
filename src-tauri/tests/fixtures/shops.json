@@ -141,5 +141,18 @@
       { "name": "T2装備設計図選択ボックス", "coin": 0, "left": 100, "price": 300 },
       { "name": "T3装備設計図選択ボックス", "coin": 0, "left": 100, "price": 480 }
     ]
+  },
+  {
+    "image": "shops/shimeitehai-2.png",
+    "role": "eval",
+    "shop": "指名手配",
+    "held": [72],
+    "note": "2026-10-14 capture, 2222x1250, by the app's user after buying ヒビキ（応援団）: the menu shows 戦術対抗戦 too, and the chosen entry's light end runs down past its letters (read as no shop before v0.2.1). The top row's names are cut off. Labels by eye.",
+    "offers": [
+      { "name": "ユズ（メイド）の神名文字", "coin": 0, "left": 0, "price": 50 },
+      { "name": "ヒビキ（応援団）の神名文字", "coin": 0, "left": 0, "price": 50 },
+      { "name": "アヤネ（水着）の神名文字", "coin": 0, "left": 0, "price": 50 },
+      { "name": "ミチルの神名文字", "coin": 0, "left": 0, "price": 50 }
+    ]
   }
 ]

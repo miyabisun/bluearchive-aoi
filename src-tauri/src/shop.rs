@@ -84,9 +84,9 @@ const DARKENED: f32 = 0.85;
 /// The chosen menu entry's letters are lighter than this on the navy.
 const LIGHT: u8 = 160;
 /// The farthest a part of the chosen menu entry may lie from the shop's name
-/// as the fixtures draw it (see `glyph::word`). Measured on 2026-10-14: an
-/// entry lies within 6.5 of its own shop's name and 19 or farther from any
-/// other shop's.
+/// as the tuning fixtures draw it (see `glyph::word`). Measured on 2026-10-14
+/// over the shop fixtures: an entry lies within 4 of its own shop's name (a
+/// capture the names were not cut from), and 55 or farther from any other's.
 const MENU_WORST: f32 = 12.0;
 /// Parts of the menu's letters smaller than this share of the window height
 /// squared are specks.
