@@ -301,11 +301,13 @@ fn set_paused(watcher: tauri::State<'_, watch::Watcher>, paused: bool) {
     watcher.pause(paused);
 }
 
-/// The app's version and the newer one the latest release brings, if any.
+/// The app's version and the newer one the latest release brings, if any;
+/// whether the app takes it itself, or opens the release page (macOS).
 #[derive(Debug, Clone, Serialize)]
 struct UpdateCheck {
     current: String,
     latest: Option<String>,
+    installs: bool,
 }
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -318,13 +320,22 @@ async fn check_update() -> Result<UpdateCheck, String> {
         Ok(UpdateCheck {
             current: format!("v{VERSION}"),
             latest: update::update_of(&release, VERSION).map(|u| u.version),
+            installs: cfg!(windows),
         })
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
+/// Opens the latest release's page: the app cannot replace itself here.
+#[cfg(not(windows))]
+#[tauri::command]
+fn apply_update() -> Result<(), String> {
+    update::open_page()
+}
+
 /// Puts the latest release in place of the running exe and starts it.
+#[cfg(windows)]
 #[tauri::command]
 async fn apply_update(app: tauri::AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(|| {

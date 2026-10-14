@@ -17,12 +17,15 @@ serde_json = "1"
 tauri = { version = "2", features = [] }
 # The local date and time in the name and heading of an export.
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-windows-capture = "1.5"
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_System_Threading", "Win32_UI_HiDpi", "Win32_UI_WindowsAndMessaging"] }
 serde_yaml = "0.9"
 microlp = "0.6"
 ureq = "2"
 sha2 = "0.10"
+
+# Capturing the game's window: Blue Archive runs on Windows only.
+[target.'cfg(windows)'.dependencies]
+windows-capture = "1.5"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_System_Threading", "Win32_UI_HiDpi", "Win32_UI_WindowsAndMessaging"] }
 
 [lints.clippy]
 missing_errors_doc = "allow"

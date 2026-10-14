@@ -1119,7 +1119,7 @@ test("the menu checks for an update and takes it", async ({ page }) => {
     status: { state: "no_game" },
     items,
     equipment,
-    update: { current: "v0.1.29", latest: "v0.1.30" },
+    update: { current: "v0.1.29", latest: "v0.1.30", installs: true },
   });
   await page.getByRole("button", { name: "メニュー" }).click();
   await page.getByRole("menuitem", { name: "アップデートを確認" }).click();
@@ -1127,6 +1127,23 @@ test("the menu checks for an update and takes it", async ({ page }) => {
   await page.getByRole("button", { name: "更新して再起動" }).click();
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ update: true }]);
   await expect(page.getByText("v0.1.30 に更新しています…")).toBeVisible();
+});
+
+test("where the app cannot replace itself, the update opens the release page", async ({ page }) => {
+  await open(page, {
+    status: { state: "no_source" },
+    items,
+    equipment,
+    update: { current: "v0.1.29", latest: "v0.1.30", installs: false },
+  });
+  await expect(page.getByText("取り込み元なし")).toBeVisible();
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await page.getByRole("menuitem", { name: "アップデートを確認" }).click();
+  await page.getByRole("button", { name: "入手ページを開く" }).click();
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ update: true }]);
+  // The page opens elsewhere: the notice stays, the button with it.
+  await expect(page.getByText("v0.1.30 があります（今 v0.1.29）")).toBeVisible();
+  await expect(page.getByRole("button", { name: "入手ページを開く" })).toBeVisible();
 });
 
 test("tells the app is up to date in a passing toast, or why it could not check", async ({

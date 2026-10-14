@@ -35,6 +35,10 @@ English: [README.en.md](README.en.md)
 新しい版が出たときは、Aoi の右上の「≡」から「アップデートを確認」を押します。新しい版が
 あれば「更新して再起動」のボタンが出るので、押すと入れ替わって起動し直します。
 
+macOS 版（`bluearchive-aoi-universal-apple-darwin.dmg`）もあります。ブルーアーカイブの PC 版が
+Windows 専用のため、macOS 版は今のところ何も読み取りません。入れ方と初めて開く手順は
+[macOS で初めて開く](docs/guide/mac.md) にあります。
+
 ## 使い方
 
 1. Aoi とブルーアーカイブを起動します。どちらが先でも構いません。

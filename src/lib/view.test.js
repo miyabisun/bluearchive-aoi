@@ -62,6 +62,7 @@ describe("filterRows", () => {
 describe("statusView", () => {
   it("names each state and marks which are trouble", () => {
     expect(statusView({ state: "no_game" })).toEqual({ label: "ゲーム未検出", tone: "idle" });
+    expect(statusView({ state: "no_source" })).toEqual({ label: "取り込み元なし", tone: "idle" });
     expect(statusView({ state: "other_screen" })).toEqual({ label: "対象外の画面", tone: "idle" });
     expect(statusView({ state: "reading", list: "items", fps: 27.5, dropped: 3 })).toEqual({
       label: "アイテムを集計中 28 fps",

@@ -57,3 +57,48 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create $env:GITHUB_REF_NAME "dist-release\$env:ASSET" "dist-release\$env:ASSET.sha256" --title $env:GITHUB_REF_NAME --generate-notes --verify-tag
+
+  # The universal macOS app joins the release the Windows job published.
+  macos:
+    needs: publish
+    runs-on: macos-latest
+    env:
+      ASSET: bluearchive-aoi-universal-apple-darwin.dmg
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # tauri.macos.conf.json bundles the app into a disk image, signed ad hoc.
+      - name: Build the app
+        run: |
+          npm ci
+          npm run tauri build -- --target universal-apple-darwin
+
+      - name: Package the disk image and its SHA-256
+        run: |
+          mkdir dist-release
+          cp src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg "dist-release/$ASSET"
+          cd dist-release
+          shasum -a 256 "$ASSET" > "$ASSET.sha256"
+          cat "$ASSET.sha256"
+
+      - name: Add them to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" "dist-release/$ASSET" "dist-release/$ASSET.sha256"

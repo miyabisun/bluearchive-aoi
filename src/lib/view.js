@@ -43,6 +43,8 @@ export function statusView(status) {
       return { label: "キャプチャ失敗", tone: "danger" };
     case "paused":
       return { label: "一時中断", tone: "paused" };
+    case "no_source":
+      return { label: "取り込み元なし", tone: "idle" };
     default:
       return { label: "ゲーム未検出", tone: "idle" };
   }

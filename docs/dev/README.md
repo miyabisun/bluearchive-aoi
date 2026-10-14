@@ -5,6 +5,10 @@ with Windows Graphics Capture, reads the item and equipment lists, the student s
 the shops and the credits from each frame, and shows what it has read in a WebView2
 window. It sends no input to the game.
 
+It builds for macOS too, where there is no window to capture: the capture lives in
+`src-tauri/src/watch/window.rs` and its crates are Windows-only dependencies, so the macOS
+app starts with the status `no_source` and reads nothing.
+
 - [Data and file formats](data.md): where the item data comes from, what is counted and
   when, and the YAML Aoi writes.
 - The player's guides are in Japanese, under [docs/guide](../guide).
@@ -39,6 +43,11 @@ Pushing a `v*` tag builds the exe on GitHub Actions and publishes it with its SH
 アップデートを確認 asks the GitHub API for the latest release; 更新して再起動 downloads its
 exe, checks it against the SHA-256, puts it in place of the running one (the old one kept
 as `.old` until the next start) and starts it.
+
+A second job then adds the universal macOS disk image and its SHA-256
+(`bluearchive-aoi-universal-apple-darwin.dmg` and `.dmg.sha256`), bundled as
+`src-tauri/tauri.macos.conf.json` says: signed ad hoc, not notarized. On macOS the update
+check looks for the disk image, and 入手ページを開く opens the release page.
 
 To check a download by hand:
 

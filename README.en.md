@@ -19,6 +19,13 @@ goes online only to look for and download a newer version when you ask it to.
 - Windows 11
 - The Japanese PC version of Blue Archive. Names are shown in Japanese.
 
+There is a macOS version too, but it reads nothing yet: the PC version of Blue Archive runs
+on Windows only. It is `bluearchive-aoi-universal-apple-darwin.dmg` in the same release,
+for Apple silicon and Intel Macs. The app is not notarized, so macOS blocks its first
+start: open it once, then choose Open Anyway in System Settings → Privacy & Security
+(steps in Japanese: [docs/guide/mac.md](docs/guide/mac.md)). Its update check opens the
+release page instead of replacing the app.
+
 ## Download and run
 
 Download `bluearchive-aoi-x86_64-pc-windows-msvc.exe` from the

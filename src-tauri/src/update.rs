@@ -1,6 +1,7 @@
 //! Updating the app from its GitHub releases: the latest release's exe,
 //! checked against the SHA-256 published beside it, takes the running exe's
-//! place, which is kept aside until the next start.
+//! place, which is kept aside until the next start. On macOS the app is not
+//! replaced: the release page is opened to take its disk image by hand.
 
 use std::{fmt::Write as _, io::Read as _, path::PathBuf};
 
@@ -8,8 +9,11 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 const RELEASES: &str = "https://api.github.com/repos/miyabisun/bluearchive-aoi/releases/latest";
-/// The release's exe, and its SHA-256 beside it with this suffix.
+/// The release's file for this OS, and its SHA-256 beside it with this suffix.
+#[cfg(windows)]
 const ASSET: &str = "bluearchive-aoi-x86_64-pc-windows-msvc.exe";
+#[cfg(not(windows))]
+const ASSET: &str = "bluearchive-aoi-universal-apple-darwin.dmg";
 const SHA: &str = ".sha256";
 /// The release exe is about 20 MB; a download past this is no release exe.
 const MAX_EXE: u64 = 200 * 1024 * 1024;
@@ -125,6 +129,20 @@ pub fn install(update: &Update) -> Result<(), String> {
     Ok(())
 }
 
+/// Opens the latest release's page, where the app cannot replace itself.
+#[cfg(not(windows))]
+pub fn open_page() -> Result<(), String> {
+    let page = "https://github.com/miyabisun/bluearchive-aoi/releases/latest";
+    let status = std::process::Command::new("open")
+        .arg(page)
+        .status()
+        .map_err(|e| e.to_string())?;
+    status
+        .success()
+        .then_some(())
+        .ok_or_else(|| format!("リリースのページを開けませんでした（{status}）"))
+}
+
 /// Removes the exe an update kept aside, once the updated one runs.
 pub fn clean_up() {
     if let Ok(exe) = std::env::current_exe() {
@@ -151,15 +169,12 @@ mod tests {
 
     #[test]
     fn a_newer_release_with_its_exe_and_hash_is_an_update() {
-        let both = [ASSET, "bluearchive-aoi-x86_64-pc-windows-msvc.exe.sha256"];
+        let sha = format!("{ASSET}.sha256");
+        let both = [ASSET, &sha];
         let update = update_of(&release("v0.1.30", &both), "0.1.29").unwrap();
         assert_eq!(update.version, "v0.1.30");
-        assert!(
-            update
-                .exe
-                .ends_with("/v0.1.30/bluearchive-aoi-x86_64-pc-windows-msvc.exe")
-        );
-        assert!(update.sha.ends_with(".exe.sha256"));
+        assert!(update.exe.ends_with(&format!("/v0.1.30/{ASSET}")));
+        assert!(update.sha.ends_with(&format!("/v0.1.30/{sha}")));
         // Numbers compare as numbers, not text.
         assert!(update_of(&release("v0.1.100", &both), "0.1.99").is_some());
         // The same or an older version, or without its hash, is none.

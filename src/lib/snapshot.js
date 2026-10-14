@@ -81,20 +81,22 @@ export const iconUrl = (name) =>
 
 /**
  * The app's version and the newer one the latest GitHub release brings
- * (`latest`, none when up to date); rejects with why it could not tell.
+ * (`latest`, none when up to date), and whether the app takes it itself
+ * (`installs`; on macOS it opens the release page); rejects with why it could not tell.
  * Outside the app it answers with the demo's `update`.
  */
 export async function checkUpdate() {
   if (!("__TAURI_INTERNALS__" in window)) {
     const answer = /** @type {any} */ (window).__AOI_DEMO__?.update;
     if (answer?.error) throw answer.error;
-    return answer ?? { current: "v0.0.0", latest: null };
+    return answer ?? { current: "v0.0.0", latest: null, installs: true };
   }
   return invoke("check_update");
 }
 
 /**
- * Puts the latest release in place of the running app and starts it; rejects
+ * Puts the latest release in place of the running app and starts it (on macOS
+ * opens the release page instead); rejects
  * with why it could not. Outside the app it notes the call in
  * `window.__AOI_CALLS__`.
  */

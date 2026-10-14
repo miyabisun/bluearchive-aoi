@@ -178,9 +178,12 @@
     }
   }
 
-  /** Takes the update; on success the app restarts as it. */
+  /**
+   * Takes the update; on success the app restarts as it. Where the app cannot
+   * replace itself (`installs` false) the release page opens and the notice stays.
+   */
   async function install() {
-    update = { ...update, state: "installing" };
+    if (update.installs) update = { ...update, state: "installing" };
     try {
       await applyUpdate();
     } catch (error) {
@@ -419,7 +422,7 @@
       <p class="exported update" aria-live="polite">
         {updateText(update)}{#if update.state === "available"}<button
             type="button"
-            onclick={install}>更新して再起動</button
+            onclick={install}>{update.installs ? "更新して再起動" : "入手ページを開く"}</button
           >{/if}
       </p>
     {/if}
