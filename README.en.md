@@ -21,7 +21,9 @@ goes online only to look for and download a newer version when you ask it to.
 
 Aoi also reads the Android version of the game: the phone sends its screen over a USB cable
 or Wi-Fi, with no app on the phone (USB or wireless debugging, Android 11 or later; steps in
-Japanese: [docs/guide/android.md](docs/guide/android.md)).
+Japanese: [docs/guide/android.md](docs/guide/android.md)). An iPhone sends its screen
+through a streaming app (Moblin) over RTMP on the same Wi-Fi, as any phone can; this is not
+tried on an iPhone yet (steps in Japanese: [docs/guide/stream.md](docs/guide/stream.md)).
 
 There is a macOS version too, which reads a phone's screen only: the PC version of Blue
 Archive runs on Windows only. It is `bluearchive-aoi-universal-apple-darwin.dmg` in the same release,

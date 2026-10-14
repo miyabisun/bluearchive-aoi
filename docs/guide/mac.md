@@ -5,8 +5,9 @@ macOS が起動を止めます。一度だけ次の手順で許可すると、�
 手順は Apple の [開発元が不明な Mac アプリを開く](https://support.apple.com/ja-jp/guide/mac-help/mh40616/mac)
 に沿っています。
 
-ブルーアーカイブの PC 版は Windows 専用なので、macOS 版は Android のスマホから送った画面を読みます
-（[Android のスマホの画面を読む](android.md)）。スマホがつながるまでは、右上に「取り込み元なし」と出ます。
+ブルーアーカイブの PC 版は Windows 専用なので、macOS 版はスマホから送った画面を読みます
+（[Android のスマホの画面を読む](android.md)、iPhone は [配信アプリでスマホの画面を送る](stream.md)）。
+スマホがつながるまでは、右上に「取り込み元なし」と出ます。
 
 ## 入れる
 

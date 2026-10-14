@@ -26,8 +26,13 @@ impl H264 {
             return Ok(None);
         };
         let whole: Vec<u8> = self.pending.drain(..cut).collect();
+        self.decode(&whole)
+    }
+
+    /// Decodes `units`, whole (Annex B); the newest frame they complete, if any.
+    pub fn decode(&mut self, units: &[u8]) -> Result<Option<RgbImage>, String> {
         let mut newest = None;
-        for unit in openh264::nal_units(&whole) {
+        for unit in openh264::nal_units(units) {
             if let Some(yuv) = self.decoder.decode(unit).map_err(|e| e.to_string())? {
                 let (width, height) = yuv.dimensions();
                 let mut rgb = vec![0; width * height * 3];

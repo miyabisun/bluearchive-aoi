@@ -22,6 +22,15 @@ only its own prebuilt binaries. The key and the phone paired are kept in the app
 in a 16:9 window's height (`screen::unit`), each part kept to the top, the middle or the
 bottom of a wider screen (`screen::Anchor`).
 
+Any phone can also send its screen from a streaming app over RTMP (`src-tauri/src/broadcast.rs`,
+with `rml_rtmp`): when the user asks, Aoi listens on port 1935 under a fresh key for streams from
+the local network, one at a time, till none comes for 10 minutes. Its FLV video tags are turned
+into Annex B for `openh264`; a screen boxed in black is cut out and one sent upright turned back
+(`screen::trim`, `screen::turn`). The window shows the URL and a QR code of Moblin's settings link
+(`moblin://?<JSON>`: H.264, 2560x1440, 50 Mbps, 15 fps). `cargo run --release --example watch --
+60 wait` waits as the app does, and `cargo run --release --example send_stream -- <url> <png>...`
+stands in for a phone.
+
 - [Data and file formats](data.md): where the item data comes from, what is counted and
   when, and the YAML Aoi writes.
 - The player's guides are in Japanese, under [docs/guide](../guide).

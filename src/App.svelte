@@ -13,12 +13,15 @@
     reloadPlan,
     setPaused,
     setTarget,
+    waitForStream,
   } from "./lib/snapshot.js";
   import { THEMES, applyTheme, storedTheme } from "./lib/theme.js";
   import {
     LISTS,
     commissionCells,
     blueprintCells,
+    castLine,
+    castNote,
     filterRows,
     filterShops,
     formatCount,
@@ -135,6 +138,8 @@
     keep_error: /** @type {string | null} */ (null),
     /** Where the link to a phone stands (see `phoneLine`). */
     phone: /** @type {any} */ ({ state: "unpaired" }),
+    /** Where waiting for a streaming app stands (see `castLine`). */
+    cast: /** @type {any} */ ({ state: "off" }),
   });
   let view = $state({ tab: "items" });
   /** Whether the menu is open, and the theme chosen in it. */
@@ -148,6 +153,18 @@
     menuOpen = false;
     phoneDialog?.showModal();
     if (phone.state === "unpaired" || phone.state === "failed") pairPhone();
+  }
+  /** The dialog of waiting for a streaming app, opened from the menu. */
+  let castDialog = $state(/** @type {HTMLDialogElement | undefined} */ (undefined));
+  const cast = $derived(snapshot.cast ?? { state: "off" });
+  /** The QR code shown while waiting: Moblin's link, or the URL for another app. */
+  let castCode = $state("moblin");
+
+  /** Opens the streaming app's dialog, waiting at once where it is not. */
+  function openCast() {
+    menuOpen = false;
+    castDialog?.showModal();
+    if (cast.state === "off" || cast.state === "failed") waitForStream(true);
   }
   let theme = $state(storedTheme());
   let query = $state("");
@@ -399,6 +416,7 @@
             }}>アップデートを確認</button
           >
           <button type="button" role="menuitem" onclick={openPhone}>Androidとの通信</button>
+          <button type="button" role="menuitem" onclick={openCast}>配信アプリとの連携</button>
           <div role="group" aria-labelledby="theme-heading">
             <span class="menu-heading" id="theme-heading">テーマ</span>
             {#each THEMES as choice (choice.id)}
@@ -1095,6 +1113,76 @@
   </div>
 </dialog>
 
+<!-- Waiting for a streaming app: a QR code to send the phone's screen to, while it lasts. -->
+<dialog class="phone" bind:this={castDialog} aria-labelledby="cast-heading">
+  <h2 id="cast-heading">配信アプリとの連携</h2>
+  <p class="phone-line" class:failed={cast.state === "failed"} aria-live="polite">
+    {castLine(cast)}
+  </p>
+  {#if castNote(cast)}
+    <p class="phone-line failed">{castNote(cast)}</p>
+  {/if}
+  {#if cast.state === "waiting"}
+    <div class="code-choice" role="tablist" aria-label="QR コードの読み取り先">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={castCode === "moblin"}
+        onclick={() => (castCode = "moblin")}>Moblin</button
+      >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={castCode === "url"}
+        onclick={() => (castCode = "url")}>ほかのアプリ</button
+      >
+    </div>
+    {@const modules = castCode === "moblin" ? cast.moblin : cast.plain}
+    <svg
+      class="qr"
+      viewBox="0 0 {modules.length + 8} {modules.length + 8}"
+      shape-rendering="crispEdges"
+      role="img"
+      aria-label={castCode === "moblin"
+        ? "Moblin に取り込む QR コード"
+        : "配信先の URL の QR コード"}
+    >
+      <rect width="100%" height="100%" fill="#fff" />
+      <path d={qrPath(modules)} fill="#000" />
+    </svg>
+    <p class="cast-url"><code>{cast.url}</code></p>
+    <ol class="steps">
+      {#if castCode === "moblin"}
+        <li>iPhone のカメラでこの QR コードを読み取り、Moblin に取り込む</li>
+        <li>Moblin で画面の取り込み（Screen capture）を始め、配信を始める</li>
+      {:else}
+        <li>配信アプリの配信先（RTMP）に上の URL を入れる</li>
+        <li>映像を H.264 にし、解像度とビットレートを高めにして配信を始める</li>
+      {/if}
+      <li>ブルーアーカイブを開く</li>
+    </ol>
+    <details class="phone-help">
+      <summary>{@render chevron()}届かないとき</summary>
+      <p>
+        PC とスマホを同じ Wi-Fi につないでください。ゲスト用の Wi-Fi
+        など、機器どうしが通信できない回線では使えません。PC
+        に「ネットワークへのアクセスを許可しますか」と出たら、プライベート
+        ネットワークで許可してください。10 分間届かないと、待ち受けを終えます。
+      </p>
+    </details>
+  {/if}
+  <div class="phone-actions">
+    {#if cast.state === "waiting" || cast.state === "receiving"}
+      <button type="button" onclick={() => waitForStream(false)}>やめる</button>
+    {:else}
+      <button type="button" class="primary" onclick={() => waitForStream(true)}
+        >{cast.state === "failed" ? "もう一度" : "待ち受ける"}</button
+      >
+    {/if}
+    <button type="button" onclick={() => castDialog?.close()}>閉じる</button>
+  </div>
+</dialog>
+
 <!-- Passing notices: the region stays so screen readers hear what comes in. -->
 <div class="toasts" aria-live="polite">
   {#if toast}
@@ -1246,6 +1334,30 @@
     font-size: var(--fs-sm)
     li + li
       margin-top: var(--sp-1)
+  // Which app reads the QR code: tabs as the header's.
+  .code-choice
+    display: flex
+    justify-content: center
+    margin: 0 0 var(--sp-2)
+    button
+      padding: var(--sp-1) var(--sp-3)
+      border: 0
+      border-bottom: 2px solid transparent
+      background: none
+      color: var(--c-muted)
+      font: inherit
+      font-size: var(--fs-sm)
+      cursor: pointer
+      &[aria-selected="true"]
+        border-bottom-color: var(--c-accent)
+        color: var(--c-on-surface)
+        font-weight: 600
+  .cast-url
+    margin: 0 0 var(--sp-3)
+    text-align: center
+    font-size: var(--fs-sm)
+    overflow-wrap: anywhere
+    user-select: all
   .phone-help
     margin: 0 0 var(--sp-3)
     font-size: var(--fs-sm)

@@ -8,6 +8,7 @@
 
 pub mod android;
 pub mod app;
+pub mod broadcast;
 pub mod catalog;
 pub mod credit;
 pub mod equipment;

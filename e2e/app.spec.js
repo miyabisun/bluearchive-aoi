@@ -1241,3 +1241,50 @@ test("the menu opens the link to a phone: a QR code to pair, then the phone conn
   await page.getByRole("button", { name: "接続", exact: true }).click();
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ connect: true }]);
 });
+
+test("the menu waits for a streaming app: a QR code for Moblin or another app, then the screen coming in", async ({
+  page,
+}) => {
+  await open(page, { status: { state: "no_source" }, items, equipment, cast: { state: "off" } });
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await page.getByRole("menuitem", { name: "配信アプリとの連携" }).click();
+  const dialog = page.getByRole("dialog", { name: "配信アプリとの連携" });
+  await expect(dialog).toBeVisible();
+  // Not waiting: it starts at once.
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ wait: true }]);
+  await dialog.getByRole("button", { name: "閉じる" }).click();
+
+  const url = "rtmp://192.168.1.20:1935/aoi/Ab3";
+  const waiting = {
+    state: "waiting",
+    url,
+    moblin: [
+      [true, false],
+      [false, true],
+    ],
+    plain: [[true]],
+    problem: "キーの違う配信が届いたので断りました。QR コードを読み取り直してください",
+  };
+  await open(page, { status: { state: "no_source" }, items, equipment, cast: waiting });
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await page.getByRole("menuitem", { name: "配信アプリとの連携" }).click();
+  await expect(dialog.getByRole("img", { name: "Moblin に取り込む QR コード" })).toBeVisible();
+  await expect(dialog.getByText(url)).toBeVisible();
+  await expect(
+    dialog.getByText("キーの違う配信が届いたので断りました。QR コードを読み取り直してください"),
+  ).toBeVisible();
+  await dialog.getByRole("tab", { name: "ほかのアプリ" }).click();
+  await expect(dialog.getByRole("img", { name: "配信先の URL の QR コード" })).toBeVisible();
+  await expect(dialog.getByText("配信アプリの配信先（RTMP）に上の URL を入れる")).toBeVisible();
+  // Already waiting: no new key.
+  expect(await page.evaluate(() => window.__AOI_CALLS__ ?? [])).toEqual([]);
+  await dialog.getByRole("button", { name: "やめる" }).click();
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ wait: false }]);
+
+  const receiving = { state: "receiving", from: "192.168.1.20", sideways: true };
+  await open(page, { status: { state: "no_source" }, items, equipment, cast: receiving });
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await page.getByRole("menuitem", { name: "配信アプリとの連携" }).click();
+  await expect(dialog.getByText("192.168.1.20 から画面を受け取っています")).toBeVisible();
+  await expect(dialog.getByText("縦向き（Portrait）の配信にすると大きく届きます")).toBeVisible();
+});

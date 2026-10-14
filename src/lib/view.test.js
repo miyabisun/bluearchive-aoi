@@ -20,6 +20,8 @@ import {
   placeName,
   stockCells,
   updateText,
+  castLine,
+  castNote,
   phoneLine,
   qrPath,
   shopStale,
@@ -811,5 +813,41 @@ describe("phone", () => {
     ];
     // Four modules of quiet zone around the code.
     expect(qrPath(modules)).toBe("M4 4h1v1h-1z M5 5h1v1h-1z");
+  });
+});
+
+describe("streaming app", () => {
+  const waiting = {
+    state: "waiting",
+    url: "rtmp://192.168.1.20:1935/aoi/Ab3",
+    moblin: [],
+    plain: [],
+  };
+
+  it("tells where waiting for a streaming app stands", () => {
+    expect(castLine({ state: "off" })).toBe(
+      "待ち受けると、スマホの配信アプリ（iPhone は Moblin）から画面を受け取れます",
+    );
+    expect(castLine({ ...waiting, problem: null })).toBe(
+      "配信アプリでこの QR コードを読み取り、配信を始めてください",
+    );
+    expect(castLine({ state: "receiving", from: "192.168.1.20", sideways: false })).toBe(
+      "192.168.1.20 から画面を受け取っています",
+    );
+    expect(castLine({ state: "failed", message: "ポート 1935 で待ち受けられません" })).toBe(
+      "ポート 1935 で待ち受けられません",
+    );
+  });
+
+  it("adds what went wrong with the last stream, or how to send the screen larger", () => {
+    expect(castNote({ ...waiting, problem: null })).toBeNull();
+    expect(castNote({ ...waiting, problem: "キーの違う配信が届いたので断りました" })).toBe(
+      "キーの違う配信が届いたので断りました",
+    );
+    expect(castNote({ state: "receiving", from: "192.168.1.20", sideways: false })).toBeNull();
+    expect(castNote({ state: "receiving", from: "192.168.1.20", sideways: true })).toBe(
+      "画面が横倒しで小さく届いています。配信アプリで縦向き（Portrait）の配信にすると大きく届きます",
+    );
+    expect(castNote({ state: "off" })).toBeNull();
   });
 });

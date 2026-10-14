@@ -1,19 +1,21 @@
 //! Watches the running game the way the app does and prints every status and
 //! tally change with the time, for measuring against the real game:
-//! `cargo run --release --example watch -- 60` (seconds to watch).
+//! `cargo run --release --example watch -- 60` (seconds to watch). With `wait`
+//! after the seconds it waits for a streaming app too, and prints its URL.
 
 use std::{sync::Arc, time::Instant};
 
-use aoi::{Recognizer, watch};
+use aoi::{Recognizer, broadcast::Cast, watch};
 
 fn main() {
     let seconds: u64 = std::env::args()
         .nth(1)
         .and_then(|s| s.parse().ok())
         .unwrap_or(60);
+    let wait = std::env::args().nth(2).as_deref() == Some("wait");
     let recognizer = Arc::new(Recognizer::embedded().unwrap());
     let started = Instant::now();
-    watch::start(
+    let watcher = watch::start(
         recognizer,
         aoi::keep::Kept::default(),
         // No phone is paired in a folder of its own.
@@ -41,9 +43,18 @@ fn main() {
                 Some(aoi::watch::Update::Phone(link)) => {
                     println!("{at:6.1}s phone {}", serde_json::to_string(&link).unwrap());
                 }
+                Some(aoi::watch::Update::Cast(Cast::Waiting { url, problem, .. })) => {
+                    println!("{at:6.1}s waiting at {url} {problem:?}");
+                }
+                Some(aoi::watch::Update::Cast(cast)) => {
+                    println!("{at:6.1}s cast {}", serde_json::to_string(&cast).unwrap());
+                }
                 None => println!("{at:6.1}s {}", serde_json::to_string(status).unwrap()),
             }
         },
     );
+    if wait {
+        watcher.cast().start();
+    }
     std::thread::sleep(std::time::Duration::from_secs(seconds));
 }

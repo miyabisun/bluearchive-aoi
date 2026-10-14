@@ -23,6 +23,7 @@ use serde::Serialize;
 use crate::{
     Frame as Shown, List, Recognizer, Row,
     android::{Link, Phone},
+    broadcast::{Cast, Receiver},
     keep::{Kept, now},
     quantity::Count,
     screen,
@@ -72,7 +73,8 @@ pub struct StudentRow {
     pub training: Training,
 }
 
-/// What changed in a tally, or in the link to a phone.
+/// What changed in a tally, in the link to a phone, or in waiting for a
+/// streaming app.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Update {
     List(List, Vec<Row>),
@@ -80,6 +82,7 @@ pub enum Update {
     Credits(u64),
     Shops(Vec<ShopRow>),
     Phone(Link),
+    Cast(Cast),
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -106,13 +109,15 @@ struct Seen {
     /// Whether a phone's screen comes in (see `android`), read as the game's
     /// window is.
     phone: bool,
+    /// Whether a streaming app's stream comes in (see `broadcast`), read so too.
+    cast: bool,
 }
 
 fn status(seen: &Seen) -> Status {
     if seen.paused {
         return Status::Paused;
     }
-    let game = if seen.phone {
+    let game = if seen.phone || seen.cast {
         &Game::Captured
     } else {
         &seen.game
@@ -166,15 +171,16 @@ struct Latest {
     ready: Condvar,
     /// Frames replaced before the reader took them.
     dropped: AtomicU32,
-    /// Whether a phone's screen comes in: then the game's window is left out,
-    /// one game read at a time.
+    /// Whether a phone's screen comes in, by ADB or from a streaming app:
+    /// then the game's window is left out, one game read at a time.
     phone: AtomicBool,
+    cast: AtomicBool,
 }
 
 impl Latest {
     /// Puts a frame of the game's window, unless a phone's screen comes in.
     fn put_window(&self, frame: RgbImage) {
-        if !self.phone.load(Ordering::Relaxed) {
+        if !self.phone.load(Ordering::Relaxed) && !self.cast.load(Ordering::Relaxed) {
             self.put(frame);
         }
     }
@@ -271,7 +277,8 @@ pub fn student_rows(recognizer: &Recognizer, known: &BTreeMap<i64, Training>) ->
 
 /// Start watching from what was `kept`; `report` hears every change of status,
 /// and every change of a tally with the rows to show. A phone's link keeps its
-/// key and the phone paired in `phone_dir`.
+/// key and the phone paired in `phone_dir`; a streaming app is waited for
+/// when the user asks.
 pub fn start(
     recognizer: Arc<Recognizer>,
     kept: Kept,
@@ -303,6 +310,7 @@ pub fn start(
         paused,
         board: board.clone(),
         phone: phone.clone(),
+        cast: receiver(&latest, &board),
     };
 
     // The reader: the newest frame into the tally.
@@ -382,12 +390,27 @@ pub fn start(
     watcher
 }
 
-/// The watcher as the window controls it: its reading paused or not, and the
-/// link to a phone.
+/// Waits for a streaming app, its frames read as a phone's.
+fn receiver(latest: &Arc<Latest>, board: &Arc<Board>) -> Receiver {
+    let (latest, windowed, board) = (latest.clone(), latest.clone(), board.clone());
+    Receiver::new(
+        move |frame| latest.put(frame),
+        move |cast| {
+            let receiving = matches!(cast, Cast::Receiving { .. });
+            windowed.cast.store(receiving, Ordering::Relaxed);
+            board.update(|seen| seen.cast = receiving);
+            board.changed(Update::Cast(cast.clone()));
+        },
+    )
+}
+
+/// The watcher as the window controls it: its reading paused or not, the
+/// link to a phone, and waiting for a streaming app.
 pub struct Watcher {
     paused: Arc<AtomicBool>,
     board: Arc<Board>,
     phone: Arc<Phone>,
+    cast: Receiver,
 }
 
 impl Watcher {
@@ -401,27 +424,32 @@ impl Watcher {
     pub fn phone(&self) -> &Phone {
         &self.phone
     }
+
+    /// Waiting for a streaming app (see `broadcast::Receiver`).
+    pub fn cast(&self) -> &Receiver {
+        &self.cast
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{Game, Screen, Seen, Status, status};
 
-    /// One game is read at a time: the phone's while its screen comes in.
+    /// One game is read at a time: the phone's while its screen comes in, by
+    /// ADB or from a streaming app.
     #[test]
     fn the_window_waits_while_a_phone_streams() {
-        let latest = super::Latest::default();
-        latest
-            .phone
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-        latest.put_window(image::RgbImage::new(2, 1));
-        latest.put(image::RgbImage::new(3, 1));
-        assert_eq!(latest.take().width(), 3);
-        latest
-            .phone
-            .store(false, std::sync::atomic::Ordering::Relaxed);
-        latest.put_window(image::RgbImage::new(2, 1));
-        assert_eq!(latest.take().width(), 2);
+        for cast in [false, true] {
+            let latest = super::Latest::default();
+            let source = if cast { &latest.cast } else { &latest.phone };
+            source.store(true, std::sync::atomic::Ordering::Relaxed);
+            latest.put_window(image::RgbImage::new(2, 1));
+            latest.put(image::RgbImage::new(3, 1));
+            assert_eq!(latest.take().width(), 3);
+            source.store(false, std::sync::atomic::Ordering::Relaxed);
+            latest.put_window(image::RgbImage::new(2, 1));
+            assert_eq!(latest.take().width(), 2);
+        }
     }
 
     #[test]
@@ -449,6 +477,7 @@ mod tests {
             dropped: 4,
             paused: false,
             phone: false,
+            cast: false,
         };
         let items = Some(Screen::Items);
         assert_eq!(status(&seen(Game::Absent, items)), Status::NoGame);
@@ -470,17 +499,24 @@ mod tests {
         );
         // A phone's screen coming in reads without the game's window.
         for game in [Game::Absent, Game::NoSource] {
-            let phone = Seen {
-                phone: true,
-                ..seen(game, Some(Screen::Shops))
-            };
-            assert!(matches!(
-                status(&phone),
-                Status::Reading {
-                    list: Screen::Shops,
-                    ..
-                }
-            ));
+            for phone in [
+                Seen {
+                    phone: true,
+                    ..seen(game.clone(), Some(Screen::Shops))
+                },
+                Seen {
+                    cast: true,
+                    ..seen(game.clone(), Some(Screen::Shops))
+                },
+            ] {
+                assert!(matches!(
+                    status(&phone),
+                    Status::Reading {
+                        list: Screen::Shops,
+                        ..
+                    }
+                ));
+            }
         }
         // Paused, whatever the game shows.
         for game in [Game::Captured, Game::Absent] {

@@ -23,6 +23,9 @@ English: [README.en.md](README.en.md)
 - Android 版ブルーアーカイブ（日本版）を読むとき: Android 11 以降のスマホと、Windows 11 の PC か
   Mac。USB ケーブルか同じ Wi-Fi でつなぎます。Mac での動作は、まだ確かめていません。つなぎ方は
   [Android のスマホの画面を読む](docs/guide/android.md) にあります。
+- iPhone 版ブルーアーカイブ（日本版）を読むとき: 配信アプリ（Moblin）を入れた iPhone と、同じ Wi-Fi の
+  Windows 11 の PC か Mac。iPhone での動作は、まだ確かめていません。送り方は
+  [配信アプリでスマホの画面を送る](docs/guide/stream.md) にあります。
 
 ## ダウンロードと起動
 

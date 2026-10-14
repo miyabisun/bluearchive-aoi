@@ -12,6 +12,7 @@ use tauri::{Emitter, Manager};
 use crate::{
     List, Recognizer, Row,
     android::Link,
+    broadcast::Cast,
     export,
     keep::{self, Kept, ReadAt, now},
     plan::{BlueprintRow, NeedRow, Target, UnknownRow},
@@ -56,6 +57,8 @@ pub struct Snapshot {
     keep_error: Option<String>,
     /// Where the link to a phone stands.
     phone: Link,
+    /// Where waiting for a streaming app stands.
+    cast: Cast,
 }
 
 /// A student marked for training, with the target, and the student's name
@@ -110,6 +113,7 @@ impl Snapshot {
             read_at: kept.read_at.clone(),
             keep_error,
             phone: Link::Unpaired,
+            cast: Cast::Off,
         };
         snapshot.reground();
         snapshot.replan(recognizer, &kept.targets);
@@ -325,6 +329,18 @@ fn connect_phone(watcher: tauri::State<'_, watch::Watcher>, connect: bool) {
     }
 }
 
+/// Waits for a streaming app under a new key, or stops waiting; the snapshot
+/// carries where it stands.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Tauri hands command arguments over by value.
+fn wait_for_stream(watcher: tauri::State<'_, watch::Watcher>, wait: bool) {
+    if wait {
+        watcher.cast().start();
+    } else {
+        watcher.cast().stop();
+    }
+}
+
 /// The app's version and the newer one the latest release brings, if any;
 /// whether the app takes it itself, or opens the release page (macOS).
 #[derive(Debug, Clone, Serialize)]
@@ -409,6 +425,8 @@ pub fn run(context: tauri::Context) {
                     snapshot.status = status.clone();
                     if let Some(Update::Phone(link)) = update {
                         snapshot.phone = link;
+                    } else if let Some(Update::Cast(cast)) = update {
+                        snapshot.cast = cast;
                     } else if let Some(update) = update {
                         let read = Some(now());
                         match update {
@@ -430,7 +448,7 @@ pub fn run(context: tauri::Context) {
                             }
                             // Each shop carries when it was read.
                             Update::Shops(rows) => snapshot.shops = rows,
-                            Update::Phone(_) => unreachable!("taken above"),
+                            Update::Phone(_) | Update::Cast(_) => unreachable!("taken above"),
                         }
                         snapshot.rework(&planner);
                         snapshot.keep_error = keep_in(&places, &snapshot)
@@ -466,7 +484,8 @@ pub fn run(context: tauri::Context) {
             set_paused,
             reload_plan,
             pair_phone,
-            connect_phone
+            connect_phone,
+            wait_for_stream
         ])
         .run(context)
         .expect("bluearchive-aoi failed to start");

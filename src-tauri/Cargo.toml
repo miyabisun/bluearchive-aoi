@@ -27,9 +27,11 @@ libadb = { version = "0.5", default-features = false, features = ["tokio", "tls"
 embedded-io-async = "0.6"
 mdns-sd = "0.21"
 qrcode = { version = "0.14", default-features = false }
-tokio = { version = "1", features = ["net", "time", "rt", "macros"] }
+tokio = { version = "1", features = ["net", "time", "rt", "macros", "io-util"] }
 nusb = "0.1"
 openh264 = "0.9"
+rml_rtmp = "0.8"
+bytes = "1"
 
 # Capturing the game's window: Blue Archive runs on Windows only.
 [target.'cfg(windows)'.dependencies]

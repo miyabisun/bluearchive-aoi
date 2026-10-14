@@ -183,19 +183,10 @@ impl Phone {
     /// Without, another phone is paired while one stays plugged in.
     pub fn pair(&self, usb: bool) {
         let (name, password) = (format!("aoi-{}", word(6)), word(10));
-        let code = match qrcode::QrCode::new(pairing_qr(&name, &password)) {
-            Ok(code) => code,
-            Err(e) => {
-                return (self.link)(&Link::Failed {
-                    message: e.to_string(),
-                });
-            }
+        let qr = match qr_modules(&pairing_qr(&name, &password)) {
+            Ok(qr) => qr,
+            Err(message) => return (self.link)(&Link::Failed { message }),
         };
-        let qr = code
-            .to_colors()
-            .chunks(code.width())
-            .map(|row| row.iter().map(|&c| c == qrcode::Color::Dark).collect())
-            .collect();
         let Some(tools) = self.tools() else {
             return;
         };
@@ -321,8 +312,18 @@ fn key(dir: &Path) -> Result<AdbKey, String> {
     Ok(key)
 }
 
+/// A QR code of `text`: its modules row by row, dark ones true.
+pub(crate) fn qr_modules(text: &str) -> Result<Vec<Vec<bool>>, String> {
+    let code = qrcode::QrCode::new(text).map_err(|e| e.to_string())?;
+    Ok(code
+        .to_colors()
+        .chunks(code.width())
+        .map(|row| row.iter().map(|&c| c == qrcode::Color::Dark).collect())
+        .collect())
+}
+
 /// Letters and digits, `n` of them, drawn at random.
-fn word(n: usize) -> String {
+pub(crate) fn word(n: usize) -> String {
     const LETTERS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     (0..n)
         .map(|_| char::from(LETTERS[OsRng.next_u32() as usize % LETTERS.len()]))

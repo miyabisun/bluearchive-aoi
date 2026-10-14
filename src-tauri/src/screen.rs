@@ -8,8 +8,10 @@
 //! compared with `data/sort-default.png` and `data/title-*.png`, written by
 //! `cargo run --example make_templates`.
 
+use std::borrow::Cow;
+
 use image::{
-    RgbImage,
+    Rgb, RgbImage,
     imageops::{self, FilterType},
 };
 
@@ -175,35 +177,110 @@ pub fn safe_area(image: &RgbImage) -> (u32, u32) {
         return (0, width);
     }
     let row = (BAR_ROW * height as f32).round() as u32;
-    let white = |x: u32| {
-        let [r, g, b] = image.get_pixel(x, row).0;
-        (299 * u32::from(r) + 587 * u32::from(g) + 114 * u32::from(b)) / 1000 > BAR_WHITE
-    };
-    let mut runs = Vec::new();
-    let mut from = None;
-    for x in 0..=width {
-        match (x < width && white(x), from) {
-            (true, None) => from = Some(x),
-            (false, Some(start)) => {
-                runs.push((start, x));
-                from = None;
-            }
-            _ => {}
-        }
-    }
-    let Some(&(start, end)) = runs.iter().max_by_key(|(a, b)| b - a) else {
+    let Some((start, _)) = bar((0..width).map(|x| image.get_pixel(x, row))) else {
         return (0, width);
     };
     let span = width as f32;
-    if ((end - start) as f32) < BAR_SPAN * span {
-        return (0, width);
-    }
     let inset = (start as f32 - BAR_START * span) / (1.0 - 2.0 * BAR_START);
     if inset <= INSET_SLACK * span {
         return (0, width);
     }
     let inset = inset.round() as u32;
     (inset, width - inset)
+}
+
+/// The top bar's white along `line`, where it runs over `BAR_SPAN` of it: its
+/// longest run, `(start, end)`.
+fn bar<'a>(line: impl ExactSizeIterator<Item = &'a Rgb<u8>>) -> Option<(u32, u32)> {
+    let length = line.len();
+    let white = |p: &Rgb<u8>| {
+        let [r, g, b] = p.0;
+        (299 * u32::from(r) + 587 * u32::from(g) + 114 * u32::from(b)) / 1000 > BAR_WHITE
+    };
+    let mut longest: Option<(u32, u32)> = None;
+    let mut from = None;
+    for (at, lit) in line.map(white).chain([false]).enumerate() {
+        let at = at as u32;
+        match (lit, from) {
+            (true, None) => from = Some(at),
+            (false, Some(start)) => {
+                if longest.is_none_or(|(a, b)| at - start > b - a) {
+                    longest = Some((start, at));
+                }
+                from = None;
+            }
+            _ => {}
+        }
+    }
+    longest.filter(|(a, b)| (b - a) as f32 >= BAR_SPAN * length as f32)
+}
+
+/// Which way to turn a frame that came upright back to the game's landscape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Turn {
+    Clockwise,
+    Counterclockwise,
+}
+
+impl Turn {
+    pub fn apply(self, image: &RgbImage) -> RgbImage {
+        match self {
+            Self::Clockwise => imageops::rotate90(image),
+            Self::Counterclockwise => imageops::rotate270(image),
+        }
+    }
+}
+
+/// How to turn a frame that came upright (a phone held sideways may send its
+/// screen so), the top bar along one side; `None` for one in landscape or with
+/// no bar to tell.
+pub fn turn(image: &RgbImage) -> Option<Turn> {
+    let (width, height) = image.dimensions();
+    if width >= height {
+        return None;
+    }
+    let side = (BAR_ROW * width as f32).round() as u32;
+    let column = |x: u32| bar((0..height).map(|y| image.get_pixel(x, y))).is_some();
+    if column(side) {
+        Some(Turn::Clockwise)
+    } else if column(width - 1 - side) {
+        Some(Turn::Counterclockwise)
+    } else {
+        None
+    }
+}
+
+/// The brightest a border's pixels may be to be cut off (black, with the
+/// codec's noise over it).
+const BORDER_DARK: u8 = 24;
+
+/// The frame without the black borders a sender boxed it in; one mostly black
+/// (a loading screen) as it is.
+pub fn trim(image: &RgbImage) -> Cow<'_, RgbImage> {
+    let (width, height) = image.dimensions();
+    let dark = |x: u32, y: u32| image.get_pixel(x, y).0.iter().all(|&c| c <= BORDER_DARK);
+    let row = |y: u32| (0..width).all(|x| dark(x, y));
+    let column = |x: u32| (0..height).all(|y| dark(x, y));
+    let Some(top) = (0..height).find(|&y| !row(y)) else {
+        return Cow::Borrowed(image);
+    };
+    let bottom = (0..height)
+        .rev()
+        .find(|&y| !row(y))
+        .map_or(height, |y| y + 1);
+    let left = (0..width).find(|&x| !column(x)).unwrap_or(0);
+    let right = (0..width)
+        .rev()
+        .find(|&x| !column(x))
+        .map_or(width, |x| x + 1);
+    let (kept_width, kept_height) = (right - left, bottom - top);
+    // A screen sent upright into a wide stream keeps a quarter of it or so.
+    if u64::from(kept_width) * u64::from(kept_height) * 8 < u64::from(width) * u64::from(height)
+        || (kept_width, kept_height) == (width, height)
+    {
+        return Cow::Borrowed(image);
+    }
+    Cow::Owned(imageops::crop_imm(image, left, top, kept_width, kept_height).to_image())
 }
 
 /// The width a phone's safe area is scaled to: the game's parts are then as
@@ -213,14 +290,14 @@ const REFERENCE_WIDTH: u32 = 2222;
 
 /// The frame as the game lays it out: a phone's safe area (see `safe_area`)
 /// scaled to `REFERENCE_WIDTH`; a window's frame as it is.
-pub fn normalize(image: &RgbImage) -> std::borrow::Cow<'_, RgbImage> {
+pub fn normalize(image: &RgbImage) -> Cow<'_, RgbImage> {
     let (left, right) = safe_area(image);
     if (left, right) == (0, image.width()) {
-        return std::borrow::Cow::Borrowed(image);
+        return Cow::Borrowed(image);
     }
     let area = imageops::crop_imm(image, left, 0, right - left, image.height());
     let height = (image.height() as f32 * REFERENCE_WIDTH as f32 / (right - left) as f32).round();
-    std::borrow::Cow::Owned(imageops::resize(
+    Cow::Owned(imageops::resize(
         &*area,
         REFERENCE_WIDTH,
         height as u32,
@@ -357,7 +434,7 @@ mod tests {
 
     use image::RgbImage;
 
-    use super::{normalize, safe_area, sorted_by_default};
+    use super::{Turn, normalize, safe_area, sorted_by_default, trim, turn};
     use crate::grid::find_panel;
 
     fn root() -> &'static Path {
@@ -452,6 +529,45 @@ mod tests {
                 "{name}"
             );
         }
+    }
+
+    /// A frame sent letterboxed comes back as the game drew it; one mostly
+    /// black (a loading screen) stays as it is.
+    #[test]
+    fn black_borders_are_cut_off() {
+        let game = RgbImage::from_fn(640, 300, |x, y| [x as u8 | 64, y as u8 | 64, 128].into());
+        let mut boxed = RgbImage::new(700, 500);
+        image::imageops::replace(&mut boxed, &game, 30, 100);
+        assert_eq!(*trim(&boxed), game);
+        assert_eq!(*trim(&game), game);
+        // A screen sent upright into a wide stream.
+        let upright = RgbImage::from_fn(160, 500, |x, y| [x as u8 | 64, y as u8 | 64, 128].into());
+        let mut wide = RgbImage::new(900, 500);
+        image::imageops::replace(&mut wide, &upright, 370, 0);
+        assert_eq!(*trim(&wide), upright);
+        let mut dark = RgbImage::new(400, 300);
+        image::imageops::replace(
+            &mut dark,
+            &RgbImage::from_pixel(100, 100, [255; 3].into()),
+            150,
+            100,
+        );
+        assert_eq!(*trim(&dark), dark);
+    }
+
+    /// A phone held sideways may send its screen upright: the top bar on one
+    /// side tells which way to turn it back.
+    #[test]
+    fn a_frame_sent_upright_is_turned_back() {
+        let phone = fixture("android/top-bar.png");
+        let left = image::imageops::rotate270(&phone);
+        let right = image::imageops::rotate90(&phone);
+        assert_eq!(turn(&left), Some(Turn::Clockwise));
+        assert_eq!(turn(&right), Some(Turn::Counterclockwise));
+        assert_eq!(Turn::Clockwise.apply(&left), phone);
+        assert_eq!(Turn::Counterclockwise.apply(&right), phone);
+        assert_eq!(turn(&phone), None);
+        assert_eq!(turn(&RgbImage::new(300, 600)), None);
     }
 
     /// No descending screenshot yet: the "≡↑" button turned upside down stands in.

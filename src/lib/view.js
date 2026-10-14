@@ -580,6 +580,29 @@ export function phoneLine(link) {
   }
 }
 
+/** The sentence of where waiting for a streaming app stands (see `broadcast::Cast`). */
+export function castLine(cast) {
+  switch (cast.state) {
+    case "waiting":
+      return "配信アプリでこの QR コードを読み取り、配信を始めてください";
+    case "receiving":
+      return `${cast.from} から画面を受け取っています`;
+    case "failed":
+      return cast.message;
+    default:
+      return "待ち受けると、スマホの配信アプリ（iPhone は Moblin）から画面を受け取れます";
+  }
+}
+
+/** What went wrong with the last stream, or how to send the screen larger; null when nothing. */
+export function castNote(cast) {
+  if (cast.state === "waiting") return cast.problem ?? null;
+  if (cast.state === "receiving" && cast.sideways) {
+    return "画面が横倒しで小さく届いています。配信アプリで縦向き（Portrait）の配信にすると大きく届きます";
+  }
+  return null;
+}
+
 /** Modules of light margin a QR code needs around it to be read. */
 const QR_QUIET = 4;
 

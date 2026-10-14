@@ -122,6 +122,20 @@ export async function connectPhone(/** @type {boolean} */ connect) {
 }
 
 /**
+ * Waits for a streaming app under a new key, or stops waiting; the snapshot's
+ * `cast` carries where it stands. Outside the app it notes the call in
+ * `window.__AOI_CALLS__`.
+ */
+export async function waitForStream(/** @type {boolean} */ wait) {
+  if (!("__TAURI_INTERNALS__" in window)) {
+    const w = /** @type {any} */ (window);
+    (w.__AOI_CALLS__ ??= []).push({ wait });
+    return;
+  }
+  return invoke("wait_for_stream", { wait });
+}
+
+/**
  * Puts the latest release in place of the running app and starts it (on macOS
  * opens the release page instead); rejects
  * with why it could not. Outside the app it notes the call in
