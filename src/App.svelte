@@ -581,15 +581,17 @@
                     </tr>
                     <tr>
                       <td colspan={cells.tiers.length} class="pay"
-                        >設計図で支払い <strong>{cells.paid}</strong> 枚 ／ T2〜T9 の残りに<img
+                        >T2 - T9: <img
                           src={iconUrl(cells.universal.icon)}
-                          alt=""
-                          width="20"
-                          height="20"
-                        />{cells.universal.name} <strong>{cells.universal.need}</strong> 枚（所持
-                        <strong>{cells.universal.held}</strong> 枚{#if cells.universal.short}<span
-                            class="short">・不足 {cells.universal.short}</span
-                          >{/if}）</td
+                          alt={cells.universal.name}
+                          title={cells.universal.name}
+                          width="32"
+                          height="32"
+                        /><span
+                          class:enough={cells.universal.tone === "enough"}
+                          class:short={cells.universal.tone === "short"}
+                          >{cells.universal.text}</span
+                        ></td
                       >
                     </tr>
                   </tbody>
@@ -1486,14 +1488,11 @@
         object-fit: contain
     .pay
       text-align: left
-      white-space: normal
       color: var(--c-muted)
-      strong
-        color: var(--c-on-surface)
       img
         display: inline
         vertical-align: middle
-        margin: 0 2px
+        margin: 0 var(--sp-1)
 
   // Each tier on its colour, from the grey of the first to the purple of the last.
   .tiers

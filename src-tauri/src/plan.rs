@@ -240,15 +240,14 @@ pub struct NeedRow {
 
 /// A slot's blueprints a plan takes, for the window: the slot, named as its
 /// universal blueprints are ("帽子") and shown by its T1 piece; its blueprints
-/// of T2 to T10; and how they are paid: the blueprints held first (`paid` of
-/// them), then the rest of T2 to T9 from the universal ones at `RATE` (their
-/// `need`), the rest of T10 (`short`) left for the player to make up.
+/// of T2 to T10; and how they are paid: the blueprints held first, then the
+/// rest of T2 to T9 from the universal ones at `RATE` (their `need`), the rest
+/// of T10 (`short`) left for the player to make up.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BlueprintRow {
     pub name: String,
     pub icon: String,
     pub tiers: Vec<TierBlueprint>,
-    pub paid: u64,
     pub universal: TierBlueprint,
     pub short: u64,
 }
@@ -295,10 +294,9 @@ pub fn blueprints<S: BuildHasher>(
             }
             tiers.sort_by_key(|t| t.tier);
             let mut universal = blueprint(pieces.iter().filter(slot).find(|p| p.tier == 0)?)?;
-            let (mut paid, mut short) = (0, 0);
+            let mut short = 0;
             for t in &tiers {
                 let own = t.need.min(t.have.amount());
-                paid += own;
                 if t.tier == 10 {
                     short = t.need - own;
                 } else {
@@ -309,7 +307,6 @@ pub fn blueprints<S: BuildHasher>(
                 name: universal.name.strip_suffix(UNIVERSAL)?.to_owned(),
                 icon: entry(first.id)?.icon.clone(),
                 tiers,
-                paid,
                 universal,
                 short,
             })
@@ -707,13 +704,10 @@ pub(crate) mod tests {
         want.extend((4..=9).map(|tier| (tier, 0)));
         want.push((10, 60));
         assert_eq!(tiers, want);
-        // 10 of T2's own, 20 of T3's and 17 of T10's; T2's other 5 from 10
-        // universal ones; T10's other 43 left short.
+        // T2's 5 beyond the 10 held from 10 universal ones; T10's 43 beyond the
+        // 17 held left short.
         let u = &hat.universal;
-        assert_eq!(
-            (hat.paid, u.need, u.have, hat.short),
-            (47, 10, Held::About(1000), 43)
-        );
+        assert_eq!((u.need, u.have, hat.short), (10, Held::About(1000), 43));
         assert_eq!(u.name, "帽子の万能設計図");
         // A slot nothing is asked of is left out.
         assert!(blueprints(&BTreeMap::new(), &pieces, &entries, &held).is_empty());

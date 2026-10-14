@@ -206,7 +206,6 @@ mod tests {
             name: name.into(),
             icon: String::new(),
             tiers: vec![tier(2, 101_001, 15, 10), tier(10, 101_009, 60, 60 - short)],
-            paid: 0,
             universal: TierBlueprint {
                 name: format!("{name}の万能設計図"),
                 ..tier(0, 501_000, universal_need, 1000)

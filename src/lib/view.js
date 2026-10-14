@@ -384,12 +384,11 @@ export function groupPlan(rows) {
 /**
  * A slot's blueprints (see the plan's `BlueprintRow`) as cells: each tier
  * "needed / held" (nothing where none is needed), T10 coloured by whether it
- * is enough, the tiers below paid the rest by the universal ones; what the
- * blueprints pay, and the universal ones needed, held and short ("" none).
+ * is enough, the tiers below paid the rest by the universal ones; and what
+ * T2 to T9 take of those over the ones held, coloured as T10.
  */
 export function blueprintCells(row) {
-  const universal = held(row.universal);
-  const lacking = universal.have === null ? 0 : row.universal.need - universal.have;
+  const universal = tierCell(row.universal);
   return {
     name: row.name,
     icon: row.icon,
@@ -404,13 +403,11 @@ export function blueprintCells(row) {
         tone: t.tier === 10 && t.need > 0 ? (cell.enough ? "enough" : "short") : "",
       };
     }),
-    paid: exact.format(row.paid),
     universal: {
       name: row.universal.name,
       icon: row.universal.icon,
-      need: exact.format(row.universal.need),
-      held: universal.have === null ? "?" : universal.mark + exact.format(universal.have),
-      short: lacking > 0 ? exact.format(lacking) : "",
+      text: universal.text,
+      tone: universal.enough ? "enough" : "short",
     },
   };
 }

@@ -787,9 +787,7 @@ test("shows a slot's blueprints by tier, and pays T10 from a box or the universa
     students,
     targets: [{ id: 20019, target }],
     plan: [],
-    blueprints: [
-      { name: "帽子", icon: "equipment_icon_hat_tier1", tiers, paid: 27, universal, short: 43 },
-    ],
+    blueprints: [{ name: "帽子", icon: "equipment_icon_hat_tier1", tiers, universal, short: 43 }],
     plan_unknown: [],
     procure: [
       {
@@ -841,9 +839,10 @@ test("shows a slot's blueprints by tier, and pays T10 from a box or the universa
   // Below T10 the universal ones pay the rest: only T10 says it is short.
   await expect(cells.first()).not.toHaveClass(/short/);
   await expect(cells.last()).toHaveClass(/short/);
-  await expect(slot.locator(".pay")).toHaveText(
-    "設計図で支払い 27 枚 ／ T2〜T9 の残りに帽子の万能設計図 10 枚（所持 約51,000 枚）",
-  );
+  // Under them, what T2 to T9 take of the universal ones over those held.
+  await expect(slot.locator(".pay")).toHaveText("T2 - T9: 10 / 約51,000");
+  await expect(slot.locator(".pay .enough")).toHaveCount(1);
+  await expect(slot.getByRole("img", { name: "帽子の万能設計図" })).toBeVisible();
   // T10 asked in the procurement: from the T10 box, or 50 universal ones each.
   await expect(page.locator("table.procure tr.line")).toHaveText(["帽子のT10設計図4343"]);
   const chips = page.locator("table.procure .source");

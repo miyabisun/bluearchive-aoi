@@ -368,7 +368,6 @@ describe("plan", () => {
       name: "帽子",
       icon: "hat",
       tiers: [tier(2, 15, 10), tier(3, 0, 30), tier(10, 60, 17)],
-      paid: 27,
       universal,
       short: 43,
     };
@@ -389,21 +388,15 @@ describe("plan", () => {
           tone: "short",
         },
       ],
-      paid: "27",
-      universal: {
-        name: "帽子の万能設計図",
-        icon: "u",
-        need: "1,200",
-        held: "約1,000",
-        short: "200",
-      },
+      // What T2 to T9 take of the universal ones over those held, coloured like T10.
+      universal: { name: "帽子の万能設計図", icon: "u", text: "1,200 / 約1,000", tone: "short" },
     });
     const enough = blueprintCells({
       ...row,
       tiers: [tier(10, 60, 60)],
       universal: { ...universal, need: 10 },
     });
-    expect([enough.tiers[0].tone, enough.universal.short]).toEqual(["enough", ""]);
+    expect([enough.tiers[0].tone, enough.universal.tone]).toEqual(["enough", "enough"]);
   });
 
   it("names a star: the student's 1 to 5, then the unique weapon's", () => {

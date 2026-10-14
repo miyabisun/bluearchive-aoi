@@ -130,5 +130,5 @@ fn equipment_from_t1_to_t10_takes_each_slots_blueprints_the_universal_ones_payin
     // (schale-calc's equipment-upgrade.md), none held.
     let hat = &blueprints[0];
     assert_eq!(hat.tiers.len(), 9);
-    assert_eq!((hat.short, hat.universal.need, hat.paid), (60, 5175, 0));
+    assert_eq!((hat.short, hat.universal.need), (60, 5175));
 }
