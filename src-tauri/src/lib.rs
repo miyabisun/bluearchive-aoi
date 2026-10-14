@@ -27,6 +27,7 @@ pub mod student;
 pub mod supply;
 pub mod tally;
 pub mod update;
+pub mod video;
 pub mod watch;
 pub mod work;
 mod embedded {

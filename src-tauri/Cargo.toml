@@ -29,6 +29,7 @@ mdns-sd = "0.21"
 qrcode = { version = "0.14", default-features = false }
 tokio = { version = "1", features = ["net", "time", "rt", "macros"] }
 nusb = "0.1"
+openh264 = "0.9"
 
 # Capturing the game's window: Blue Archive runs on Windows only.
 [target.'cfg(windows)'.dependencies]

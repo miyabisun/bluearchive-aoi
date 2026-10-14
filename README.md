@@ -65,4 +65,5 @@ macOS 版は Android のスマホから送った画面を読みます。
 
 ## ライセンス
 
-MIT（[LICENSE](LICENSE)）
+MIT（[LICENSE](LICENSE)）。同梱する scrcpy のサーバーは Apache License 2.0
+（[src-tauri/vendor/scrcpy](src-tauri/vendor/scrcpy)）です。

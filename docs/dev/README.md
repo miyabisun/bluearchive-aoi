@@ -12,8 +12,11 @@ app starts with the status `no_source`.
 On either system it can read an Android phone's screen over USB or Wi-Fi
 (`src-tauri/src/android.rs`): USB debugging over `nusb` (the ADB interface found in the
 device's configuration, which Windows lists for no device that is not composite), or wireless
-debugging paired by a QR code and connected over TLS with `libadb`, its services found over mDNS, and the screen recorded as raw frames (`screenrecord --output-format=frames`,
-no video to decode). The key and the phone paired are kept in the app's data folder
+debugging paired by a QR code and connected over TLS with `libadb`, its services found over mDNS, and the screen recorded by scrcpy's server
+(`src-tauri/vendor/scrcpy`, pushed to the phone and started over ADB) as H.264 from the
+phone's hardware encoder, at most 5 frames a second, and decoded by `openh264` (`src-tauri/src/video.rs`).
+The `openh264` crate builds Cisco's decoder from source; Cisco's H.264 patent licence covers
+only its own prebuilt binaries. The key and the phone paired are kept in the app's data folder
 (`adbkey.pem`, `android.json`). A phone's frame is cut to its safe area and scaled to the
 2222-wide window the references were drawn from (`screen::normalize`); the readers measure
 in a 16:9 window's height (`screen::unit`), each part kept to the top, the middle or the

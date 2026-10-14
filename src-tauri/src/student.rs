@@ -139,6 +139,10 @@ const EQUIPMENT_TIER: [Area; 3] = [
 /// The favorite item's badge, "T1" or "T2"; its picture, blue in places,
 /// stands right of and above it.
 const GEAR_TIER: Area = on_panel((0.447, 0.402), (0.851, 0.883));
+/// The badge's blue covers at least this share of `GEAR_TIER` where there is a
+/// favorite item (measured on 2026-10-14 over the student fixtures: none
+/// without one; 0.19 to 0.27 with one, 0.19 on a phone's H.264 video).
+const GEAR_BADGE: f32 = 0.05;
 
 /// Every area the screen is read in.
 pub fn areas() -> Vec<Area> {
@@ -345,9 +349,18 @@ pub fn read(image: &RgbImage, fonts: &Fonts) -> Training {
             t => t.strip_prefix("Lv")?.parse().ok(),
         }
     };
-    let gear = match text(image, fonts, "tier", GEAR_TIER) {
-        Some(t) if t.is_empty() => Some(0),
-        Some(t) => t.strip_prefix('T').and_then(|n| n.parse().ok()),
+    // No favorite item where its badge's blue is missing; a badge whose tier
+    // does not read (a video's blur) is unknown, not missing.
+    let badge = rect(image, GEAR_TIER).zip(count(image, GEAR_TIER, BLUE));
+    let gear = match badge {
+        Some(((x0, y0, x1, y1), blue))
+            if (blue as f32) < GEAR_BADGE * ((x1 - x0) * (y1 - y0)) as f32 =>
+        {
+            Some(0)
+        }
+        Some(_) => {
+            text(image, fonts, "tier", GEAR_TIER).and_then(|t| t.strip_prefix('T')?.parse().ok())
+        }
         None => None,
     };
     Training {

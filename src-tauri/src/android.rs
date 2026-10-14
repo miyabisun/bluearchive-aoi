@@ -1,7 +1,7 @@
 //! A phone's screen over USB or Wi-Fi, with no `adb` installed: USB debugging
 //! allowed on the phone, or Android 11's wireless debugging paired by a QR code
-//! as Android Studio pairs; then the screen recorded as raw frames
-//! (`screenrecord --output-format=frames`).
+//! as Android Studio pairs; then the screen recorded by scrcpy's server with
+//! the phone's hardware encoder, a few frames a second, and decoded here.
 
 use std::{
     net::IpAddr,
@@ -15,65 +15,20 @@ use std::{
 
 use image::RgbImage;
 use libadb::{
-    AdbKey, Connection, Feature, TlsClientConfig, TlsIdentity, TokioTcp, exec,
+    AdbKey, Connection, Feature, TlsClientConfig, TlsIdentity, TokioTcp,
     keys::rsa::rand_core::{OsRng, RngCore},
     pairing::pair,
     transport::{nusb::UsbTransport, tls::MaybeTls},
 };
 use mdns_sd::{ServiceDaemon, ServiceEvent};
+
+use crate::video::H264;
 use serde::{Deserialize, Serialize};
 
 /// The text of the QR code a phone scans to pair: the service `name` it
 /// announces back, and the `password` the pairing runs on.
 pub fn pairing_qr(name: &str, password: &str) -> String {
     format!("WIFI:T:ADB;S:{name};P:{password};;")
-}
-
-/// The pixel format of a raw frame: `HAL_PIXEL_FORMAT_RGB_888`.
-const RGB_888: u32 = 3;
-/// A raw frame's header: five little-endian words.
-const HEADER: usize = 20;
-
-/// Raw frames cut from `screenrecord --output-format=frames`: each a header
-/// of five little-endian words (the length of what follows, the width, the
-/// height, the row's bytes, the pixel format), then its RGB rows.
-#[derive(Default)]
-pub struct Frames {
-    pending: Vec<u8>,
-}
-
-impl Frames {
-    /// Takes `bytes` of the stream; the newest frame they complete, if any.
-    pub fn push(&mut self, bytes: &[u8]) -> Result<Option<RgbImage>, String> {
-        self.pending.extend_from_slice(bytes);
-        let mut newest = None;
-        let mut at = 0;
-        while self.pending.len() - at >= HEADER {
-            let word = |i: usize| {
-                let b = &self.pending[at + 4 * i..at + 4 * i + 4];
-                u32::from_le_bytes([b[0], b[1], b[2], b[3]])
-            };
-            let (length, width, height, stride, format) =
-                (word(0), word(1), word(2), word(3), word(4));
-            let data = width as usize * height as usize * 3;
-            if format != RGB_888 || stride != width * 3 || length as usize != HEADER - 4 + data {
-                return Err(format!(
-                    "unknown frame {width}x{height} stride {stride} format {format}"
-                ));
-            }
-            if self.pending.len() - at < HEADER + data {
-                break;
-            }
-            newest = Some((at + HEADER, width, height));
-            at += HEADER + data;
-        }
-        let frame = newest.map(|(from, width, height)| {
-            let rgb = self.pending[from..from + width as usize * height as usize * 3].to_vec();
-            RgbImage::from_raw(width, height, rgb).expect("as many bytes as the header says")
-        });
-        self.pending.drain(..at);
-        Ok(frame)
-    }
 }
 
 /// The phone's model in its banner (`device::ro.product.model=Pixel 9;...`).
@@ -104,9 +59,6 @@ const RETRY: Duration = Duration::from_secs(3);
 /// How long a USB connection may take before the phone is taken to be asking
 /// its user to allow it.
 const ASKING: Duration = Duration::from_secs(2);
-/// From Android 14 (API 34) the screen records without end; before, for three
-/// minutes at a time.
-const ENDLESS_FROM: u32 = 34;
 /// The key's name, which the phone lists among its paired devices.
 const KEY_NAME: &str = "Aoi";
 /// The file the linked phone is kept in, and the key's.
@@ -114,6 +66,22 @@ const PAIRED: &str = "android.json";
 const KEY: &str = "adbkey.pem";
 /// ADB's USB interface: vendor class, subclass and protocol.
 const ADB_INTERFACE: (u8, u8, u8) = (0xff, 0x42, 0x01);
+/// scrcpy's server (see `vendor/scrcpy`), which records the screen with the
+/// phone's hardware encoder: its version, given when it starts, and where it
+/// is put.
+const SCRCPY: &[u8] = include_bytes!("../vendor/scrcpy/scrcpy-server-v5.0.1");
+const SCRCPY_VERSION: &str = "5.0.1";
+const SCRCPY_PATH: &str = "/data/local/tmp/aoi-scrcpy.jar";
+/// Frames a second at most: the game plays on as the phone encodes them.
+const MAX_FPS: u32 = 5;
+/// The bit rate the encoder shares among the display's frames, of which
+/// `MAX_FPS` come: high, for small letters to read as they are drawn
+/// (measured on 2026-10-14 on a Legion Tab Y700: at 8 Mbps the student
+/// screen's levels and gear do not read, at 200 they do; a still screen sends
+/// 0.2 MB a second).
+const BIT_RATE: u32 = 200_000_000;
+/// How long the server takes to listen, at most.
+const SERVER_START: Duration = Duration::from_secs(10);
 
 /// How a phone's screen comes in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -365,20 +333,23 @@ fn word(n: usize) -> String {
 /// no composite lists no interfaces on Windows, so its configuration is read.
 fn usb() -> Option<UsbTransport> {
     nusb::list_devices().ok()?.find_map(|info| {
-        let listed = info.interfaces().count() > 0;
-        let adb = info
+        let listed = info
             .interfaces()
-            .any(|i| (i.class(), i.subclass(), i.protocol()) == ADB_INTERFACE);
-        if listed && !adb {
+            .find(|i| (i.class(), i.subclass(), i.protocol()) == ADB_INTERFACE);
+        let listed = listed.map(nusb::InterfaceInfo::interface_number);
+        if listed.is_none() && info.interfaces().count() > 0 {
             return None;
         }
         let device = info.open().ok()?;
-        let config = device.active_configuration().ok()?;
-        let number = config.interfaces().find_map(|group| {
-            group
-                .alt_settings()
-                .any(|a| (a.class(), a.subclass(), a.protocol()) == ADB_INTERFACE)
-                .then(|| group.interface_number())
+        // A composite device lists its interfaces; another is read for them.
+        let number = listed.or_else(|| {
+            let config = device.active_configuration().ok()?;
+            config.interfaces().find_map(|group| {
+                group
+                    .alt_settings()
+                    .any(|a| (a.class(), a.subclass(), a.protocol()) == ADB_INTERFACE)
+                    .then(|| group.interface_number())
+            })
         })?;
         UsbTransport::new(device.claim_interface(number).ok()?)
     })
@@ -507,9 +478,9 @@ async fn stream_wifi(
     record(tools, paired, &mut conn, Via::Wifi).await
 }
 
-/// Records the screen of the phone at `conn`, passing on each frame, till the
-/// recording ends or the reading pauses. The phone's model, kept, and the link
-/// streaming are told once its first frame comes.
+/// Records the screen of the phone at `conn` with scrcpy's server, passing
+/// on each frame, till the recording ends or the reading pauses. The phone's
+/// model, kept, and the link streaming are told once its first frame comes.
 async fn record<T>(
     tools: &Tools,
     paired: &mut Paired,
@@ -525,28 +496,47 @@ where
         .and_then(model)
         .unwrap_or_else(|| paired.device.clone());
     let mut buf = vec![0u8; 1 << 20];
-    let n = exec::run(conn, "getprop ro.build.version.sdk", &mut buf)
+    {
+        let mut sync = libadb::sync::open(conn, &mut buf)
+            .await
+            .map_err(|e| e.to_string())?;
+        sync.send(SCRCPY_PATH, 0o100_644, 0, SCRCPY)
+            .await
+            .map_err(|e| e.to_string())?;
+        sync.quit().await.map_err(|e| e.to_string())?;
+    }
+    let scid = OsRng.next_u32() & 0x7fff_ffff;
+    let start = format!(
+        "exec:CLASSPATH={SCRCPY_PATH} app_process / com.genymobile.scrcpy.Server \
+         {SCRCPY_VERSION} scid={scid:08x} log_level=warn video_codec=h264 max_fps={MAX_FPS} \
+         video_bit_rate={BIT_RATE} audio=false control=false tunnel_forward=true \
+         raw_stream=true\0"
+    );
+    // The server runs while its channel stays open, and listens for the video.
+    let server = conn
+        .open_channel(start.as_bytes())
         .await
         .map_err(|e| e.to_string())?;
-    let sdk: u32 = String::from_utf8_lossy(&buf[..n])
-        .trim()
-        .parse()
-        .unwrap_or(0);
-    let limit = if sdk >= ENDLESS_FROM { 0 } else { 180 };
-    let command = format!("screenrecord --output-format=frames --time-limit {limit} -");
-    let mut destination = [0u8; 128];
-    let mut recording = exec::open(conn, &command, &mut destination)
-        .await
-        .map_err(|e| e.to_string())?;
-    let mut frames = Frames::default();
+    let socket = format!("localabstract:scrcpy_{scid:08x}\0");
+    let since = std::time::Instant::now();
+    let video = loop {
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        if let Ok(video) = conn.open_channel(socket.as_bytes()).await {
+            break video;
+        }
+        if since.elapsed() > SERVER_START {
+            return Err("画面の録画が始まりませんでした".to_owned());
+        }
+    };
+    let mut decoder = H264::new()?;
     let mut first = true;
     while !tools.paused.load(Ordering::Relaxed) {
-        let n = match recording.read(&mut buf).await {
+        let n = match conn.read_channel(video, &mut buf).await {
             Ok(n) => n,
             Err(libadb::Error::ChannelClosed) => return Ok(()),
             Err(e) => return Err(e.to_string()),
         };
-        if let Some(image) = frames.push(&buf[..n])? {
+        if let Some(image) = decoder.push(&buf[..n])? {
             if first {
                 first = false;
                 if paired.device != device {
@@ -561,48 +551,19 @@ where
             (tools.frame)(image);
         }
     }
+    // Paused: the server stops with its channels.
+    let _ = conn.close_channel(video).await;
+    let _ = conn.close_channel(server).await;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Frames, instance, model, pairing_qr};
-
-    /// A frame of `width` x `height` whose every byte is `fill`.
-    fn frame(width: u32, height: u32, fill: u8) -> Vec<u8> {
-        let data = (width * height * 3) as usize;
-        let mut out = Vec::new();
-        for word in [16 + data as u32, width, height, width * 3, 3] {
-            out.extend(word.to_le_bytes());
-        }
-        out.extend(std::iter::repeat_n(fill, data));
-        out
-    }
+    use super::{instance, model, pairing_qr};
 
     #[test]
     fn the_pairing_qr_carries_the_name_and_the_password() {
         assert_eq!(pairing_qr("aoi-x1", "Ab3"), "WIFI:T:ADB;S:aoi-x1;P:Ab3;;");
-    }
-
-    #[test]
-    fn frames_are_cut_from_the_stream_however_it_arrives() {
-        let stream = [frame(2, 1, 7), frame(2, 1, 9), frame(3, 2, 5)].concat();
-        let mut frames = Frames::default();
-        // A frame split anywhere comes once it is whole.
-        assert_eq!(frames.push(&stream[..10]).unwrap(), None);
-        let first = frames.push(&stream[10..30]).unwrap().unwrap();
-        assert_eq!((first.dimensions(), first.as_raw()[0]), ((2, 1), 7));
-        // Two whole frames at once: the newer one.
-        let rest = frames.push(&stream[30..]).unwrap().unwrap();
-        assert_eq!((rest.dimensions(), rest.as_raw()[0]), ((3, 2), 5));
-        assert_eq!(frames.push(&[]).unwrap(), None);
-    }
-
-    #[test]
-    fn a_frame_of_another_pixel_format_is_refused() {
-        let mut other = frame(2, 1, 0);
-        other[16] = 1;
-        assert!(Frames::default().push(&other).is_err());
     }
 
     #[test]
