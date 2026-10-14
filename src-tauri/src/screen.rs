@@ -14,20 +14,21 @@ use image::{
 };
 
 /// How large the game draws a screen: the height of a 16:9 window as wide as
-/// the screen, or the screen's own height where it is no wider than 16:9. A
-/// phone's screen is wider, and the game's parts keep the size the width gives
-/// them, each kept to the top, the middle or the bottom (see `Anchor`): the
-/// parts measured in window heights at 16:9 are measured in this.
+/// the screen. A phone's screen is wider, a tablet's taller, and the game's
+/// parts keep the size the width gives them, each kept to the top, the middle
+/// or the bottom (see `Anchor`): the parts measured in window heights at 16:9
+/// are measured in this. A window within a pixel of 16:9 keeps its height.
 pub fn unit(width: u32, height: u32) -> f32 {
-    if u64::from(width) * 9 > u64::from(height) * 16 {
-        width as f32 * 9.0 / 16.0
-    } else {
+    let wide = width as f32 * 9.0 / 16.0;
+    if (wide - height as f32).abs() < 1.0 {
         height as f32
+    } else {
+        wide
     }
 }
 
-/// Which edge a part of the screen keeps to where the screen is wider than
-/// 16:9 and so shorter than `unit` (measured on 2026-10-14 on a Pixel 9 against
+/// Which edge a part of the screen keeps to where the screen is not 16:9 and
+/// so shorter or taller than `unit` (measured on 2026-10-14 on a Pixel 9 against
 /// a 16:9 window): the top bar and the lists to the top, the student screen's
 /// panel to the middle, its name plate to the bottom.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -401,6 +402,23 @@ mod tests {
             "other/event-stages.png",
         ] {
             assert!(!shows_default(&fixture(name)), "{name}");
+        }
+    }
+
+    /// The game sizes its parts by the screen's width, whatever its shape
+    /// (measured on 2026-10-14: a card is 165 pixels high in a 2222x1250
+    /// window, 155 on a phone's 2080-wide safe area, 226 on a 3040x1904 tablet).
+    #[test]
+    fn the_unit_follows_the_width() {
+        for (width, height, unit) in [
+            (2222, 1250, 1250.0),
+            (2080, 1080, 1170.0),
+            (3040, 1904, 1710.0),
+        ] {
+            assert!(
+                (super::unit(width, height) - unit).abs() < 0.01,
+                "{width}x{height}"
+            );
         }
     }
 

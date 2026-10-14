@@ -1197,7 +1197,9 @@ test("the menu opens the link to a phone: a QR code to pair, then the phone conn
   const dialog = page.getByRole("dialog", { name: "Androidとの通信" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("img", { name: "ペア設定の QR コード" })).toBeVisible();
-  await expect(dialog.getByText("スマホでこの QR コードを読み取ってください")).toBeVisible();
+  await expect(
+    dialog.getByText("この QR コードを読み取るか、USB ケーブルでつないでください"),
+  ).toBeVisible();
   // Already showing a QR code: none asked for anew.
   expect(await page.evaluate(() => window.__AOI_CALLS__ ?? [])).toEqual([]);
   await dialog.getByRole("button", { name: "閉じる" }).click();
@@ -1214,11 +1216,11 @@ test("the menu opens the link to a phone: a QR code to pair, then the phone conn
   // None paired: a QR code is asked for at once.
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ pair: true }]);
 
-  const streaming = { state: "streaming", device: "Pixel 9" };
+  const streaming = { state: "streaming", device: "Pixel 9", via: "wifi" };
   await open(page, { status: { state: "no_source" }, items, equipment, phone: streaming });
   await page.getByRole("button", { name: "メニュー" }).click();
   await page.getByRole("menuitem", { name: "Androidとの通信" }).click();
-  await expect(page.getByText("Pixel 9 の画面を受け取っています")).toBeVisible();
+  await expect(page.getByText("Pixel 9 の画面を Wi-Fi で受け取っています")).toBeVisible();
   await page.getByRole("button", { name: "切断" }).click();
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ connect: false }]);
 

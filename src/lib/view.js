@@ -564,17 +564,19 @@ export function updateText(update) {
 export function phoneLine(link) {
   switch (link.state) {
     case "pairing":
-      return "スマホでこの QR コードを読み取ってください";
+      return "この QR コードを読み取るか、USB ケーブルでつないでください";
     case "searching":
       return `${link.device} を探しています…`;
+    case "allowing":
+      return "スマホに出た「USB デバッグを許可しますか？」で許可を押してください";
     case "streaming":
-      return `${link.device} の画面を受け取っています`;
+      return `${link.device} の画面を ${link.via === "usb" ? "USB" : "Wi-Fi"} で受け取っています`;
     case "stopped":
       return `${link.device} とは切断しています`;
     case "failed":
       return link.message;
     default:
-      return "スマホとはまだペア設定していません";
+      return "スマホとはまだつないでいません";
   }
 }
 

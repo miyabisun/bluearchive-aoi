@@ -19,8 +19,8 @@ goes online only to look for and download a newer version when you ask it to.
 - Windows 11
 - The Japanese PC version of Blue Archive. Names are shown in Japanese.
 
-Aoi also reads the Android version of the game: the phone sends its screen over Wi-Fi,
-with no app on the phone and no cable (wireless debugging, Android 11 or later; steps in
+Aoi also reads the Android version of the game: the phone sends its screen over a USB cable
+or Wi-Fi, with no app on the phone (USB or wireless debugging, Android 11 or later; steps in
 Japanese: [docs/guide/android.md](docs/guide/android.md)).
 
 There is a macOS version too, which reads a phone's screen only: the PC version of Blue

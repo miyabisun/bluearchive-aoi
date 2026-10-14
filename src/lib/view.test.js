@@ -784,13 +784,19 @@ describe("update", () => {
 
 describe("phone", () => {
   it("tells where the link to a phone stands", () => {
-    expect(phoneLine({ state: "unpaired" })).toBe("スマホとはまだペア設定していません");
+    expect(phoneLine({ state: "unpaired" })).toBe("スマホとはまだつないでいません");
     expect(phoneLine({ state: "pairing", qr: [] })).toBe(
-      "スマホでこの QR コードを読み取ってください",
+      "この QR コードを読み取るか、USB ケーブルでつないでください",
     );
     expect(phoneLine({ state: "searching", device: "Pixel 9" })).toBe("Pixel 9 を探しています…");
-    expect(phoneLine({ state: "streaming", device: "Pixel 9" })).toBe(
-      "Pixel 9 の画面を受け取っています",
+    expect(phoneLine({ state: "allowing" })).toBe(
+      "スマホに出た「USB デバッグを許可しますか？」で許可を押してください",
+    );
+    expect(phoneLine({ state: "streaming", device: "Pixel 9", via: "wifi" })).toBe(
+      "Pixel 9 の画面を Wi-Fi で受け取っています",
+    );
+    expect(phoneLine({ state: "streaming", device: "TB322FC", via: "usb" })).toBe(
+      "TB322FC の画面を USB で受け取っています",
     );
     expect(phoneLine({ state: "stopped", device: "Pixel 9" })).toBe("Pixel 9 とは切断しています");
     expect(phoneLine({ state: "failed", message: "ペア設定できませんでした" })).toBe(

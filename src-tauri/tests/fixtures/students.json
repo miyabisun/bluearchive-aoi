@@ -36,5 +36,6 @@
 {"image": "students/fubuki-swimsuit.png", "role": "eval", "id": 20037, "level": 80, "rarity": 3, "bond": 20, "skills": [3, 4, 7, 7], "weapon": null, "equipment": [[6, 50], [3, 30], [1, 1]], "gear": 0, "ability": [0, 0, 0]},
 {"image": "students/ichika-swimsuit.png", "role": "eval", "id": 26015, "level": 90, "rarity": 5, "bond": 21, "skills": [5, 7, 4, 10], "weapon": {"level": 60, "stars": 4}, "equipment": [[6, 50], [10, 70], [4, 40]], "gear": 0, "ability": [0, 0, 0]},
 {"image": "android/haruka-dress.png", "role": "tune", "id": 10141, "level": 90, "rarity": 5, "bond": 35, "skills": [5, 9, 9, 9], "weapon": {"level": 30, "stars": 1}, "equipment": [[10, 70], [10, 70], [10, 70]], "gear": 0, "ability": [0, 0, 0]},
-{"image": "android/suzumi.png", "role": "eval", "id": 16003, "level": 90, "rarity": 5, "bond": 25, "skills": [5, 4, 4, 4], "weapon": {"level": 40, "stars": 2}, "equipment": [[10, 70], [5, 45], [9, 65]], "gear": 2, "ability": [0, 0, 0]}
+{"image": "android/suzumi.png", "role": "eval", "id": 16003, "level": 90, "rarity": 5, "bond": 25, "skills": [5, 4, 4, 4], "weapon": {"level": 40, "stars": 2}, "equipment": [[10, 70], [5, 45], [9, 65]], "gear": 2, "ability": [0, 0, 0]},
+{"image": "android/tablet-hoshino.png", "role": "eval", "id": 10005, "level": 90, "rarity": 5, "bond": 34, "skills": [5, 10, 10, 10], "weapon": {"level": 60, "stars": 4}, "equipment": [[10, 70], [10, 70], [10, 70]], "gear": 2, "ability": [25, 0, 25]}
 ]

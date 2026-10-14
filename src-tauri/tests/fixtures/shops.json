@@ -201,5 +201,22 @@
       { "name": "イオリ（水着）の神名文字", "coin": 0, "left": 0, "price": 1800 },
       { "name": "神名のカケラ", "coin": 0, "left": 0, "price": 600 }
     ]
+  },
+  {
+    "image": "android/tablet-souryokusen.png",
+    "role": "eval",
+    "shop": "総力戦",
+    "held": [530, 3320],
+    "note": "2026-10-14 capture on a Lenovo Legion Tab Y700 (TB322FC, Android, 3040x1904, 16:10) over USB with adb's screencap. Labels by eye. Left coin purple (530), right gold (3,320); the bottom row is cut off.",
+    "offers": [
+      { "name": "初級戦術教育BD（百鬼夜行）", "coin": 1, "left": 40, "price": 10 },
+      { "name": "中級戦術教育BD（百鬼夜行）", "coin": 1, "left": 30, "price": 20 },
+      { "name": "上級戦術教育BD（百鬼夜行）", "coin": 1, "left": 25, "price": 50 },
+      { "name": "最上級戦術教育BD（百鬼夜行）", "coin": 1, "left": 6, "price": 100 },
+      { "name": "初級戦術教育BD（トリニティ）", "coin": 1, "left": 40, "price": 10 },
+      { "name": "中級戦術教育BD（トリニティ）", "coin": 1, "left": 30, "price": 20 },
+      { "name": "上級戦術教育BD（トリニティ）", "coin": 1, "left": 25, "price": 50 },
+      { "name": "最上級戦術教育BD（トリニティ）", "coin": 1, "left": 6, "price": 100 }
+    ]
   }
 ]

@@ -9,9 +9,10 @@ It builds for macOS too, where there is no window to capture: the capture lives 
 `src-tauri/src/watch/window.rs` and its crates are Windows-only dependencies, so the macOS
 app starts with the status `no_source`.
 
-On either system it can read an Android phone's screen over Wi-Fi (`src-tauri/src/android.rs`):
-wireless debugging paired by a QR code and connected over TLS with `libadb`, its services
-found over mDNS, and the screen recorded as raw frames (`screenrecord --output-format=frames`,
+On either system it can read an Android phone's screen over USB or Wi-Fi
+(`src-tauri/src/android.rs`): USB debugging over `nusb` (the ADB interface found in the
+device's configuration, which Windows lists for no device that is not composite), or wireless
+debugging paired by a QR code and connected over TLS with `libadb`, its services found over mDNS, and the screen recorded as raw frames (`screenrecord --output-format=frames`,
 no video to decode). The key and the phone paired are kept in the app's data folder
 (`adbkey.pem`, `android.json`). A phone's frame is cut to its safe area and scaled to the
 2222-wide window the references were drawn from (`screen::normalize`); the readers measure

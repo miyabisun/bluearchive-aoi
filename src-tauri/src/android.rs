@@ -1,6 +1,7 @@
-//! A phone's screen over Wi-Fi, with no `adb` installed: Android 11's
-//! wireless debugging, paired by a QR code as Android Studio pairs, then the
-//! screen recorded as raw frames (`screenrecord --output-format=frames`).
+//! A phone's screen over USB or Wi-Fi, with no `adb` installed: USB debugging
+//! allowed on the phone, or Android 11's wireless debugging paired by a QR code
+//! as Android Studio pairs; then the screen recorded as raw frames
+//! (`screenrecord --output-format=frames`).
 
 use std::{
     net::IpAddr,
@@ -17,7 +18,7 @@ use libadb::{
     AdbKey, Connection, Feature, TlsClientConfig, TlsIdentity, TokioTcp, exec,
     keys::rsa::rand_core::{OsRng, RngCore},
     pairing::pair,
-    transport::tls::MaybeTls,
+    transport::{nusb::UsbTransport, tls::MaybeTls},
 };
 use mdns_sd::{ServiceDaemon, ServiceEvent};
 use serde::{Deserialize, Serialize};
@@ -96,41 +97,59 @@ const PAIRING: &str = "_adb-tls-pairing._tcp.local.";
 const CONNECT: &str = "_adb-tls-connect._tcp.local.";
 /// How long a QR code waits to be scanned.
 const PAIRING_WAIT: Duration = Duration::from_mins(10);
-/// How long the paired phone is looked for at a time, and the pause between tries.
-const LOOK: Duration = Duration::from_secs(10);
+/// How long the paired phone is looked for over Wi-Fi at a time, and the pause
+/// between tries (a USB cable is looked for between them).
+const LOOK: Duration = Duration::from_secs(3);
 const RETRY: Duration = Duration::from_secs(3);
+/// How long a USB connection may take before the phone is taken to be asking
+/// its user to allow it.
+const ASKING: Duration = Duration::from_secs(2);
 /// From Android 14 (API 34) the screen records without end; before, for three
 /// minutes at a time.
 const ENDLESS_FROM: u32 = 34;
 /// The key's name, which the phone lists among its paired devices.
 const KEY_NAME: &str = "Aoi";
-/// The file the paired phone is kept in, and the key's.
+/// The file the linked phone is kept in, and the key's.
 const PAIRED: &str = "android.json";
 const KEY: &str = "adbkey.pem";
+/// ADB's USB interface: vendor class, subclass and protocol.
+const ADB_INTERFACE: (u8, u8, u8) = (0xff, 0x42, 0x01);
+
+/// How a phone's screen comes in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Via {
+    Usb,
+    Wifi,
+}
 
 /// Where the phone link stands, for the window.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum Link {
-    /// No phone is paired.
+    /// No phone has been linked.
     Unpaired,
-    /// A QR code waits to be scanned: its modules row by row, dark ones true.
+    /// A QR code waits to be scanned (its modules row by row, dark ones true);
+    /// a phone plugged in by USB is taken too.
     Pairing { qr: Vec<Vec<bool>> },
-    /// Paired with `device`, which is looked for on the network.
+    /// `device`, linked, is looked for over USB and Wi-Fi.
     Searching { device: String },
-    /// The screen of `device` comes in.
-    Streaming { device: String },
-    /// Paired with `device`, left unconnected by the user.
+    /// A phone plugged in by USB asks its user to allow this computer.
+    Allowing,
+    /// The screen of `device` comes in, `via` USB or Wi-Fi.
+    Streaming { device: String, via: Via },
+    /// `device`, linked, left unconnected by the user.
     Stopped { device: String },
-    /// Pairing did not go through: why.
+    /// Linking did not go through: why.
     Failed { message: String },
 }
 
-/// The phone paired, kept beside the key: the instance it announces its
-/// connect port under, its model, and whether to connect at start.
+/// The phone linked, kept beside the key: the instance it announces its
+/// Wi-Fi connect port under once paired (none for a phone only plugged in),
+/// its model, and whether to connect at start.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Paired {
-    guid: String,
+    guid: Option<String>,
     device: String,
     connect: bool,
 }
@@ -149,9 +168,10 @@ struct Tools {
     paused: Arc<AtomicBool>,
 }
 
-/// The link to a phone: pairs it, keeps it connected and passes on its frames.
+/// The link to a phone: pairs it or takes it by USB, keeps it connected and
+/// passes on its frames.
 pub struct Phone {
-    /// Where the key and the paired phone are kept.
+    /// Where the key and the phone linked are kept.
     dir: PathBuf,
     frame: FrameSink,
     link: LinkSink,
@@ -178,7 +198,7 @@ impl Phone {
         }
     }
 
-    /// Tells where the link stands, and connects to the paired phone if the
+    /// Tells where the link stands, and connects to the phone linked if the
     /// user left it connected.
     pub fn start(&self) {
         match self.paired() {
@@ -190,7 +210,8 @@ impl Phone {
         }
     }
 
-    /// Shows a QR code to pair a phone with, then connects to it.
+    /// Shows a QR code to pair a phone over Wi-Fi with, and takes a phone
+    /// plugged in by USB meanwhile; then keeps whichever came connected.
     pub fn pair(&self) {
         let (name, password) = (format!("aoi-{}", word(6)), word(10));
         let code = match qrcode::QrCode::new(pairing_qr(&name, &password)) {
@@ -211,9 +232,12 @@ impl Phone {
         };
         (self.link)(&Link::Pairing { qr });
         self.run(async move {
-            let guid = match pair_phone(&tools, &name, &password).await {
-                Ok(guid) => guid,
-                Err(message) => return (tools.link)(&Link::Failed { message }),
+            let guid = tokio::select! {
+                paired = pair_phone(&tools, &name, &password) => match paired {
+                    Ok(guid) => Some(guid),
+                    Err(message) => return (tools.link)(&Link::Failed { message }),
+                },
+                () = plugged() => None,
             };
             let paired = Paired {
                 guid,
@@ -225,7 +249,7 @@ impl Phone {
         });
     }
 
-    /// Connects to the paired phone, now and at the next start.
+    /// Connects to the phone linked, now and at the next start.
     pub fn connect(&self) {
         if let Some(mut paired) = self.paired() {
             paired.connect = true;
@@ -234,7 +258,7 @@ impl Phone {
         }
     }
 
-    /// Leaves the paired phone unconnected, now and at the next start.
+    /// Leaves the phone linked unconnected, now and at the next start.
     pub fn stop(&self) {
         self.cancel();
         match self.paired() {
@@ -330,6 +354,37 @@ fn word(n: usize) -> String {
         .collect()
 }
 
+/// The ADB interface of a phone plugged in by USB, claimed. A device that is
+/// no composite lists no interfaces on Windows, so its configuration is read.
+fn usb() -> Option<UsbTransport> {
+    nusb::list_devices().ok()?.find_map(|info| {
+        let listed = info.interfaces().count() > 0;
+        let adb = info
+            .interfaces()
+            .any(|i| (i.class(), i.subclass(), i.protocol()) == ADB_INTERFACE);
+        if listed && !adb {
+            return None;
+        }
+        let device = info.open().ok()?;
+        let config = device.active_configuration().ok()?;
+        let number = config.interfaces().find_map(|group| {
+            group
+                .alt_settings()
+                .any(|a| (a.class(), a.subclass(), a.protocol()) == ADB_INTERFACE)
+                .then(|| group.interface_number())
+        })?;
+        UsbTransport::new(device.claim_interface(number).ok()?)
+    })
+}
+
+/// Waits for a phone to be plugged in by USB.
+async fn plugged() {
+    // Claimed to look, and let go at once: `keep` claims it again.
+    while usb().is_none() {
+        tokio::time::sleep(RETRY).await;
+    }
+}
+
 /// The address and port of the instance of `service` named `wanted`, if it
 /// is announced within `within`.
 async fn find(
@@ -379,9 +434,10 @@ async fn pair_phone(tools: &Tools, name: &str, password: &str) -> Result<String,
     Ok(paired.guid)
 }
 
-/// Keeps the paired phone connected and its frames coming, looking for it
-/// again whenever it drops (its screen off, wireless debugging turned off),
-/// none taken while the reading is paused.
+/// Keeps the phone linked connected and its frames coming: over USB while it
+/// is plugged in, else over Wi-Fi once paired. It is looked for again whenever
+/// it drops (unplugged, wireless debugging turned off); no frames are taken
+/// while the reading is paused.
 async fn keep(mut tools: Tools, mut paired: Paired) {
     loop {
         while tools.paused.load(Ordering::Relaxed) {
@@ -390,32 +446,47 @@ async fn keep(mut tools: Tools, mut paired: Paired) {
         (tools.link)(&Link::Searching {
             device: paired.device.clone(),
         });
-        if let Some((address, port)) = find(&tools.mdns, CONNECT, &paired.guid, LOOK).await {
-            let streamed = stream(&mut tools, (address, port), |tools, device| {
-                if paired.device != device {
-                    device.clone_into(&mut paired.device);
-                    let _ = save(&tools.dir, &paired);
-                }
-                (tools.link)(&Link::Streaming {
-                    device: device.to_owned(),
-                });
-            })
-            .await;
-            if streamed.is_ok() {
-                continue;
-            }
+        let streamed = if let Some(transport) = usb() {
+            stream_usb(&mut tools, &mut paired, transport).await
+        } else if let Some(guid) = paired.guid.clone()
+            && let Some(at) = find(&tools.mdns, CONNECT, &guid, LOOK).await
+        {
+            stream_wifi(&mut tools, &mut paired, at).await
+        } else {
+            Err(String::new())
+        };
+        if streamed.is_err() {
+            tokio::time::sleep(RETRY).await;
         }
-        tokio::time::sleep(RETRY).await;
     }
 }
 
-/// Receives the screen of the phone at `at`, passing on each frame, till the
-/// recording ends or the reading pauses; `started` hears the phone's model
-/// once its first frame comes.
-async fn stream(
+/// Receives the screen of the phone plugged in at `transport`. A phone that
+/// has not allowed the key asks its user, which takes as long as it takes.
+async fn stream_usb(
     tools: &mut Tools,
+    paired: &mut Paired,
+    transport: UsbTransport,
+) -> Result<(), String> {
+    let conn = {
+        let connecting = Connection::<_>::connect(transport, &mut tools.key, &[Feature::ShellV2]);
+        tokio::pin!(connecting);
+        if let Ok(conn) = tokio::time::timeout(ASKING, &mut connecting).await {
+            conn
+        } else {
+            (tools.link)(&Link::Allowing);
+            connecting.await
+        }
+    };
+    let mut conn = conn.map_err(|e| e.to_string())?;
+    record(tools, paired, &mut conn, Via::Usb).await
+}
+
+/// Receives the screen of the phone paired at `at` over Wi-Fi.
+async fn stream_wifi(
+    tools: &mut Tools,
+    paired: &mut Paired,
     at: (IpAddr, u16),
-    mut started: impl FnMut(&Tools, &str),
 ) -> Result<(), String> {
     let tcp = tokio::net::TcpStream::connect(at)
         .await
@@ -426,12 +497,28 @@ async fn stream(
         Connection::<_>::connect_tls(transport, &mut tools.key, &[Feature::ShellV2], &tools.tls)
             .await
             .map_err(|e| e.to_string())?;
+    record(tools, paired, &mut conn, Via::Wifi).await
+}
+
+/// Records the screen of the phone at `conn`, passing on each frame, till the
+/// recording ends or the reading pauses. The phone's model, kept, and the link
+/// streaming are told once its first frame comes.
+async fn record<T>(
+    tools: &Tools,
+    paired: &mut Paired,
+    conn: &mut Connection<T>,
+    via: Via,
+) -> Result<(), String>
+where
+    T: embedded_io_async::Read + embedded_io_async::Write,
+    T::Error: std::fmt::Display,
+{
     let device = conn
         .device_banner()
         .and_then(model)
-        .unwrap_or_else(|| "Android".to_owned());
+        .unwrap_or_else(|| paired.device.clone());
     let mut buf = vec![0u8; 1 << 20];
-    let n = exec::run(&mut conn, "getprop ro.build.version.sdk", &mut buf)
+    let n = exec::run(conn, "getprop ro.build.version.sdk", &mut buf)
         .await
         .map_err(|e| e.to_string())?;
     let sdk: u32 = String::from_utf8_lossy(&buf[..n])
@@ -441,7 +528,7 @@ async fn stream(
     let limit = if sdk >= ENDLESS_FROM { 0 } else { 180 };
     let command = format!("screenrecord --output-format=frames --time-limit {limit} -");
     let mut destination = [0u8; 128];
-    let mut recording = exec::open(&mut conn, &command, &mut destination)
+    let mut recording = exec::open(conn, &command, &mut destination)
         .await
         .map_err(|e| e.to_string())?;
     let mut frames = Frames::default();
@@ -454,8 +541,15 @@ async fn stream(
         };
         if let Some(image) = frames.push(&buf[..n])? {
             if first {
-                started(tools, &device);
                 first = false;
+                if paired.device != device {
+                    device.clone_into(&mut paired.device);
+                    let _ = save(&tools.dir, paired);
+                }
+                (tools.link)(&Link::Streaming {
+                    device: device.clone(),
+                    via,
+                });
             }
             (tools.frame)(image);
         }
