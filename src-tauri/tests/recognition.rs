@@ -19,6 +19,8 @@ struct Fixture {
     image: String,
     list: List,
     cells: Vec<Label>,
+    /// Whether the references were drawn from it ("tune") or not ("eval").
+    role: String,
 }
 
 #[derive(Deserialize, Clone, PartialEq, Debug)]
@@ -191,4 +193,54 @@ fn a_run_of_frames_tallies_to_the_labels() {
         })
         .collect();
     assert_eq!(counted, expected);
+}
+
+/// A phone with a smaller screen (or a stream of one) shows the list smaller:
+/// the screens kept for evaluation, scaled to 1600 and 1280 wide, read every
+/// cell's item and count right or not at all, and most of them right.
+#[test]
+fn a_smaller_screen_reads_right_or_not_at_all() {
+    use image::imageops::{FilterType, resize};
+    let recognizer = recognizer();
+    let mut failures = Vec::new();
+    for width in [1600, 1280] {
+        let (mut cells, mut right) = (0, 0);
+        for fixture in fixtures().into_iter().filter(|f| f.role == "eval") {
+            let image = open(&fixture.image);
+            let height = image.height() * width / image.width();
+            let small = resize(&image, width, height, FilterType::Triangle);
+            let read = recognizer.read(&small, fixture.list);
+            for (i, (cell, want)) in read.iter().zip(&fixture.cells).enumerate() {
+                if want.ignored {
+                    continue;
+                }
+                cells += 1;
+                let quantity = cell.quantity.map(|q| q.to_string());
+                if cell.id.is_some_and(|id| Some(id) != want.id)
+                    || quantity
+                        .as_ref()
+                        .is_some_and(|q| Some(q) != want.quantity.as_ref())
+                {
+                    failures.push(format!(
+                        "{width}: {} cell {i}: got {:?} x{quantity:?}, want {:?} x{:?}",
+                        fixture.image, cell.id, want.id, want.quantity
+                    ));
+                } else if cell.id.is_some() && quantity.is_some() {
+                    right += 1;
+                }
+            }
+        }
+        if right * 10 < cells * 9 {
+            failures.push(format!("{width}: {right} of {cells} cells read"));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "
+{}",
+        failures.join(
+            "
+"
+        )
+    );
 }

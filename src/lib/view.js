@@ -45,6 +45,8 @@ export function statusView(status) {
       return { label: "一時中断", tone: "paused" };
     case "no_source":
       return { label: "取り込み元なし", tone: "idle" };
+    case "too_small":
+      return { label: "画面が小さすぎます", tone: "idle" };
     default:
       return { label: "ゲーム未検出", tone: "idle" };
   }

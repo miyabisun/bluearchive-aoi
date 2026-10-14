@@ -283,23 +283,56 @@ pub fn trim(image: &RgbImage) -> Cow<'_, RgbImage> {
     Cow::Owned(imageops::crop_imm(image, left, top, kept_width, kept_height).to_image())
 }
 
-/// The width a phone's safe area is scaled to: the game's parts are then as
-/// large as in the 2222x1250 window the references were drawn from (a phone
-/// draws its letters smaller, too far from them to read).
-const REFERENCE_WIDTH: u32 = 2222;
+/// The widths the texts are read at, with references of their own: the
+/// 2222x1250 window the references were first drawn from, and smaller screens
+/// (a phone's, or a stream of one, at 1080 lines or 720), whose letters lose
+/// their shapes too far for the window's references (measured on 2026-10-15:
+/// the student screen's names and stars, the credits and the shops' bars read
+/// wrong or not at all at 1600 wide with the window's).
+pub const WIDTHS: [u32; 3] = [2222, 1600, 1280];
+
+/// The width of a 16:9 window drawing the game's parts as large as `image`.
+pub fn drawn_width(image: &RgbImage) -> f32 {
+    unit(image.width(), image.height()) * 16.0 / 9.0
+}
+
+/// The least width a screen is read at: a little short of the smallest of
+/// `WIDTHS`, where reading was measured right or not at all (on 2026-10-15:
+/// scaled to about 1150 wide, a bond of "25" read "5").
+const SMALLEST: f32 = 1240.0;
+
+/// Whether `image` draws the game's parts too small to read. An upright
+/// screen is no game's (the game is drawn sideways only), small or not.
+pub fn too_small(image: &RgbImage) -> bool {
+    image.width() > image.height() && drawn_width(image) < SMALLEST
+}
+
+/// The width among `WIDTHS` nearest to `width`.
+pub fn nearest_width(width: f32) -> u32 {
+    WIDTHS
+        .into_iter()
+        .min_by(|a, b| {
+            (*a as f32 - width)
+                .abs()
+                .total_cmp(&(*b as f32 - width).abs())
+        })
+        .unwrap_or(WIDTHS[0])
+}
 
 /// The frame as the game lays it out: a phone's safe area (see `safe_area`)
-/// scaled to `REFERENCE_WIDTH`; a window's frame as it is.
+/// scaled to the nearest of `WIDTHS` (a phone draws its letters smaller than
+/// a window as wide); a window's frame as it is.
 pub fn normalize(image: &RgbImage) -> Cow<'_, RgbImage> {
     let (left, right) = safe_area(image);
     if (left, right) == (0, image.width()) {
         return Cow::Borrowed(image);
     }
     let area = imageops::crop_imm(image, left, 0, right - left, image.height());
-    let height = (image.height() as f32 * REFERENCE_WIDTH as f32 / (right - left) as f32).round();
+    let width = nearest_width((right - left) as f32);
+    let height = (image.height() as f32 * width as f32 / (right - left) as f32).round();
     Cow::Owned(imageops::resize(
         &*area,
-        REFERENCE_WIDTH,
+        width,
         height as u32,
         FilterType::Nearest,
     ))
@@ -434,7 +467,10 @@ mod tests {
 
     use image::RgbImage;
 
-    use super::{Turn, normalize, safe_area, sorted_by_default, trim, turn};
+    use super::{
+        Turn, drawn_width, nearest_width, normalize, safe_area, sorted_by_default, too_small, trim,
+        turn,
+    };
     use crate::grid::find_panel;
 
     fn root() -> &'static Path {
@@ -497,6 +533,34 @@ mod tests {
                 "{width}x{height}"
             );
         }
+    }
+
+    /// Each screen is read with the references of the width nearest to the
+    /// one it draws the game's parts at, a 16:9 window's.
+    #[test]
+    fn a_screen_is_read_at_the_nearest_width() {
+        assert_eq!(nearest_width(2222.0), 2222);
+        assert_eq!(nearest_width(3040.0), 2222);
+        assert_eq!(nearest_width(1920.0), 2222);
+        assert_eq!(nearest_width(1700.0), 1600);
+        assert_eq!(nearest_width(1400.0), 1280);
+        assert_eq!(nearest_width(800.0), 1280);
+        assert!((drawn_width(&RgbImage::new(1600, 900)) - 1600.0).abs() < 1.0);
+        // A 4:3 window draws its parts as large as a 16:9 window as wide.
+        assert!((drawn_width(&RgbImage::new(1744, 1308)) - 1744.0).abs() < 1.0);
+        // A smaller phone's screen is scaled to the nearest width, not up to
+        // the largest.
+        let phone = fixture("android/top-bar.png");
+        let small =
+            image::imageops::resize(&phone, 1600, 713, image::imageops::FilterType::Triangle);
+        assert_eq!(normalize(&small).width(), 1280);
+        assert_eq!(normalize(&phone).width(), 2222);
+        // Smaller than the smallest width read, a screen is not read at all.
+        assert!(!too_small(&RgbImage::new(1280, 720)));
+        assert!(!too_small(&normalize(&small)));
+        assert!(too_small(&RgbImage::new(1100, 619)));
+        // Upright, it is no game (it is drawn sideways only), small or not.
+        assert!(!too_small(&RgbImage::new(1202, 1920)));
     }
 
     /// A phone keeps the game in from its rounded corners and its camera, as

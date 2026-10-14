@@ -96,10 +96,13 @@ const MENU_WORST: f32 = 24.0;
 /// Parts of the menu's letters smaller than this share of the window height
 /// squared are specks.
 const SPECK: f32 = 6.0 / (1250.0 * 1250.0);
-/// The letters of a bar lie farther than this from every digit (measured on
-/// 2026-10-14 over the shop fixtures: 27 or farther; the digits read lie
-/// within 10 of their references, one left unread at 11).
-const LETTER: f32 = 20.0;
+/// The letters of a bar lie farther than this from every digit, in a window
+/// and on a smaller screen (see `screen::WIDTHS`). Measured on 2026-10-14 over
+/// the shop fixtures: 27 or farther; the digits read lie within 10 of their
+/// references, one left unread at 11. On 2026-10-15 over them scaled to 1600
+/// wide: the letters 29 or farther, a "0" read as none of the digits at 22
+/// (taken for a letter, "30" read "3").
+const LETTER: (f32, f32) = (20.0, 27.0);
 /// The light letters of a card's bar ("あと6回購入可能"), on a bar brightened
 /// back first when its card is bought up. Only their lightest pixels: with
 /// their soft edges the small digits touch ("57" one part; measured on
@@ -112,6 +115,7 @@ pub const BAR_STYLE: Style = Style {
     widest: 1.3,
     width: 1.2,
     skew: 0.0,
+    entire: false,
 };
 /// The white digits of a card's price ("1,800") on the navy, apart from the
 /// light blue around; the comma is too short to count.
@@ -123,6 +127,7 @@ pub const PRICE_STYLE: Style = Style {
     widest: 1.3,
     width: 1.2,
     skew: 0.0,
+    entire: false,
 };
 
 type Span = (f32, f32);
@@ -339,7 +344,12 @@ impl Goods {
         let u = unit(image);
         let (left, _, _, _) = card_area(image, bar)?;
         let bottom = bar.bottom as f32;
-        let times = times_left(fonts, &bar_shapes(image, bar))?;
+        let letter = if screen::nearest_width(screen::drawn_width(image)) == screen::WIDTHS[0] {
+            LETTER.0
+        } else {
+            LETTER.1
+        };
+        let times = times_left(fonts, &bar_shapes(image, bar), letter)?;
         let price = if read_price {
             Some(u32::try_from(number(&fonts.read("price", &price_shapes(image, bar)?)?)?).ok()?)
         } else {
@@ -447,14 +457,14 @@ pub fn bar_shapes(image: &RgbImage, bar: &Bar) -> Vec<Vec<f32>> {
 
 /// How many more times the card's bar says it can be bought: the digits among
 /// its letters, which are the only ones the bar's references know. A part
-/// near a digit but not told as one leaves it unread, as a number read short
-/// would be wrong.
-pub fn times_left(fonts: &Fonts, shapes: &[Vec<f32>]) -> Option<u32> {
+/// within `letter` of a digit but not told as one leaves it unread, as a
+/// number read short would be wrong.
+pub fn times_left(fonts: &Fonts, shapes: &[Vec<f32>], letter: f32) -> Option<u32> {
     let mut digits = String::new();
     for shape in shapes {
         match fonts.character("bar", shape) {
             Some(c) => digits.push(c),
-            None if fonts.nearest("bar", shape)? <= LETTER => return None,
+            None if fonts.nearest("bar", shape)? <= letter => return None,
             None => {}
         }
     }

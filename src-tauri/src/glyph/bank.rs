@@ -15,6 +15,19 @@ use serde::{Deserialize, Serialize};
 
 use super::{Fonts, GLYPH};
 
+/// The files a bank is kept in, the picture and the index, for screens of
+/// `width` (see `screen::WIDTHS`): `glyphs.png` for the window's.
+pub fn files(width: u32) -> (String, String) {
+    if width == crate::screen::WIDTHS[0] {
+        ("glyphs.png".to_owned(), "glyphs.json".to_owned())
+    } else {
+        (
+            format!("glyphs-{width}.png"),
+            format!("glyphs-{width}.json"),
+        )
+    }
+}
+
 /// A tile's side in pixels.
 pub const TILE: usize = 16;
 /// Tiles side by side in the picture.

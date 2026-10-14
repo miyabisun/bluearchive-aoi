@@ -74,6 +74,9 @@ const SCRCPY_VERSION: &str = "5.0.1";
 const SCRCPY_PATH: &str = "/data/local/tmp/aoi-scrcpy.jar";
 /// Frames a second at most: the game plays on as the phone encodes them.
 const MAX_FPS: u32 = 5;
+/// The longer side of the frames at most: a phone of less power encodes them
+/// lightly, and they read right at this size (1080 lines; see `screen::WIDTHS`).
+const MAX_SIZE: u32 = 1920;
 /// The bit rate the encoder shares among the display's frames, of which
 /// `MAX_FPS` come: high, for small letters to read as they are drawn
 /// (measured on 2026-10-14 on a Legion Tab Y700: at 8 Mbps the student
@@ -510,8 +513,8 @@ where
     let start = format!(
         "exec:CLASSPATH={SCRCPY_PATH} app_process / com.genymobile.scrcpy.Server \
          {SCRCPY_VERSION} scid={scid:08x} log_level=warn video_codec=h264 max_fps={MAX_FPS} \
-         video_bit_rate={BIT_RATE} audio=false control=false tunnel_forward=true \
-         raw_stream=true\0"
+         max_size={MAX_SIZE} video_bit_rate={BIT_RATE} audio=false control=false \
+         tunnel_forward=true raw_stream=true\0"
     );
     // The server runs while its channel stays open, and listens for the video.
     let server = conn

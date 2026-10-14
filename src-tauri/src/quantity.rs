@@ -218,33 +218,53 @@ fn parse(text: &str) -> Option<Count> {
     }
 }
 
-/// Reference glyph for each character of a count: the digits and "K".
+/// Reference glyphs of each character of a count, the digits and "K": one for
+/// each size the list is drawn at, from a PC window to a small phone's screen
+/// (small digits lose their holes, an "8" coming near a "6").
 #[derive(Serialize, Deserialize)]
 pub struct Digits {
-    pub glyphs: BTreeMap<char, Vec<f32>>,
+    pub glyphs: BTreeMap<char, Vec<Vec<f32>>>,
 }
 
+/// The nearest character must be at most this share of the distance to the
+/// next nearest one, or the character is unknown: a small "8" near a "6" is no
+/// digit. Smaller cards (under `SMALL_CARD` px high) take the stricter share.
+/// Measured on 2026-10-15 over the evaluation screens scaled down: characters
+/// read right are at most 0.83 at the screens' own size, the ones read wrong
+/// 0.90 or more at 1280 wide (95 px cards) and 0.83 or more at 1024 (76 px).
+const LEAD: (f32, f32) = (0.85, 0.75);
+const SMALL_CARD: u32 = 90;
+
 impl Digits {
-    /// The character the glyph shows, if it is close enough to one.
-    fn closest(&self, glyph: &[f32]) -> Option<char> {
+    /// The character the glyph shows, if it is close enough to one and clearly
+    /// nearer to it than to any other (`lead`, see `LEAD`).
+    fn closest(&self, glyph: &[f32], lead: f32) -> Option<char> {
         let dist = |r: &Vec<f32>| {
             r.iter()
                 .zip(glyph)
                 .map(|(a, b)| (a - b).powi(2))
                 .sum::<f32>()
         };
-        self.glyphs
+        let mut nearest: Vec<(char, f32)> = self
+            .glyphs
             .iter()
-            .map(|(c, r)| (*c, dist(r)))
-            .min_by(|a, b| a.1.total_cmp(&b.1))
-            .filter(|(_, d)| *d <= MAX_DISTANCE)
-            .map(|(c, _)| c)
+            .filter_map(|(c, refs)| Some((*c, refs.iter().map(dist).min_by(f32::total_cmp)?)))
+            .collect();
+        nearest.sort_by(|a, b| a.1.total_cmp(&b.1));
+        let (c, d) = *nearest.first()?;
+        let next = nearest.get(1).map_or(f32::INFINITY, |n| n.1);
+        (d <= MAX_DISTANCE && d <= lead * next).then_some(c)
     }
 
     pub fn read(&self, image: &RgbImage, card: &Card) -> Option<Count> {
+        let lead = if card.height < SMALL_CARD {
+            LEAD.1
+        } else {
+            LEAD.0
+        };
         let text: Option<String> = glyphs(image, card)?
             .iter()
-            .map(|g| self.closest(g))
+            .map(|g| self.closest(g, lead))
             .collect();
         parse(&text?)
     }

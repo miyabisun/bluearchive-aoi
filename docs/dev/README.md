@@ -14,13 +14,18 @@ On either system it can read an Android phone's screen over USB or Wi-Fi
 device's configuration, which Windows lists for no device that is not composite), or wireless
 debugging paired by a QR code and connected over TLS with `libadb`, its services found over mDNS, and the screen recorded by scrcpy's server
 (`src-tauri/vendor/scrcpy`, pushed to the phone and started over ADB) as H.264 from the
-phone's hardware encoder, at most 5 frames a second, and decoded by `openh264` (`src-tauri/src/video.rs`).
+phone's hardware encoder, at most 5 frames a second and 1920 pixels on the longer side, and decoded by `openh264` (`src-tauri/src/video.rs`).
 The `openh264` crate builds Cisco's decoder from source; Cisco's H.264 patent licence covers
 only its own prebuilt binaries. The key and the phone paired are kept in the app's data folder
 (`adbkey.pem`, `android.json`). A phone's frame is cut to its safe area and scaled to the
-2222-wide window the references were drawn from (`screen::normalize`); the readers measure
-in a 16:9 window's height (`screen::unit`), each part kept to the top, the middle or the
-bottom of a wider screen (`screen::Anchor`).
+nearest of the widths the texts are read at (`screen::WIDTHS`: 2222, the window the
+references were drawn from, 1600 and 1280); the readers measure in a 16:9 window's height
+(`screen::unit`), each part kept to the top, the middle or the bottom of a wider screen
+(`screen::Anchor`). Each width has references of its own, drawn from the tuning fixtures
+scaled to it (`data/glyphs*.png`, `data/digits.json`; `examples/build_glyphs.rs`,
+`examples/build_digits.rs`), and the tests read the evaluation fixtures scaled down too:
+right or not at all. A screen drawn smaller than about 1240 wide is not read
+(`screen::too_small`).
 
 Any phone can also send its screen from a streaming app over RTMP (`src-tauri/src/broadcast.rs`,
 with `rml_rtmp`): when the user asks, Aoi listens on port 1935 under a fresh key for streams from

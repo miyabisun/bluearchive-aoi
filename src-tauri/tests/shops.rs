@@ -40,6 +40,27 @@ fn fixtures_dir() -> PathBuf {
 /// offers read in a single frame.
 #[test]
 fn every_offer_read_is_right() {
+    let (wrong, read, labeled) = offers_read(None);
+    assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
+    assert!(
+        read * 4 >= labeled * 3,
+        "{read} of {labeled} labeled offers read"
+    );
+}
+
+/// A smaller screen (a phone's, or a stream of one, 1600 and 1280 wide) reads
+/// every shop and offer right or not at all.
+#[test]
+fn a_smaller_screen_reads_offers_right_or_not_at_all() {
+    for width in [1600, 1280] {
+        let (wrong, ..) = offers_read(Some(width));
+        assert!(wrong.is_empty(), "{width}:\n{}", wrong.join("\n"));
+    }
+}
+
+/// What the shop fixtures read, scaled to `width` if given: what was read
+/// wrong, how many offers were read right, and how many are labeled.
+fn offers_read(width: Option<u32>) -> (Vec<String>, usize, usize) {
     let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
     let items = recognizer.shop_goods();
     let fixtures: Vec<Fixture> =
@@ -50,6 +71,20 @@ fn every_offer_read_is_right() {
         let image = image::open(fixtures_dir().join(&fixture.image))
             .unwrap()
             .to_rgb8();
+        let image = match width {
+            Some(width) => {
+                let scale = width as f32 / 2222.0;
+                let (w, h) = (image.width() as f32 * scale, image.height() as f32 * scale);
+                image::imageops::resize(
+                    &image,
+                    w.round() as u32,
+                    h.round() as u32,
+                    image::imageops::FilterType::Triangle,
+                )
+            }
+            None => image,
+        };
+        let image = aoi::screen::normalize(&image).into_owned();
         let shown = recognizer.reads_price(&fixture.shop);
         let labels: Vec<Offer> = fixture
             .offers
@@ -67,16 +102,30 @@ fn every_offer_read_is_right() {
             .collect();
         labeled += labels.len();
         let Some(seen) = recognizer.read_shop(&image) else {
-            wrong.push(format!("{}: no shop read", fixture.image));
+            // A window reads every shop; a smaller screen may read none.
+            if width.is_none() {
+                wrong.push(format!("{}: no shop read", fixture.image));
+            }
             continue;
         };
         if seen.shop != fixture.shop {
             wrong.push(format!("{}: read as {}", fixture.image, seen.shop));
         }
-        if let Some(held) = &fixture.held
-            && seen.held != *held
-        {
-            wrong.push(format!("{}: held read {:?}", fixture.image, seen.held));
+        if let Some(held) = &fixture.held {
+            let held_wrong = if width.is_none() {
+                seen.held != *held
+            } else {
+                // Unread is no wrong count.
+                seen.held.len() != held.len()
+                    || seen
+                        .held
+                        .iter()
+                        .zip(held)
+                        .any(|(s, h)| s.is_some() && s != h)
+            };
+            if held_wrong {
+                wrong.push(format!("{}: held read {:?}", fixture.image, seen.held));
+            }
         }
         for offer in &seen.offers {
             let right = labels.contains(offer);
@@ -87,11 +136,7 @@ fn every_offer_read_is_right() {
             }
         }
     }
-    assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
-    assert!(
-        read * 4 >= labeled * 3,
-        "{read} of {labeled} labeled offers read"
-    );
+    (wrong, read, labeled)
 }
 
 /// The shops' terms give each labeled offer the price its card shows.

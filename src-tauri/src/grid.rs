@@ -16,6 +16,10 @@ const GAP_ROW_SHARE: f32 = 0.85;
 const CUT_OFF_SLACK: u32 = 3;
 /// Spans between gaps shorter than this are no row of cards.
 const MIN_ROW: u32 = 20;
+/// A card is about as wide as tall (170 by 164 px); a span wider than this
+/// share of the card height is cards whose gaps did not show (a frame too
+/// small), which is no card.
+const WIDEST_CARD: f32 = 1.5;
 /// The padding over a list's first row is taller than this share of the card
 /// height (11 and 13 px over 165 px cards); a gap between rows is lower (7 px
 /// at most).
@@ -227,16 +231,54 @@ fn cards_in_row(
         })
         .collect();
     let card_columns: Vec<bool> = gap_columns.iter().map(|g| !g).collect();
-    spans(&card_columns)
+    let spans: Vec<(f32, f32)> = spans(&card_columns)
         .into_iter()
         .filter(|(a, b)| b - a >= height / 2)
-        .map(|(a, b)| Card {
-            left: (panel_left + a) as f32,
-            width: (b - a) as f32,
+        .map(|(a, b)| ((panel_left + a) as f32, (b - a) as f32))
+        .collect();
+    split_spans(&spans, height as f32)
+        .into_iter()
+        .map(|(left, width)| Card {
+            left,
+            width,
             top,
             height,
         })
         .collect()
+}
+
+/// A card's width for its height, and the gap between two (180 and 4 px by
+/// 165), where no card of the row shows them.
+const CARD_WIDTH: f32 = 180.0 / 165.0;
+const CARD_GAP: f32 = 4.0 / 165.0;
+/// How far a run of cards may be from a whole number of them, of a card's width.
+const RUN_SLACK: f32 = 0.1;
+
+/// The cards `(left, width)` of a row's `spans`: one card each, or several
+/// whose gaps did not show (too narrow in a small frame), cut where they
+/// would be. A span no whole number of cards wide is no card.
+fn split_spans(spans: &[(f32, f32)], height: f32) -> Vec<(f32, f32)> {
+    let single = |w: f32| w <= height * WIDEST_CARD;
+    let mut widths: Vec<f32> = spans.iter().map(|s| s.1).filter(|&w| single(w)).collect();
+    widths.sort_by(f32::total_cmp);
+    let card = widths
+        .get(widths.len() / 2)
+        .copied()
+        .unwrap_or(height * CARD_WIDTH);
+    let gap = height * CARD_GAP;
+    let mut cards = Vec::new();
+    for &(left, width) in spans {
+        if single(width) {
+            cards.push((left, width));
+            continue;
+        }
+        let count = ((width + gap) / (card + gap)).round();
+        if count >= 2.0 && (count * (card + gap) - gap - width).abs() <= card * RUN_SLACK {
+            let each = (width - (count - 1.0) * gap) / count;
+            cards.extend((0..count as u32).map(|i| (left + i as f32 * (each + gap), each)));
+        }
+    }
+    cards
 }
 
 #[cfg(test)]
@@ -273,6 +315,46 @@ mod tests {
     #[test]
     fn finds_full_rows_in_4_by_3() {
         check("items-4x3-ooparts.png", 30, 133, 148.5);
+    }
+
+    /// A frame too small for the gaps between cards to show (scaled down to
+    /// 1024 wide and back up) gives no card spanning several: reading one
+    /// took minutes.
+    #[test]
+    fn cards_run_together_are_no_card() {
+        use image::imageops::{FilterType, resize};
+        let image = fixture("items-16x9-event-items.png");
+        let small = resize(&image, 1024, 576, FilterType::Triangle);
+        let blurred = resize(&small, 2222, 1250, FilterType::Nearest);
+        for card in find_cards(&blurred) {
+            assert!(card.width <= card.height as f32 * 1.5, "{card:?}");
+        }
+    }
+
+    /// A smaller window (a phone's screen, or a stream of it, 1280 wide) draws
+    /// the gaps between cards 3 px wide or less: every card is still found.
+    #[test]
+    fn a_small_frame_shows_every_card() {
+        use image::imageops::{FilterType, resize};
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let fixtures: Vec<Fixture> =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("labels.json")).unwrap())
+                .unwrap();
+        let mut wrong = Vec::new();
+        for fixture in fixtures {
+            let image = fixture_image(&dir, &fixture.image);
+            let height = image.height() * 1280 / image.width();
+            let small = resize(&image, 1280, height, FilterType::Triangle);
+            let found = find_cards(&small).len();
+            if found != fixture.cells.len() {
+                wrong.push(format!(
+                    "{}: {found} of {}",
+                    fixture.image,
+                    fixture.cells.len()
+                ));
+            }
+        }
+        assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
     }
 
     #[test]

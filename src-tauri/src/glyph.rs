@@ -37,6 +37,11 @@ pub struct Style {
     /// height from the top, which stands the italic characters upright and
     /// parts neighbours that touch only along their slant.
     pub skew: f32,
+    /// A piece left out from among the characters (shorter than `tall`) leaves
+    /// the text unread: a character of a smaller screen's broken in pieces
+    /// ("Lv70" losing its "7") would read short. Not where a text has short
+    /// marks between its characters ("Lv.", "243,819").
+    pub entire: bool,
 }
 
 /// Normalized character size; characters keep their width relative to their height.
@@ -57,6 +62,7 @@ const LEAD: f32 = 0.6;
 /// A rectangle of the screen in pixels: left, top, right, bottom.
 pub type Rect = (u32, u32, u32, u32);
 
+#[derive(Clone)]
 struct Blob {
     left: u32,
     right: u32,
@@ -211,8 +217,17 @@ pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
         .map(|b| b.bottom - b.top + 1)
         .max()
         .unwrap_or(0);
-    blobs.retain(|b| (b.bottom - b.top + 1) as f32 >= tallest as f32 * style.tall);
-    let blobs: Vec<Blob> = blobs
+    let (kept, short): (Vec<Blob>, Vec<Blob>) = blobs
+        .into_iter()
+        .partition(|b| (b.bottom - b.top + 1) as f32 >= tallest as f32 * style.tall);
+    if style.entire {
+        let first = kept.iter().map(|b| b.left).min().unwrap_or(0);
+        let last = kept.iter().map(|b| b.right).max().unwrap_or(0);
+        if short.iter().any(|b| b.left > first && b.right < last) {
+            return Vec::new();
+        }
+    }
+    let blobs: Vec<Blob> = kept
         .into_iter()
         .flat_map(|b| {
             // Measured against the tallest character: a short one ("v")

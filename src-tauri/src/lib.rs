@@ -189,8 +189,15 @@ pub struct Recognizer {
     /// The student screen's title, its selected 基本情報 tab, and the same tab
     /// while another is selected.
     student_screen: (RgbImage, RgbImage, RgbImage),
-    /// The references of the texts read (see `glyph::bank`), and the text
-    /// styles' among them as `Fonts`.
+    /// The references of the texts read, at each of `screen::WIDTHS`, the
+    /// window's first.
+    texts: Vec<Texts>,
+}
+
+/// The references of the texts read at a width (see `glyph::bank`), and the
+/// text styles' among them as `Fonts`.
+struct Texts {
+    width: u32,
     glyphs: glyph::bank::Bank,
     fonts: glyph::Fonts,
 }
@@ -238,9 +245,20 @@ impl Recognizer {
     }
 
     fn build(read: &Read) -> Result<Self, String> {
-        let index = String::from_utf8(read("glyphs.json")?).map_err(|e| e.to_string())?;
-        let glyphs = glyph::bank::Bank::decode(&read("glyphs.png")?, &index)
-            .map_err(|e| format!("glyphs: {e}"))?;
+        let texts = screen::WIDTHS
+            .into_iter()
+            .map(|width| {
+                let (picture, index) = glyph::bank::files(width);
+                let index = String::from_utf8(read(&index)?).map_err(|e| e.to_string())?;
+                let glyphs = glyph::bank::Bank::decode(&read(&picture)?, &index)
+                    .map_err(|e| format!("{picture}: {e}"))?;
+                Ok(Texts {
+                    width,
+                    fonts: glyphs.fonts(),
+                    glyphs,
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
         let template =
             |path: &str| picture(read, path).map(|p| image::DynamicImage::from(p).to_rgb8());
         let planner = plan::Planner {
@@ -297,9 +315,18 @@ impl Recognizer {
                 template("student-tab.png")?,
                 template("student-tab-other.png")?,
             ),
-            fonts: glyphs.fonts(),
-            glyphs,
+            texts,
         })
+    }
+
+    /// The references to read `image` with: those of the width nearest to the
+    /// one it draws the game's parts at.
+    fn texts(&self, image: &RgbImage) -> &Texts {
+        let width = screen::nearest_width(screen::drawn_width(image));
+        self.texts
+            .iter()
+            .find(|t| t.width == width)
+            .unwrap_or(&self.texts[0])
     }
 
     /// The work tab against the items and equipment held and the credits.
@@ -692,17 +719,25 @@ impl Recognizer {
 
     /// The shop screen (see `shop::Goods::read`); `None` on any other screen.
     pub fn read_shop(&self, image: &RgbImage) -> Option<shop::Seen> {
+        let texts = self.texts(image);
         self.goods
-            .read(image, &self.glyphs, &self.fonts, &self.prices)
+            .read(image, &texts.glyphs, &texts.fonts, &self.prices)
     }
 
     pub fn students(&self) -> &[(i64, String)] {
         &self.students
     }
 
-    /// The references of the texts read (see `glyph::bank`).
+    /// The references of the texts read in a window (see `glyph::bank`).
     pub fn glyphs(&self) -> &glyph::bank::Bank {
-        &self.glyphs
+        &self.texts[0].glyphs
+    }
+
+    /// The references `image` is read with (see `texts`): the bank, and the
+    /// text styles among it.
+    pub fn references(&self, image: &RgbImage) -> (&glyph::bank::Bank, &glyph::Fonts) {
+        let texts = self.texts(image);
+        (&texts.glyphs, &texts.fonts)
     }
 
     /// Reads whatever the frame shows that can be read: a list in its default
@@ -720,7 +755,7 @@ impl Recognizer {
     /// The credits the top bar shows; `None` where there is no bar, or its
     /// number reads as no such number.
     pub fn read_credits(&self, image: &RgbImage) -> Option<u64> {
-        credit::read(image, &self.fonts)
+        credit::read(image, &self.texts(image).fonts)
     }
 
     /// Reads the student screen: all of its 基本情報 tab, and the name plate
@@ -735,11 +770,12 @@ impl Recognizer {
         if !basic && !screen::student_tab(image, other_tab) {
             return None;
         }
-        let id = student::name::read(image, &self.glyphs, &self.glyphs.index.names);
+        let texts = self.texts(image);
+        let id = student::name::read(image, &texts.glyphs, &texts.glyphs.index.names);
         let training = if basic {
-            student::read(image, &self.fonts)
+            student::read(image, &texts.fonts)
         } else {
-            student::plate(image, &self.fonts)
+            student::plate(image, &texts.fonts)
         };
         Some((id, training))
     }

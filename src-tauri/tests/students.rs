@@ -3,10 +3,7 @@
 
 use std::path::Path;
 
-use aoi::{
-    glyph::{Fonts, bank::Bank},
-    student::{self, Label, LevelLabel, Training},
-};
+use aoi::student::{self, Label, LevelLabel, Training};
 
 fn root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -17,10 +14,6 @@ fn labels() -> Vec<Label> {
         &std::fs::read_to_string(root().join("tests/fixtures/students.json")).unwrap(),
     )
     .unwrap()
-}
-
-fn fonts() -> Fonts {
-    Bank::load(&root().join("data")).unwrap().fonts()
 }
 
 /// The fields of a training, named, each `None` when unknown.
@@ -47,13 +40,13 @@ fn fields(t: &Training) -> Vec<(String, Option<String>)> {
 
 #[test]
 fn every_field_reads_right_or_unknown() {
-    let fonts = fonts();
+    let recognizer = recognizer();
     let (mut wrong, mut unknown, mut total) = (Vec::new(), Vec::new(), 0);
     for label in labels() {
         let image = image::open(root().join("tests/fixtures").join(&label.image))
             .unwrap()
             .to_rgb8();
-        let read = fields(&student::read(&image, &fonts));
+        let read = fields(&student::read(&image, recognizer.references(&image).1));
         let want = fields(&label.training());
         for ((name, got), (_, want)) in read.into_iter().zip(want) {
             total += 1;
@@ -75,6 +68,40 @@ fn every_field_reads_right_or_unknown() {
         unknown.len(),
         unknown.join("\n")
     );
+    assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
+}
+
+/// On a smaller screen (a phone's, or a stream of one) every field of the
+/// student screen reads right or not at all.
+#[test]
+fn a_smaller_screen_reads_fields_right_or_not_at_all() {
+    use image::imageops::{FilterType, resize};
+    let recognizer = recognizer();
+    let mut wrong = Vec::new();
+    for width in [1600, 1280] {
+        for label in labels() {
+            let image = image::open(root().join("tests/fixtures").join(&label.image))
+                .unwrap()
+                .to_rgb8();
+            let scale = width as f32 / 2222.0;
+            let (w, h) = (image.width() as f32 * scale, image.height() as f32 * scale);
+            let image = resize(
+                &image,
+                w.round() as u32,
+                h.round() as u32,
+                FilterType::Triangle,
+            );
+            let read = fields(&student::read(&image, recognizer.references(&image).1));
+            for ((name, got), (_, want)) in read.into_iter().zip(fields(&label.training())) {
+                if got.is_some() && got != want {
+                    wrong.push(format!(
+                        "{width} {} {name}: read {got:?}, is {want:?}",
+                        label.image
+                    ));
+                }
+            }
+        }
+    }
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
 }
 
@@ -102,11 +129,11 @@ fn each_student_screen_names_its_student() {
 #[test]
 fn a_student_missing_from_the_snapshot_is_never_named_as_another() {
     let recognizer = recognizer();
-    let glyphs = recognizer.glyphs();
     for label in labels() {
         let image = image::open(root().join("tests/fixtures").join(&label.image))
             .unwrap()
             .to_rgb8();
+        let glyphs = recognizer.references(&image).0;
         let name = &recognizer
             .students()
             .iter()
@@ -121,6 +148,48 @@ fn a_student_missing_from_the_snapshot_is_never_named_as_another() {
             label.image
         );
     }
+}
+
+/// On a smaller screen (a phone's, or a stream of one) as well, a student
+/// missing from the snapshot is never named as another, and one in it is
+/// named right or not at all.
+#[test]
+fn a_smaller_screen_names_its_student_right_or_not_at_all() {
+    use image::imageops::{FilterType, resize};
+    let recognizer = recognizer();
+    let mut wrong = Vec::new();
+    for width in [1920, 1600, 1440, 1280] {
+        for label in labels() {
+            let image = image::open(root().join("tests/fixtures").join(&label.image))
+                .unwrap()
+                .to_rgb8();
+            let scale = width as f32 / 2222.0;
+            let (w, h) = (image.width() as f32 * scale, image.height() as f32 * scale);
+            let image = resize(
+                &image,
+                w.round() as u32,
+                h.round() as u32,
+                FilterType::Triangle,
+            );
+            let glyphs = recognizer.references(&image).0;
+            let name = &recognizer
+                .students()
+                .iter()
+                .find(|(id, _)| *id == label.id)
+                .unwrap()
+                .1;
+            if let Some(id) = student::name::read(&image, glyphs, &glyphs.index.names)
+                && id != label.id
+            {
+                wrong.push(format!("{width} {}: {id}", label.image));
+            }
+            let others = glyphs.index.names.iter().filter(|w| w.text != *name);
+            if let Some(id) = student::name::read(&image, glyphs, others) {
+                wrong.push(format!("{width} {} left out: {id}", label.image));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
 }
 
 /// Lists are never read as a student screen, nor other screens.
@@ -175,12 +244,12 @@ fn weapon_blue(c: [u8; 3]) -> bool {
 /// the tag hanging from her gun beside them is no star.
 #[test]
 fn the_weapon_stars_read_on_every_screen() {
-    let fonts = fonts();
+    let recognizer = recognizer();
     for label in labels() {
         let image = image::open(root().join("tests/fixtures").join(&label.image))
             .unwrap()
             .to_rgb8();
-        let read = student::read(&image, &fonts);
+        let read = student::read(&image, recognizer.references(&image).1);
         assert_eq!(read.weapon, label.training().weapon, "{}", label.image);
     }
 }
@@ -211,7 +280,7 @@ fn a_fifth_weapon_star_counts() {
             image.put_pixel(x - pitch, y, p);
         }
     }
-    let read = student::read(&image, &fonts());
+    let read = student::read(&image, recognizer().references(&image).1);
     assert_eq!(
         read.weapon,
         Some(Some(student::Weapon {
@@ -224,7 +293,7 @@ fn a_fifth_weapon_star_counts() {
 /// Every level sample (`levels.json`) reads its level, or nothing.
 #[test]
 fn every_level_sample_reads_right_or_unknown() {
-    let fonts = fonts();
+    let recognizer = recognizer();
     let levels: Vec<LevelLabel> = serde_json::from_str(
         &std::fs::read_to_string(root().join("tests/fixtures/levels.json")).unwrap(),
     )
@@ -234,7 +303,7 @@ fn every_level_sample_reads_right_or_unknown() {
         let image = image::open(root().join("tests/fixtures").join(&label.image))
             .unwrap()
             .to_rgb8();
-        match student::level(&image, &fonts) {
+        match student::level(&image, recognizer.references(&image).1) {
             None => unknown.push(label.image.as_str()),
             Some(read) => assert_eq!(read, label.level, "{}", label.image),
         }

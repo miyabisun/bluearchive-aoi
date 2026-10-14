@@ -53,6 +53,8 @@ pub enum Status {
     Failed { message: String },
     /// The user paused the reading.
     Paused,
+    /// The game is drawn too small to read (see `screen::too_small`).
+    TooSmall,
 }
 
 /// What can be read: a list, the student screen or the shop.
@@ -96,12 +98,21 @@ enum Game {
     Captured,
 }
 
+/// What the last frame read showed.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+enum Sight {
+    #[default]
+    Other,
+    /// The game drawn too small to read (see `screen::too_small`).
+    TooSmall,
+    Screen(Screen),
+}
+
 /// What the two threads know, from which the status follows.
 #[derive(Debug, Clone, PartialEq, Default)]
 struct Seen {
     game: Game,
-    /// What the last frame read showed.
-    on_list: Option<Screen>,
+    sight: Sight,
     fps: f32,
     dropped: u32,
     /// Whether the user paused the reading.
@@ -128,13 +139,14 @@ fn status(seen: &Seen) -> Status {
         Game::Failed(message) => Status::Failed {
             message: message.clone(),
         },
-        Game::Captured => match seen.on_list {
-            Some(list) => Status::Reading {
+        Game::Captured => match seen.sight {
+            Sight::Screen(list) => Status::Reading {
                 list,
                 fps: seen.fps,
                 dropped: seen.dropped,
             },
-            None => Status::OtherScreen,
+            Sight::TooSmall => Status::TooSmall,
+            Sight::Other => Status::OtherScreen,
         },
     }
 }
@@ -318,64 +330,12 @@ pub fn start(
         let (board, latest, frames) = (board.clone(), latest.clone(), frames.clone());
         let paused = watcher.paused.clone();
         thread::spawn(move || {
-            let mut tallies = HashMap::from([
-                (List::Items, Tally::seeded(kept.items.into_iter().collect())),
-                (
-                    List::Equipment,
-                    Tally::seeded(kept.equipment.into_iter().collect()),
-                ),
-            ]);
-            let mut roster = Roster::seeded(kept.students);
-            let mut credits = Credits {
-                known: kept.credits,
-                streak: None,
-            };
-            let mut shelves = Shelves::seeded(kept.shops);
+            let mut read = Read::seeded(kept);
             loop {
                 let shot = latest.take();
                 // Paused, frames are taken and dropped unread.
-                if paused.load(Ordering::Relaxed) {
-                    continue;
-                }
-                // A phone's frame as the game lays it out (a window's as it is).
-                let shot = screen::normalize(&shot);
-                let read = recognizer.read_frame(&shot);
-                // The credits change seldom.
-                if frames.fetch_add(1, Ordering::Relaxed) % CREDITS_EVERY == 0
-                    && let Some(changed) = credits.observe(recognizer.read_credits(&shot))
-                {
-                    board.changed(Update::Credits(changed));
-                }
-                board.update(|seen| {
-                    seen.on_list = read.as_ref().map(|frame| match frame {
-                        Shown::List(List::Items, ..) => Screen::Items,
-                        Shown::List(List::Equipment, ..) => Screen::Equipment,
-                        Shown::Student(..) => Screen::Students,
-                        Shown::Shop(_) => Screen::Shops,
-                    });
-                });
-                match read {
-                    Some(Shown::List(list, cells, start)) => {
-                        let tally = tallies.entry(list).or_default();
-                        let gone = recognizer.catalog(list).gaps(&cells, start);
-                        if tally.observe(&cells, &gone) {
-                            board.changed(Update::List(list, recognizer.rows(list, tally)));
-                            // The shops show the coins held as the item list counts them.
-                            if list == List::Items {
-                                let rows = recognizer.shop_rows(shelves.shelves(), tally.counts());
-                                board.changed(Update::Shops(rows));
-                            }
-                        }
-                    }
-                    Some(Shown::Student(Some(id), training)) if roster.observe(id, training) => {
-                        let rows = student_rows(&recognizer, roster.students());
-                        board.changed(Update::Students(rows));
-                    }
-                    Some(Shown::Shop(seen)) if shelves.observe(&seen, &now()) => {
-                        let items = tallies.entry(List::Items).or_default();
-                        shops_changed(&recognizer, &mut shelves, items, &board);
-                    }
-                    _ => {}
+                if !paused.load(Ordering::Relaxed) {
+                    read.frame(&recognizer, &board, &frames, &shot);
                 }
             }
         });
@@ -402,6 +362,93 @@ fn receiver(latest: &Arc<Latest>, board: &Arc<Board>) -> Receiver {
             board.changed(Update::Cast(cast.clone()));
         },
     )
+}
+
+/// What the reader has read so far.
+struct Read {
+    tallies: HashMap<List, Tally>,
+    roster: Roster,
+    credits: Credits,
+    shelves: Shelves,
+}
+
+impl Read {
+    fn seeded(kept: Kept) -> Self {
+        Self {
+            tallies: HashMap::from([
+                (List::Items, Tally::seeded(kept.items.into_iter().collect())),
+                (
+                    List::Equipment,
+                    Tally::seeded(kept.equipment.into_iter().collect()),
+                ),
+            ]),
+            roster: Roster::seeded(kept.students),
+            credits: Credits {
+                known: kept.credits,
+                streak: None,
+            },
+            shelves: Shelves::seeded(kept.shops),
+        }
+    }
+
+    /// Reads `shot` into what is read, telling `board` what it shows and
+    /// what changed; `frames` counts the frames read.
+    fn frame(
+        &mut self,
+        recognizer: &Recognizer,
+        board: &Board,
+        frames: &AtomicU32,
+        shot: &RgbImage,
+    ) {
+        // A phone's frame as the game lays it out (a window's as it is).
+        let shot = screen::normalize(shot);
+        if screen::too_small(&shot) {
+            board.update(|seen| seen.sight = Sight::TooSmall);
+            return;
+        }
+        let read = recognizer.read_frame(&shot);
+        // The credits change seldom.
+        if frames
+            .fetch_add(1, Ordering::Relaxed)
+            .is_multiple_of(CREDITS_EVERY)
+            && let Some(changed) = self.credits.observe(recognizer.read_credits(&shot))
+        {
+            board.changed(Update::Credits(changed));
+        }
+        board.update(|seen| {
+            seen.sight = read.as_ref().map_or(Sight::Other, |frame| {
+                Sight::Screen(match frame {
+                    Shown::List(List::Items, ..) => Screen::Items,
+                    Shown::List(List::Equipment, ..) => Screen::Equipment,
+                    Shown::Student(..) => Screen::Students,
+                    Shown::Shop(_) => Screen::Shops,
+                })
+            });
+        });
+        match read {
+            Some(Shown::List(list, cells, start)) => {
+                let tally = self.tallies.entry(list).or_default();
+                let gone = recognizer.catalog(list).gaps(&cells, start);
+                if tally.observe(&cells, &gone) {
+                    board.changed(Update::List(list, recognizer.rows(list, tally)));
+                    // The shops show the coins held as the item list counts them.
+                    if list == List::Items {
+                        let rows = recognizer.shop_rows(self.shelves.shelves(), tally.counts());
+                        board.changed(Update::Shops(rows));
+                    }
+                }
+            }
+            Some(Shown::Student(Some(id), training)) if self.roster.observe(id, training) => {
+                let rows = student_rows(recognizer, self.roster.students());
+                board.changed(Update::Students(rows));
+            }
+            Some(Shown::Shop(seen)) if self.shelves.observe(&seen, &now()) => {
+                let items = self.tallies.entry(List::Items).or_default();
+                shops_changed(recognizer, &mut self.shelves, items, board);
+            }
+            _ => {}
+        }
+    }
 }
 
 /// The watcher as the window controls it: its reading paused or not, the
@@ -433,7 +480,7 @@ impl Watcher {
 
 #[cfg(test)]
 mod tests {
-    use super::{Game, Screen, Seen, Status, status};
+    use super::{Game, Screen, Seen, Sight, Status, status};
 
     /// One game is read at a time: the phone's while its screen comes in, by
     /// ADB or from a streaming app.
@@ -470,27 +517,33 @@ mod tests {
 
     #[test]
     fn the_status_follows_the_game_and_the_screen() {
-        let seen = |game, on_list| Seen {
+        let seen = |game, sight| Seen {
             game,
-            on_list,
+            sight,
             fps: 28.5,
             dropped: 4,
             paused: false,
             phone: false,
             cast: false,
         };
-        let items = Some(Screen::Items);
+        let items = Sight::Screen(Screen::Items);
         assert_eq!(status(&seen(Game::Absent, items)), Status::NoGame);
-        assert_eq!(status(&seen(Game::NoSource, None)), Status::NoSource);
         assert_eq!(
-            status(&seen(Game::Failed("denied".into()), None)),
+            status(&seen(Game::NoSource, Sight::Other)),
+            Status::NoSource
+        );
+        assert_eq!(
+            status(&seen(Game::Failed("denied".into()), Sight::Other)),
             Status::Failed {
                 message: "denied".into()
             }
         );
-        assert_eq!(status(&seen(Game::Captured, None)), Status::OtherScreen);
         assert_eq!(
-            status(&seen(Game::Captured, Some(Screen::Students))),
+            status(&seen(Game::Captured, Sight::Other)),
+            Status::OtherScreen
+        );
+        assert_eq!(
+            status(&seen(Game::Captured, Sight::Screen(Screen::Students))),
             Status::Reading {
                 list: Screen::Students,
                 fps: 28.5,
@@ -502,11 +555,11 @@ mod tests {
             for phone in [
                 Seen {
                     phone: true,
-                    ..seen(game.clone(), Some(Screen::Shops))
+                    ..seen(game.clone(), Sight::Screen(Screen::Shops))
                 },
                 Seen {
                     cast: true,
-                    ..seen(game.clone(), Some(Screen::Shops))
+                    ..seen(game.clone(), Sight::Screen(Screen::Shops))
                 },
             ] {
                 assert!(matches!(
@@ -518,11 +571,16 @@ mod tests {
                 ));
             }
         }
+        // A screen too small to read is said so, whatever it shows.
+        assert_eq!(
+            status(&seen(Game::Captured, Sight::TooSmall)),
+            Status::TooSmall
+        );
         // Paused, whatever the game shows.
         for game in [Game::Captured, Game::Absent] {
             let paused = Seen {
                 paused: true,
-                ..seen(game, Some(Screen::Items))
+                ..seen(game, items)
             };
             assert_eq!(status(&paused), Status::Paused);
         }

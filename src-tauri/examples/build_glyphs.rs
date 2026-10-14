@@ -38,10 +38,13 @@ use aoi::{
         bank::{Bank, Word, glyph_tile},
         word::Ink,
     },
-    shop,
+    screen, shop,
     student::{self, Label, LevelLabel},
 };
-use image::{Rgb, RgbImage};
+use image::{
+    Rgb, RgbImage,
+    imageops::{FilterType, resize},
+};
 use serde::Deserialize;
 
 /// A cut farther than this from every group of its character starts a group.
@@ -315,13 +318,14 @@ fn cards(shops: &[ShopLabel], open: &dyn Fn(&str) -> RgbImage) -> Vec<Card> {
 }
 
 /// Adds the digits of the `cards` as the game draws them: each card read
-/// loosely (see `place`), again while a round takes more.
-fn take_card_digits(cuts: &mut Cuts, cards: &[Card]) {
-    let mut done = vec![false; cards.len()];
+/// loosely (see `place`), again while a round takes more. Where each card's
+/// value was found among its shapes, `(value, at)`.
+fn take_card_digits(cuts: &mut Cuts, cards: &[Card]) -> Vec<Option<(String, usize)>> {
+    let mut done: Vec<Option<(String, usize)>> = vec![None; cards.len()];
     loop {
         let mut taken = Cuts::new();
         for (card, c) in cards.iter().enumerate() {
-            if done[card] {
+            if done[card].is_some() {
                 continue;
             }
             let found: Vec<(&String, usize)> = c
@@ -333,7 +337,7 @@ fn take_card_digits(cuts: &mut Cuts, cards: &[Card]) {
                 let n = value.chars().count();
                 let shapes = c.shapes[*at..*at + n].to_vec();
                 add(&mut taken, &c.path, c.style, shapes, value);
-                done[card] = true;
+                done[card] = Some(((*value).clone(), *at));
             }
         }
         if taken.is_empty() {
@@ -348,13 +352,59 @@ fn take_card_digits(cuts: &mut Cuts, cards: &[Card]) {
             }
         }
     }
-    let read = done.iter().filter(|&&d| d).count();
+    let read = done.iter().filter(|d| d.is_some()).count();
     println!("cards read for their digits: {read} of {}", cards.len());
+    done
 }
 
-/// Adds the cards' digits (see the top): drawn with the fonts, the credits'
-/// digits, then those the tuning cards draw.
-fn card_digits(cuts: &mut Cuts, weights: &[FontVec], cards: &[Card]) {
+/// Adds the digits of the `cards` scaled down, at the places the window's
+/// cards (`at_window`, with where their values were found) showed them: a
+/// small screen's letters are read too loosely to place them anew. A fixture
+/// whose cards cut into other shapes is left out.
+fn take_scaled_card_digits(
+    cuts: &mut Cuts,
+    at_window: &[(Card, Option<(String, usize)>)],
+    cards: &[Card],
+) {
+    let mut taken = 0;
+    for path in cards
+        .iter()
+        .map(|c| &c.path)
+        .collect::<std::collections::BTreeSet<_>>()
+    {
+        let small: Vec<&Card> = cards.iter().filter(|c| c.path == *path).collect();
+        let window: Vec<&(Card, Option<(String, usize)>)> =
+            at_window.iter().filter(|(c, _)| c.path == *path).collect();
+        if small.len() != window.len() {
+            continue;
+        }
+        for (card, (big, found)) in small.into_iter().zip(window) {
+            let Some((value, at)) = found else {
+                continue;
+            };
+            if card.style != big.style || card.shapes.len() != big.shapes.len() {
+                continue;
+            }
+            let n = value.chars().count();
+            add(
+                cuts,
+                &card.path,
+                card.style,
+                card.shapes[*at..*at + n].to_vec(),
+                value,
+            );
+            taken += 1;
+        }
+    }
+    println!(
+        "cards taken at the window's places: {taken} of {}",
+        cards.len()
+    );
+}
+
+/// Adds the cards' first digits (see the top): drawn with the fonts, and the
+/// credits' digits.
+fn font_card_digits(cuts: &mut Cuts, weights: &[FontVec]) {
     for drawn in weights {
         for (style, cut) in [("bar", shop::BAR_STYLE), ("price", shop::PRICE_STYLE)] {
             add(cuts, "the font", style, digits(drawn, cut), "0123456789");
@@ -375,12 +425,10 @@ fn card_digits(cuts: &mut Cuts, weights: &[FontVec], cards: &[Card]) {
             join(known, mean.clone());
         }
     }
-    take_card_digits(cuts, cards);
 }
 
-/// Adds the students' names drawn with `font`, and the letters of them the
-/// tuning screens draw.
-fn names(bank: &mut Bank, font: &FontVec, labels: &[Label], open: &dyn Fn(&str) -> RgbImage) {
+/// Adds the students' names drawn with `font`.
+fn names(bank: &mut Bank, font: &FontVec) {
     // A name two ids share is one word, under the lower id.
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let students = aoi::student_names(&root.join("data")).unwrap();
@@ -393,11 +441,19 @@ fn names(bank: &mut Bank, font: &FontVec, labels: &[Label], open: &dyn Fn(&str) 
         let word = word(bank, font, id, text).unwrap();
         bank.index.names.push(word);
     }
+}
+
+/// Adds the letters of the students' names the tuning screens draw.
+fn letters(bank: &mut Bank, labels: &[Label], open: &dyn Fn(&str) -> RgbImage) {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let students = aoi::student_names(&root.join("data")).unwrap();
     for label in labels.iter().filter(|l| l.role == "tune") {
         let name = &students.iter().find(|s| s.0 == label.id).unwrap().1;
         let words = &bank.index.names;
         let word = words.iter().find(|w| w.text == *name).cloned().unwrap();
-        let ink = student::name::plate(&open(&label.image)).unwrap();
+        let Some(ink) = student::name::plate(&open(&label.image)) else {
+            continue;
+        };
         for (c, tile) in word.text.chars().zip(ink.letters(&word)) {
             let at = bank.add(tile);
             bank.index.letters.entry(c).or_default().push(at);
@@ -415,14 +471,16 @@ fn student_styles(
     for label in labels.iter().filter(|l| l.role == "tune") {
         let image = open(&label.image);
         for (style, area, text) in label.texts() {
-            let shapes = student::shapes(&image, style, area).unwrap();
-            add(cuts, &label.image, style, shapes, &text);
+            if let Some(shapes) = student::shapes(&image, style, area) {
+                add(cuts, &label.image, style, shapes, &text);
+            }
         }
     }
     for level in levels.iter().filter(|l| l.role == "tune") {
-        let shapes = student::shapes(&open(&level.image), "level", student::LEVEL).unwrap();
-        let text = format!("Lv{}", level.level);
-        add(cuts, &level.image, "level", shapes, &text);
+        if let Some(shapes) = student::shapes(&open(&level.image), "level", student::LEVEL) {
+            let text = format!("Lv{}", level.level);
+            add(cuts, &level.image, "level", shapes, &text);
+        }
     }
 }
 
@@ -439,8 +497,9 @@ fn dark_digits_and_shops(
         let Some(credits) = label.credits else {
             continue;
         };
-        let shapes = credit::shapes(&open(&label.image)).unwrap();
-        add(cuts, &label.image, "digits", shapes, &credits.to_string());
+        if let Some(shapes) = credit::shapes(&open(&label.image)) {
+            add(cuts, &label.image, "digits", shapes, &credits.to_string());
+        }
     }
     for label in shops.iter().filter(|l| l.role == "tune") {
         let image = open(&label.image);
@@ -455,9 +514,11 @@ fn dark_digits_and_shops(
             add(cuts, &label.image, "digits", shapes, &held.to_string());
         }
         let id = shop::SHOPS.iter().position(|s| *s == label.shop).unwrap() as i64;
-        let ink = shop::menu_ink(&image).expect("a chosen menu entry");
-        let word = entry(bank, id, &label.shop, &ink).unwrap();
-        bank.index.shops.push(word);
+        if let Some(word) =
+            shop::menu_ink(&image).and_then(|ink| entry(bank, id, &label.shop, &ink))
+        {
+            bank.index.shops.push(word);
+        }
     }
 }
 
@@ -474,42 +535,68 @@ fn main() {
     };
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let dir = root.join("tests/fixtures");
-    let open = |path: &str| image::open(dir.join(path)).unwrap().to_rgb8();
     let labels: Vec<Label> = read_json(&dir.join("students.json"));
     let levels: Vec<LevelLabel> = read_json(&dir.join("levels.json"));
     let credits: Vec<CreditsLabel> = read_json(&dir.join("credits.json"));
     let shops: Vec<ShopLabel> = read_json(&dir.join("shops.json"));
-    let (mut cuts, mut bank) = (Cuts::new(), Bank::default());
-
-    student_styles(&mut cuts, &labels, &levels, &open);
-    dark_digits_and_shops(&mut cuts, &mut bank, &credits, &shops, &open);
     let weights = ["Regular", "Medium", "Bold"].map(weight);
-    card_digits(&mut cuts, &weights, &cards(&shops, &open));
-    for (style, chars) in &cuts {
-        let counts: Vec<String> = chars
-            .iter()
-            .map(|(c, gs)| format!("{c}:{}", gs.len()))
-            .collect();
-        println!("{style}: {}", counts.join(" "));
-        let font = chars
-            .iter()
-            .map(|(c, gs)| {
-                let tiles = gs.iter().map(|g| bank.add(glyph_tile(&g.mean()))).collect();
-                (*c, tiles)
-            })
-            .collect();
-        bank.index.fonts.insert(style.clone(), font);
-    }
-    names(&mut bank, &weights[0], &labels, &open);
+    // The window's cards, and where their values were found among their shapes.
+    let mut at_window: Vec<(Card, Option<(String, usize)>)> = Vec::new();
 
-    let (png, index) = bank.encode().unwrap();
-    std::fs::write(root.join("data/glyphs.png"), png).unwrap();
-    std::fs::write(root.join("data/glyphs.json"), index + "\n").unwrap();
-    println!(
-        "{} tiles: {} names, {} letters of the game, {} shops",
-        bank.tiles.len(),
-        bank.index.names.len(),
-        bank.index.letters.len(),
-        bank.index.shops.len()
-    );
+    // Each width the screens are read at keeps a bank of its own: the
+    // fixtures' (a window 2222 wide), and theirs scaled to smaller screens.
+    for width in screen::WIDTHS {
+        let mut bank = Bank::default();
+        names(&mut bank, &weights[0]);
+        let scale = width as f32 / 2222.0;
+        let open = |path: &str| {
+            let image = image::open(dir.join(path)).unwrap().to_rgb8();
+            if width == 2222 {
+                return image;
+            }
+            let (w, h) = (image.width() as f32 * scale, image.height() as f32 * scale);
+            resize(
+                &image,
+                w.round() as u32,
+                h.round() as u32,
+                FilterType::Triangle,
+            )
+        };
+        let mut cuts = Cuts::new();
+        student_styles(&mut cuts, &labels, &levels, &open);
+        dark_digits_and_shops(&mut cuts, &mut bank, &credits, &shops, &open);
+        font_card_digits(&mut cuts, &weights);
+        let shop_cards = cards(&shops, &open);
+        if width == screen::WIDTHS[0] {
+            let found = take_card_digits(&mut cuts, &shop_cards);
+            at_window = shop_cards.into_iter().zip(found).collect();
+        } else {
+            take_scaled_card_digits(&mut cuts, &at_window, &shop_cards);
+        }
+        for (style, chars) in &cuts {
+            let counts: Vec<String> = chars
+                .iter()
+                .map(|(c, gs)| format!("{c}:{}", gs.len()))
+                .collect();
+            println!("{width} {style}: {}", counts.join(" "));
+            for (c, gs) in chars {
+                let tiles: Vec<usize> =
+                    gs.iter().map(|g| bank.add(glyph_tile(&g.mean()))).collect();
+                let font = bank.index.fonts.entry(style.clone()).or_default();
+                font.entry(*c).or_default().extend(tiles);
+            }
+        }
+        letters(&mut bank, &labels, &open);
+        let (png, index) = bank.encode().unwrap();
+        let (picture, index_file) = glyph::bank::files(width);
+        std::fs::write(root.join("data").join(picture), png).unwrap();
+        std::fs::write(root.join("data").join(index_file), index + "\n").unwrap();
+        println!(
+            "{width}: {} tiles: {} names, {} letters of the game, {} shops",
+            bank.tiles.len(),
+            bank.index.names.len(),
+            bank.index.letters.len(),
+            bank.index.shops.len()
+        );
+    }
 }

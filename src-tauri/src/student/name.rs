@@ -21,12 +21,15 @@ const COLUMNS: (f32, f32) = (0.10, 0.365);
 /// Parts of the letters smaller than this share of the unit squared are specks
 /// (6 pixels at 1250 rows; a voiced mark's dots are 8 or more).
 const SPECK: f32 = 6.0 / (1250.0 * 1250.0);
-/// The farthest a letter of the plate may lie from the name's own letter.
-/// Measured on 2026-10-14 over the student fixtures: a right name's farthest
-/// letter lies within 22.6 (an evaluation plate), and with each student left
-/// out in turn, the nearest other name has a letter 26.1 or farther ("ハルカ"
-/// for "ハルナ"). A name not told is safer than one told wrong.
-const WORST: f32 = 24.0;
+/// The farthest a letter of the plate may lie from the name's own letter, in
+/// a window and on a smaller screen (see `screen::WIDTHS`). Measured on
+/// 2026-10-14 over the student fixtures: a right name's farthest letter lies
+/// within 22.6 (an evaluation plate), and with each student left out in turn,
+/// the nearest other name has a letter 26.1 or farther ("ハルカ" for "ハルナ").
+/// Measured again on 2026-10-15 over them scaled down: from 1280 to 1920 wide
+/// another name comes as near as 22.9 (for "ツムギ" at 1600), while some right
+/// ones lie up to 29. A name not told is safer than one told wrong.
+const WORST: (f32, f32) = (24.0, 22.0);
 
 /// The white letters of the name.
 fn white(c: [u8; 3]) -> bool {
@@ -55,5 +58,10 @@ pub fn read<'a>(
     names: impl IntoIterator<Item = &'a Word>,
 ) -> Option<i64> {
     let ink = plate(image)?;
-    word::nearest(&ink, names, &bank.tiles, &bank.index.letters, WORST).map(|w| w.id)
+    let worst = if screen::nearest_width(screen::drawn_width(image)) == screen::WIDTHS[0] {
+        WORST.0
+    } else {
+        WORST.1
+    };
+    word::nearest(&ink, names, &bank.tiles, &bank.index.letters, worst).map(|w| w.id)
 }

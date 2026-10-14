@@ -81,6 +81,10 @@ describe("statusView", () => {
       tone: "danger",
     });
     expect(statusView({ state: "paused" })).toEqual({ label: "一時中断", tone: "paused" });
+    expect(statusView({ state: "too_small" })).toEqual({
+      label: "画面が小さすぎます",
+      tone: "idle",
+    });
   });
 });
 
