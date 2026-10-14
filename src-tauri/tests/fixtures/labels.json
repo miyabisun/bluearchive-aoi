@@ -1200,5 +1200,93 @@
         "ignored": true
       }
     ]
+  },
+  {
+    "image": "android/equipment.png",
+    "list": "equipment",
+    "role": "eval",
+    "note": "2026-10-14 capture on a Pixel 9 (Android, 2424x1080) over adb's screenrecord, cut to its safe area (172..2252) and scaled to 2222 wide (screen::normalize). Labels by eye.",
+    "cells": [
+      {
+        "id": 102003,
+        "quantity": "4"
+      },
+      {
+        "id": 102006,
+        "quantity": "10"
+      },
+      {
+        "id": 102007,
+        "quantity": "6"
+      },
+      {
+        "id": 102009,
+        "quantity": "154"
+      },
+      {
+        "id": 103001,
+        "quantity": "1010"
+      },
+      {
+        "id": 103002,
+        "quantity": "1035"
+      },
+      {
+        "id": 103003,
+        "quantity": "1051"
+      },
+      {
+        "id": 103006,
+        "quantity": "41"
+      },
+      {
+        "id": 103007,
+        "quantity": "255"
+      },
+      {
+        "id": 103009,
+        "quantity": "576"
+      },
+      {
+        "id": 104002,
+        "quantity": "395"
+      },
+      {
+        "id": 104003,
+        "quantity": "408"
+      },
+      {
+        "id": 104004,
+        "quantity": "1681"
+      },
+      {
+        "id": 104005,
+        "quantity": "1151"
+      },
+      {
+        "id": 104006,
+        "quantity": "1036"
+      },
+      {
+        "id": 104007,
+        "quantity": "984"
+      },
+      {
+        "id": 104008,
+        "quantity": "176"
+      },
+      {
+        "id": 104009,
+        "quantity": "443"
+      },
+      {
+        "id": 105001,
+        "quantity": "412"
+      },
+      {
+        "id": 105002,
+        "quantity": "20"
+      }
+    ]
   }
 ]

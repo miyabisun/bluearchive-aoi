@@ -21,7 +21,7 @@ use windows_capture::{
     window::Window,
 };
 
-use super::{Board, Game, Latest, Seen};
+use super::{Board, Game, Latest};
 
 const GAME: &str = "BlueArchive.exe";
 /// Frames are taken at most this often (30 a second).
@@ -130,7 +130,7 @@ impl GraphicsCaptureApiHandler for Capture {
             })
             .collect();
         if let Some(image) = RgbImage::from_raw(w, h, rgb) {
-            self.latest.put(image);
+            self.latest.put_window(image);
         }
         Ok(())
     }
@@ -217,7 +217,11 @@ pub(super) fn look(board: &Board, latest: &Arc<Latest>, frames: &AtomicU32) {
             if let Some((_, control)) = session.take() {
                 let _ = control.stop();
             }
-            board.update(|seen| *seen = Seen::default());
+            // The phone's screen and the pause outlast the game's window.
+            board.update(|seen| {
+                seen.game = Game::Absent;
+                seen.on_list = None;
+            });
         }
         if session.is_none()
             && let Some(window) = game_window()

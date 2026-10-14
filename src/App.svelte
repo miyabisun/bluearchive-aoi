@@ -5,9 +5,11 @@
   import {
     applyUpdate,
     checkUpdate,
+    connectPhone,
     exportAll,
     follow,
     iconUrl,
+    pairPhone,
     reloadPlan,
     setPaused,
     setTarget,
@@ -25,8 +27,10 @@
     heldTone,
     groupPlan,
     needCells,
+    phoneLine,
     placeName,
     procureCells,
+    qrPath,
     settle,
     step,
     shopStale,
@@ -129,10 +133,22 @@
     credits: /** @type {number | null} */ (null),
     /** Why what was read could not be kept or brought back. */
     keep_error: /** @type {string | null} */ (null),
+    /** Where the link to a phone stands (see `phoneLine`). */
+    phone: /** @type {any} */ ({ state: "unpaired" }),
   });
   let view = $state({ tab: "items" });
   /** Whether the menu is open, and the theme chosen in it. */
   let menuOpen = $state(false);
+  /** The dialog of the link to a phone, opened from the menu. */
+  let phoneDialog = $state(/** @type {HTMLDialogElement | undefined} */ (undefined));
+  const phone = $derived(snapshot.phone ?? { state: "unpaired" });
+
+  /** Opens the phone's dialog, showing a QR code at once where none is paired. */
+  function openPhone() {
+    menuOpen = false;
+    phoneDialog?.showModal();
+    if (phone.state === "unpaired" || phone.state === "failed") pairPhone();
+  }
   let theme = $state(storedTheme());
   let query = $state("");
   /** The student column the table is ordered by. */
@@ -382,6 +398,7 @@
               check();
             }}>アップデートを確認</button
           >
+          <button type="button" role="menuitem" onclick={openPhone}>Androidとの通信</button>
           <div role="group" aria-labelledby="theme-heading">
             <span class="menu-heading" id="theme-heading">テーマ</span>
             {#each THEMES as choice (choice.id)}
@@ -1020,6 +1037,61 @@
   </div>
 </main>
 
+<!-- The link to a phone: paired by a QR code, then connected or not. -->
+<dialog class="phone" bind:this={phoneDialog} aria-labelledby="phone-heading">
+  <h2 id="phone-heading">Androidとの通信</h2>
+  <p class="phone-line" class:failed={phone.state === "failed"} aria-live="polite">
+    {phoneLine(phone)}
+  </p>
+  {#if phone.state === "pairing"}
+    <svg
+      class="qr"
+      viewBox="0 0 {phone.qr.length + 8} {phone.qr.length + 8}"
+      shape-rendering="crispEdges"
+      role="img"
+      aria-label="ペア設定の QR コード"
+    >
+      <rect width="100%" height="100%" fill="#fff" />
+      <path d={qrPath(phone.qr)} fill="#000" />
+    </svg>
+    <ol class="steps">
+      <li>スマホの「設定」→「デバイス情報」→「ビルド番号」を 7 回タップする（初回だけ）</li>
+      <li>
+        「設定」→「システム」→「開発者向けオプション」→「ワイヤレス デバッグ」をオンにして開く
+      </li>
+      <li>「QR コードによるデバイスのペア設定」を押して、この QR コードを読み取る</li>
+    </ol>
+  {/if}
+  {#if phone.state === "pairing" || phone.state === "searching"}
+    <details class="phone-help">
+      <summary
+        >{@render chevron()}{phone.state === "pairing"
+          ? "読み取っても進まないとき"
+          : "見つからないとき"}</summary
+      >
+      <p>
+        PC とスマホを同じ Wi-Fi につないでください。ゲスト用の Wi-Fi
+        など、機器どうしが通信できない回線では使えません。{phone.state === "searching"
+          ? "スマホの「ワイヤレス デバッグ」がオンかも確かめてください。"
+          : ""}
+      </p>
+    </details>
+  {/if}
+  <div class="phone-actions">
+    {#if phone.state === "searching" || phone.state === "streaming"}
+      <button type="button" onclick={() => connectPhone(false)}>切断</button>
+    {:else if phone.state === "stopped"}
+      <button type="button" class="primary" onclick={() => connectPhone(true)}>接続</button>
+    {/if}
+    {#if phone.state === "failed"}
+      <button type="button" class="primary" onclick={pairPhone}>もう一度</button>
+    {:else if phone.state !== "pairing" && phone.state !== "unpaired"}
+      <button type="button" onclick={pairPhone}>別のスマホとペア設定</button>
+    {/if}
+    <button type="button" onclick={() => phoneDialog?.close()}>閉じる</button>
+  </div>
+</dialog>
+
 <!-- Passing notices: the region stays so screen readers hear what comes in. -->
 <div class="toasts" aria-live="polite">
   {#if toast}
@@ -1140,6 +1212,64 @@
     color: var(--c-accent)
     font: inherit
     cursor: pointer
+
+  // The link to a phone: a dialog over the page with the menu's face.
+  .phone
+    width: min(30rem, calc(100vw - 2 * var(--sp-4)))
+    max-height: calc(100vh - 2 * var(--sp-4))
+    padding: var(--sp-4)
+    border: 1px solid var(--c-border)
+    border-radius: var(--radius-sm)
+    background: var(--c-surface)
+    color: var(--c-on-surface)
+    &::backdrop
+      background: rgb(0 0 0 / 0.5)
+    h2
+      margin: 0 0 var(--sp-3)
+      font-size: var(--fs-title)
+  .phone-line
+    margin: 0 0 var(--sp-3)
+    &.failed
+      color: var(--c-danger)
+  // Dark on white whatever the theme: a phone reads it so.
+  .qr
+    display: block
+    width: 15rem
+    max-width: 100%
+    margin: 0 auto var(--sp-3)
+  .steps
+    margin: 0 0 var(--sp-3)
+    padding-left: 1.4em
+    font-size: var(--fs-sm)
+    li + li
+      margin-top: var(--sp-1)
+  .phone-help
+    margin: 0 0 var(--sp-3)
+    font-size: var(--fs-sm)
+    color: var(--c-muted)
+    summary
+      display: flex
+      align-items: center
+      gap: var(--sp-1)
+      cursor: pointer
+    p
+      margin: var(--sp-2) 0 0
+  .phone-actions
+    display: flex
+    flex-wrap: wrap
+    justify-content: flex-end
+    gap: var(--sp-2)
+    button
+      padding: 2px var(--sp-3)
+      border: 1px solid var(--c-border)
+      border-radius: var(--radius-sm)
+      background: none
+      color: var(--c-on-surface)
+      font: inherit
+      cursor: pointer
+      &.primary
+        border-color: var(--c-accent)
+        color: var(--c-accent)
 
   // A passing notice at the window's foot, over the content: the menu's face.
   .toasts

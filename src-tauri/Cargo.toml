@@ -21,6 +21,12 @@ serde_yaml = "0.9"
 microlp = "0.6"
 ureq = "2"
 sha2 = "0.10"
+# A phone's screen over Wi-Fi: wireless debugging paired by QR code, its
+# services found over mDNS, with no adb installed.
+libadb = { version = "0.5", default-features = false, features = ["tokio", "tls", "pairing", "host-keys"] }
+mdns-sd = "0.21"
+qrcode = { version = "0.14", default-features = false }
+tokio = { version = "1", features = ["net", "time", "rt"] }
 
 # Capturing the game's window: Blue Archive runs on Windows only.
 [target.'cfg(windows)'.dependencies]

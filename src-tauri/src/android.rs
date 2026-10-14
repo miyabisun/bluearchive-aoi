@@ -1,0 +1,522 @@
+//! A phone's screen over Wi-Fi, with no `adb` installed: Android 11's
+//! wireless debugging, paired by a QR code as Android Studio pairs, then the
+//! screen recorded as raw frames (`screenrecord --output-format=frames`).
+
+use std::{
+    net::IpAddr,
+    path::{Path, PathBuf},
+    sync::{
+        Arc, Mutex, OnceLock, PoisonError,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
+
+use image::RgbImage;
+use libadb::{
+    AdbKey, Connection, Feature, TlsClientConfig, TlsIdentity, TokioTcp, exec,
+    keys::rsa::rand_core::{OsRng, RngCore},
+    pairing::pair,
+    transport::tls::MaybeTls,
+};
+use mdns_sd::{ServiceDaemon, ServiceEvent};
+use serde::{Deserialize, Serialize};
+
+/// The text of the QR code a phone scans to pair: the service `name` it
+/// announces back, and the `password` the pairing runs on.
+pub fn pairing_qr(name: &str, password: &str) -> String {
+    format!("WIFI:T:ADB;S:{name};P:{password};;")
+}
+
+/// The pixel format of a raw frame: `HAL_PIXEL_FORMAT_RGB_888`.
+const RGB_888: u32 = 3;
+/// A raw frame's header: five little-endian words.
+const HEADER: usize = 20;
+
+/// Raw frames cut from `screenrecord --output-format=frames`: each a header
+/// of five little-endian words (the length of what follows, the width, the
+/// height, the row's bytes, the pixel format), then its RGB rows.
+#[derive(Default)]
+pub struct Frames {
+    pending: Vec<u8>,
+}
+
+impl Frames {
+    /// Takes `bytes` of the stream; the newest frame they complete, if any.
+    pub fn push(&mut self, bytes: &[u8]) -> Result<Option<RgbImage>, String> {
+        self.pending.extend_from_slice(bytes);
+        let mut newest = None;
+        let mut at = 0;
+        while self.pending.len() - at >= HEADER {
+            let word = |i: usize| {
+                let b = &self.pending[at + 4 * i..at + 4 * i + 4];
+                u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+            };
+            let (length, width, height, stride, format) =
+                (word(0), word(1), word(2), word(3), word(4));
+            let data = width as usize * height as usize * 3;
+            if format != RGB_888 || stride != width * 3 || length as usize != HEADER - 4 + data {
+                return Err(format!(
+                    "unknown frame {width}x{height} stride {stride} format {format}"
+                ));
+            }
+            if self.pending.len() - at < HEADER + data {
+                break;
+            }
+            newest = Some((at + HEADER, width, height));
+            at += HEADER + data;
+        }
+        let frame = newest.map(|(from, width, height)| {
+            let rgb = self.pending[from..from + width as usize * height as usize * 3].to_vec();
+            RgbImage::from_raw(width, height, rgb).expect("as many bytes as the header says")
+        });
+        self.pending.drain(..at);
+        Ok(frame)
+    }
+}
+
+/// The phone's model in its banner (`device::ro.product.model=Pixel 9;...`).
+pub fn model(banner: &[u8]) -> Option<String> {
+    let banner = String::from_utf8_lossy(banner);
+    let (_, rest) = banner.split_once("ro.product.model=")?;
+    rest.split(';').next().map(str::to_owned)
+}
+
+/// The instance an mDNS service's full name names
+/// ("adb-XXX._adb-tls-connect._tcp.local." is "adb-XXX").
+pub fn instance<'a>(fullname: &'a str, service: &str) -> &'a str {
+    fullname
+        .strip_suffix(service)
+        .and_then(|name| name.strip_suffix('.'))
+        .unwrap_or(fullname)
+}
+
+/// The services a phone announces over mDNS: to pair, and to connect once paired.
+const PAIRING: &str = "_adb-tls-pairing._tcp.local.";
+const CONNECT: &str = "_adb-tls-connect._tcp.local.";
+/// How long a QR code waits to be scanned.
+const PAIRING_WAIT: Duration = Duration::from_mins(10);
+/// How long the paired phone is looked for at a time, and the pause between tries.
+const LOOK: Duration = Duration::from_secs(10);
+const RETRY: Duration = Duration::from_secs(3);
+/// From Android 14 (API 34) the screen records without end; before, for three
+/// minutes at a time.
+const ENDLESS_FROM: u32 = 34;
+/// The key's name, which the phone lists among its paired devices.
+const KEY_NAME: &str = "Aoi";
+/// The file the paired phone is kept in, and the key's.
+const PAIRED: &str = "android.json";
+const KEY: &str = "adbkey.pem";
+
+/// Where the phone link stands, for the window.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum Link {
+    /// No phone is paired.
+    Unpaired,
+    /// A QR code waits to be scanned: its modules row by row, dark ones true.
+    Pairing { qr: Vec<Vec<bool>> },
+    /// Paired with `device`, which is looked for on the network.
+    Searching { device: String },
+    /// The screen of `device` comes in.
+    Streaming { device: String },
+    /// Paired with `device`, left unconnected by the user.
+    Stopped { device: String },
+    /// Pairing did not go through: why.
+    Failed { message: String },
+}
+
+/// The phone paired, kept beside the key: the instance it announces its
+/// connect port under, its model, and whether to connect at start.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Paired {
+    guid: String,
+    device: String,
+    connect: bool,
+}
+
+type FrameSink = Arc<dyn Fn(RgbImage) + Send + Sync>;
+type LinkSink = Arc<dyn Fn(&Link) + Send + Sync>;
+
+/// What a task of the link works with.
+struct Tools {
+    key: AdbKey,
+    tls: TlsClientConfig,
+    mdns: ServiceDaemon,
+    dir: PathBuf,
+    frame: FrameSink,
+    link: LinkSink,
+    paused: Arc<AtomicBool>,
+}
+
+/// The link to a phone: pairs it, keeps it connected and passes on its frames.
+pub struct Phone {
+    /// Where the key and the paired phone are kept.
+    dir: PathBuf,
+    frame: FrameSink,
+    link: LinkSink,
+    /// While set, no frames are received (the reading is paused).
+    paused: Arc<AtomicBool>,
+    mdns: OnceLock<Result<ServiceDaemon, String>>,
+    task: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
+}
+
+impl Phone {
+    pub fn new(
+        dir: PathBuf,
+        paused: Arc<AtomicBool>,
+        frame: impl Fn(RgbImage) + Send + Sync + 'static,
+        link: impl Fn(&Link) + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            dir,
+            frame: Arc::new(frame),
+            link: Arc::new(link),
+            paused,
+            mdns: OnceLock::new(),
+            task: Mutex::new(None),
+        }
+    }
+
+    /// Tells where the link stands, and connects to the paired phone if the
+    /// user left it connected.
+    pub fn start(&self) {
+        match self.paired() {
+            Some(paired) if paired.connect => self.keep_connected(paired),
+            Some(paired) => (self.link)(&Link::Stopped {
+                device: paired.device,
+            }),
+            None => (self.link)(&Link::Unpaired),
+        }
+    }
+
+    /// Shows a QR code to pair a phone with, then connects to it.
+    pub fn pair(&self) {
+        let (name, password) = (format!("aoi-{}", word(6)), word(10));
+        let code = match qrcode::QrCode::new(pairing_qr(&name, &password)) {
+            Ok(code) => code,
+            Err(e) => {
+                return (self.link)(&Link::Failed {
+                    message: e.to_string(),
+                });
+            }
+        };
+        let qr = code
+            .to_colors()
+            .chunks(code.width())
+            .map(|row| row.iter().map(|&c| c == qrcode::Color::Dark).collect())
+            .collect();
+        let Some(tools) = self.tools() else {
+            return;
+        };
+        (self.link)(&Link::Pairing { qr });
+        self.run(async move {
+            let guid = match pair_phone(&tools, &name, &password).await {
+                Ok(guid) => guid,
+                Err(message) => return (tools.link)(&Link::Failed { message }),
+            };
+            let paired = Paired {
+                guid,
+                device: "Android".to_owned(),
+                connect: true,
+            };
+            let _ = save(&tools.dir, &paired);
+            keep(tools, paired).await;
+        });
+    }
+
+    /// Connects to the paired phone, now and at the next start.
+    pub fn connect(&self) {
+        if let Some(mut paired) = self.paired() {
+            paired.connect = true;
+            let _ = save(&self.dir, &paired);
+            self.keep_connected(paired);
+        }
+    }
+
+    /// Leaves the paired phone unconnected, now and at the next start.
+    pub fn stop(&self) {
+        self.cancel();
+        match self.paired() {
+            Some(mut paired) => {
+                paired.connect = false;
+                let _ = save(&self.dir, &paired);
+                (self.link)(&Link::Stopped {
+                    device: paired.device,
+                });
+            }
+            None => (self.link)(&Link::Unpaired),
+        }
+    }
+
+    fn keep_connected(&self, paired: Paired) {
+        if let Some(tools) = self.tools() {
+            self.run(keep(tools, paired));
+        }
+    }
+
+    /// What a task works with; `None` once why it cannot be had is told.
+    fn tools(&self) -> Option<Tools> {
+        let made = (|| {
+            let key = key(&self.dir)?;
+            let identity = TlsIdentity::from_key(&key, &mut OsRng).map_err(|e| e.to_string())?;
+            let tls = TlsClientConfig::adb(&identity).map_err(|e| e.to_string())?;
+            let mdns = self
+                .mdns
+                .get_or_init(|| ServiceDaemon::new().map_err(|e| e.to_string()))
+                .clone()?;
+            Ok::<_, String>(Tools {
+                key,
+                tls,
+                mdns,
+                dir: self.dir.clone(),
+                frame: self.frame.clone(),
+                link: self.link.clone(),
+                paused: self.paused.clone(),
+            })
+        })();
+        made.map_err(|message| (self.link)(&Link::Failed { message }))
+            .ok()
+    }
+
+    /// Runs `task` in place of the one running.
+    fn run(&self, task: impl Future<Output = ()> + Send + 'static) {
+        self.cancel();
+        *self.task.lock().unwrap_or_else(PoisonError::into_inner) =
+            Some(tauri::async_runtime::spawn(task));
+    }
+
+    fn cancel(&self) {
+        let task = self
+            .task
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let Some(task) = task {
+            task.abort();
+        }
+    }
+
+    fn paired(&self) -> Option<Paired> {
+        let text = std::fs::read_to_string(self.dir.join(PAIRED)).ok()?;
+        serde_json::from_str(&text).ok()
+    }
+}
+
+fn save(dir: &Path, paired: &Paired) -> Result<(), String> {
+    let text = serde_json::to_string_pretty(paired).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join(PAIRED), text).map_err(|e| e.to_string())
+}
+
+/// The key kept in `dir`, made the first time.
+fn key(dir: &Path) -> Result<AdbKey, String> {
+    let path = dir.join(KEY);
+    if let Ok(pem) = std::fs::read_to_string(&path) {
+        return AdbKey::from_pkcs8_pem(&pem, &mut OsRng, KEY_NAME).map_err(|e| e.to_string());
+    }
+    let key = AdbKey::generate(&mut OsRng, KEY_NAME).map_err(|e| e.to_string())?;
+    let pem = key.to_pkcs8_pem().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    std::fs::write(&path, pem.as_bytes()).map_err(|e| e.to_string())?;
+    Ok(key)
+}
+
+/// Letters and digits, `n` of them, drawn at random.
+fn word(n: usize) -> String {
+    const LETTERS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    (0..n)
+        .map(|_| char::from(LETTERS[OsRng.next_u32() as usize % LETTERS.len()]))
+        .collect()
+}
+
+/// The address and port of the instance of `service` named `wanted`, if it
+/// is announced within `within`.
+async fn find(
+    mdns: &ServiceDaemon,
+    service: &str,
+    wanted: &str,
+    within: Duration,
+) -> Option<(IpAddr, u16)> {
+    let _ = mdns.stop_browse(service);
+    let events = mdns.browse(service).ok()?;
+    let found = tokio::time::timeout(within, async {
+        while let Ok(event) = events.recv_async().await {
+            if let ServiceEvent::ServiceResolved(info) = event
+                && instance(info.get_fullname(), service) == wanted
+            {
+                let addresses: Vec<IpAddr> = info
+                    .get_addresses()
+                    .iter()
+                    .map(mdns_sd::ScopedIp::to_ip_addr)
+                    .collect();
+                let address = addresses.iter().find(|a| a.is_ipv4()).or(addresses.first());
+                if let Some(&address) = address {
+                    return Some((address, info.get_port()));
+                }
+            }
+        }
+        None
+    })
+    .await;
+    let _ = mdns.stop_browse(service);
+    found.ok().flatten()
+}
+
+/// Pairs the phone that scanned the QR code of `name` and `password`; its guid.
+async fn pair_phone(tools: &Tools, name: &str, password: &str) -> Result<String, String> {
+    let (address, port) = find(&tools.mdns, PAIRING, name, PAIRING_WAIT)
+        .await
+        .ok_or("QR コードが読み取られないまま時間が過ぎました")?;
+    let tcp = tokio::net::TcpStream::connect((address, port))
+        .await
+        .map_err(|e| format!("スマホにつながりませんでした: {e}"))?;
+    let _ = tcp.set_nodelay(true);
+    let mut transport = MaybeTls::plain(TokioTcp::new(tcp));
+    let paired = pair(&mut transport, &tools.tls, &tools.key, password, &mut OsRng)
+        .await
+        .map_err(|e| format!("ペア設定できませんでした: {e}"))?;
+    Ok(paired.guid)
+}
+
+/// Keeps the paired phone connected and its frames coming, looking for it
+/// again whenever it drops (its screen off, wireless debugging turned off),
+/// none taken while the reading is paused.
+async fn keep(mut tools: Tools, mut paired: Paired) {
+    loop {
+        while tools.paused.load(Ordering::Relaxed) {
+            tokio::time::sleep(RETRY).await;
+        }
+        (tools.link)(&Link::Searching {
+            device: paired.device.clone(),
+        });
+        if let Some((address, port)) = find(&tools.mdns, CONNECT, &paired.guid, LOOK).await {
+            let streamed = stream(&mut tools, (address, port), |tools, device| {
+                if paired.device != device {
+                    device.clone_into(&mut paired.device);
+                    let _ = save(&tools.dir, &paired);
+                }
+                (tools.link)(&Link::Streaming {
+                    device: device.to_owned(),
+                });
+            })
+            .await;
+            if streamed.is_ok() {
+                continue;
+            }
+        }
+        tokio::time::sleep(RETRY).await;
+    }
+}
+
+/// Receives the screen of the phone at `at`, passing on each frame, till the
+/// recording ends or the reading pauses; `started` hears the phone's model
+/// once its first frame comes.
+async fn stream(
+    tools: &mut Tools,
+    at: (IpAddr, u16),
+    mut started: impl FnMut(&Tools, &str),
+) -> Result<(), String> {
+    let tcp = tokio::net::TcpStream::connect(at)
+        .await
+        .map_err(|e| e.to_string())?;
+    let _ = tcp.set_nodelay(true);
+    let transport = MaybeTls::plain(TokioTcp::new(tcp));
+    let mut conn =
+        Connection::<_>::connect_tls(transport, &mut tools.key, &[Feature::ShellV2], &tools.tls)
+            .await
+            .map_err(|e| e.to_string())?;
+    let device = conn
+        .device_banner()
+        .and_then(model)
+        .unwrap_or_else(|| "Android".to_owned());
+    let mut buf = vec![0u8; 1 << 20];
+    let n = exec::run(&mut conn, "getprop ro.build.version.sdk", &mut buf)
+        .await
+        .map_err(|e| e.to_string())?;
+    let sdk: u32 = String::from_utf8_lossy(&buf[..n])
+        .trim()
+        .parse()
+        .unwrap_or(0);
+    let limit = if sdk >= ENDLESS_FROM { 0 } else { 180 };
+    let command = format!("screenrecord --output-format=frames --time-limit {limit} -");
+    let mut destination = [0u8; 128];
+    let mut recording = exec::open(&mut conn, &command, &mut destination)
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut frames = Frames::default();
+    let mut first = true;
+    while !tools.paused.load(Ordering::Relaxed) {
+        let n = match recording.read(&mut buf).await {
+            Ok(n) => n,
+            Err(libadb::Error::ChannelClosed) => return Ok(()),
+            Err(e) => return Err(e.to_string()),
+        };
+        if let Some(image) = frames.push(&buf[..n])? {
+            if first {
+                started(tools, &device);
+                first = false;
+            }
+            (tools.frame)(image);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Frames, instance, model, pairing_qr};
+
+    /// A frame of `width` x `height` whose every byte is `fill`.
+    fn frame(width: u32, height: u32, fill: u8) -> Vec<u8> {
+        let data = (width * height * 3) as usize;
+        let mut out = Vec::new();
+        for word in [16 + data as u32, width, height, width * 3, 3] {
+            out.extend(word.to_le_bytes());
+        }
+        out.extend(std::iter::repeat_n(fill, data));
+        out
+    }
+
+    #[test]
+    fn the_pairing_qr_carries_the_name_and_the_password() {
+        assert_eq!(pairing_qr("aoi-x1", "Ab3"), "WIFI:T:ADB;S:aoi-x1;P:Ab3;;");
+    }
+
+    #[test]
+    fn frames_are_cut_from_the_stream_however_it_arrives() {
+        let stream = [frame(2, 1, 7), frame(2, 1, 9), frame(3, 2, 5)].concat();
+        let mut frames = Frames::default();
+        // A frame split anywhere comes once it is whole.
+        assert_eq!(frames.push(&stream[..10]).unwrap(), None);
+        let first = frames.push(&stream[10..30]).unwrap().unwrap();
+        assert_eq!((first.dimensions(), first.as_raw()[0]), ((2, 1), 7));
+        // Two whole frames at once: the newer one.
+        let rest = frames.push(&stream[30..]).unwrap().unwrap();
+        assert_eq!((rest.dimensions(), rest.as_raw()[0]), ((3, 2), 5));
+        assert_eq!(frames.push(&[]).unwrap(), None);
+    }
+
+    #[test]
+    fn a_frame_of_another_pixel_format_is_refused() {
+        let mut other = frame(2, 1, 0);
+        other[16] = 1;
+        assert!(Frames::default().push(&other).is_err());
+    }
+
+    #[test]
+    fn the_model_is_read_from_the_banner() {
+        let banner = b"device::ro.product.name=tokay;ro.product.model=Pixel 9;ro.product.device=tokay;features=shell_v2";
+        assert_eq!(model(banner).as_deref(), Some("Pixel 9"));
+        assert_eq!(model(b"device::features=shell_v2"), None);
+    }
+
+    #[test]
+    fn an_instance_is_its_full_name_short_of_the_service() {
+        let full = "adb-47050DLAQ000XJ-4OU0sd._adb-tls-connect._tcp.local.";
+        assert_eq!(
+            instance(full, "_adb-tls-connect._tcp.local."),
+            "adb-47050DLAQ000XJ-4OU0sd"
+        );
+    }
+}

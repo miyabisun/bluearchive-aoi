@@ -1178,3 +1178,58 @@ test("tells the app is up to date in a passing toast, or why it could not check"
   await page.getByRole("menuitem", { name: "アップデートを確認" }).click();
   await expect(page.getByRole("alert")).toHaveText("アップデートできませんでした: 通信できません");
 });
+
+test("the menu opens the link to a phone: a QR code to pair, then the phone connected or not", async ({
+  page,
+}) => {
+  const qr = [
+    [true, false],
+    [false, true],
+  ];
+  await open(page, {
+    status: { state: "no_source" },
+    items,
+    equipment,
+    phone: { state: "pairing", qr },
+  });
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await page.getByRole("menuitem", { name: "Androidとの通信" }).click();
+  const dialog = page.getByRole("dialog", { name: "Androidとの通信" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("img", { name: "ペア設定の QR コード" })).toBeVisible();
+  await expect(dialog.getByText("スマホでこの QR コードを読み取ってください")).toBeVisible();
+  // Already showing a QR code: none asked for anew.
+  expect(await page.evaluate(() => window.__AOI_CALLS__ ?? [])).toEqual([]);
+  await dialog.getByRole("button", { name: "閉じる" }).click();
+  await expect(dialog).toBeHidden();
+
+  await open(page, {
+    status: { state: "no_source" },
+    items,
+    equipment,
+    phone: { state: "unpaired" },
+  });
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await page.getByRole("menuitem", { name: "Androidとの通信" }).click();
+  // None paired: a QR code is asked for at once.
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ pair: true }]);
+
+  const streaming = { state: "streaming", device: "Pixel 9" };
+  await open(page, { status: { state: "no_source" }, items, equipment, phone: streaming });
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await page.getByRole("menuitem", { name: "Androidとの通信" }).click();
+  await expect(page.getByText("Pixel 9 の画面を受け取っています")).toBeVisible();
+  await page.getByRole("button", { name: "切断" }).click();
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ connect: false }]);
+
+  await open(page, {
+    status: { state: "no_source" },
+    items,
+    equipment,
+    phone: { state: "stopped", device: "Pixel 9" },
+  });
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await page.getByRole("menuitem", { name: "Androidとの通信" }).click();
+  await page.getByRole("button", { name: "接続", exact: true }).click();
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ connect: true }]);
+});

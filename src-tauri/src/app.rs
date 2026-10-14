@@ -10,7 +10,9 @@ use serde::Serialize;
 use tauri::{Emitter, Manager};
 
 use crate::{
-    List, Recognizer, Row, export,
+    List, Recognizer, Row,
+    android::Link,
+    export,
     keep::{self, Kept, ReadAt, now},
     plan::{BlueprintRow, NeedRow, Target, UnknownRow},
     shop::ShopRow,
@@ -52,6 +54,8 @@ pub struct Snapshot {
     read_at: ReadAt,
     /// Why what was read could not be kept or brought back, while it lasts.
     keep_error: Option<String>,
+    /// Where the link to a phone stands.
+    phone: Link,
 }
 
 /// A student marked for training, with the target, and the student's name
@@ -105,6 +109,7 @@ impl Snapshot {
             work: recognizer.work_rows(&[], &[], None),
             read_at: kept.read_at.clone(),
             keep_error,
+            phone: Link::Unpaired,
         };
         snapshot.reground();
         snapshot.replan(recognizer, &kept.targets);
@@ -301,6 +306,25 @@ fn set_paused(watcher: tauri::State<'_, watch::Watcher>, paused: bool) {
     watcher.pause(paused);
 }
 
+/// Shows a QR code to pair a phone with (see `android::Phone::pair`); the
+/// snapshot carries it.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Tauri hands command arguments over by value.
+fn pair_phone(watcher: tauri::State<'_, watch::Watcher>) {
+    watcher.phone().pair();
+}
+
+/// Connects to the paired phone, or leaves it unconnected.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Tauri hands command arguments over by value.
+fn connect_phone(watcher: tauri::State<'_, watch::Watcher>, connect: bool) {
+    if connect {
+        watcher.phone().connect();
+    } else {
+        watcher.phone().stop();
+    }
+}
+
 /// The app's version and the newer one the latest release brings, if any;
 /// whether the app takes it itself, or opens the release page (macOS).
 #[derive(Debug, Clone, Serialize)]
@@ -373,39 +397,49 @@ pub fn run(context: tauri::Context) {
             app.manage(places.clone());
             let planner = recognizer.clone();
             let handle = app.handle().clone();
-            let watcher = watch::start(recognizer.clone(), kept, move |status, update| {
-                let latest = handle.state::<Latest>();
-                let mut snapshot = latest.0.lock().unwrap_or_else(PoisonError::into_inner);
-                snapshot.status = status.clone();
-                if let Some(update) = update {
-                    let read = Some(now());
-                    match update {
-                        Update::List(List::Items, rows) => {
-                            snapshot.items = rows;
-                            snapshot.read_at.items = read;
+            // The phone's key and the phone paired sit beside what is kept.
+            let phone_dir = app.path().app_data_dir()?;
+            let watcher = watch::start(
+                recognizer.clone(),
+                kept,
+                phone_dir,
+                move |status, update| {
+                    let latest = handle.state::<Latest>();
+                    let mut snapshot = latest.0.lock().unwrap_or_else(PoisonError::into_inner);
+                    snapshot.status = status.clone();
+                    if let Some(Update::Phone(link)) = update {
+                        snapshot.phone = link;
+                    } else if let Some(update) = update {
+                        let read = Some(now());
+                        match update {
+                            Update::List(List::Items, rows) => {
+                                snapshot.items = rows;
+                                snapshot.read_at.items = read;
+                            }
+                            Update::List(List::Equipment, rows) => {
+                                snapshot.equipment = rows;
+                                snapshot.read_at.equipment = read;
+                            }
+                            Update::Students(rows) => {
+                                snapshot.students = rows;
+                                snapshot.read_at.students = read;
+                            }
+                            Update::Credits(credits) => {
+                                snapshot.credits = Some(credits);
+                                snapshot.read_at.credits = read;
+                            }
+                            // Each shop carries when it was read.
+                            Update::Shops(rows) => snapshot.shops = rows,
+                            Update::Phone(_) => unreachable!("taken above"),
                         }
-                        Update::List(List::Equipment, rows) => {
-                            snapshot.equipment = rows;
-                            snapshot.read_at.equipment = read;
-                        }
-                        Update::Students(rows) => {
-                            snapshot.students = rows;
-                            snapshot.read_at.students = read;
-                        }
-                        Update::Credits(credits) => {
-                            snapshot.credits = Some(credits);
-                            snapshot.read_at.credits = read;
-                        }
-                        // Each shop carries when it was read.
-                        Update::Shops(rows) => snapshot.shops = rows,
+                        snapshot.rework(&planner);
+                        snapshot.keep_error = keep_in(&places, &snapshot)
+                            .err()
+                            .map(|e| format!("読み取り結果を保存できませんでした: {e}"));
                     }
-                    snapshot.rework(&planner);
-                    snapshot.keep_error = keep_in(&places, &snapshot)
-                        .err()
-                        .map(|e| format!("読み取り結果を保存できませんでした: {e}"));
-                }
-                let _ = handle.emit(EVENT, &*snapshot);
-            });
+                    let _ = handle.emit(EVENT, &*snapshot);
+                },
+            );
             app.manage(watcher);
             Ok(())
         })
@@ -430,7 +464,9 @@ pub fn run(context: tauri::Context) {
             check_update,
             apply_update,
             set_paused,
-            reload_plan
+            reload_plan,
+            pair_phone,
+            connect_phone
         ])
         .run(context)
         .expect("bluearchive-aoi failed to start");

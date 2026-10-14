@@ -7,7 +7,16 @@ window. It sends no input to the game.
 
 It builds for macOS too, where there is no window to capture: the capture lives in
 `src-tauri/src/watch/window.rs` and its crates are Windows-only dependencies, so the macOS
-app starts with the status `no_source` and reads nothing.
+app starts with the status `no_source`.
+
+On either system it can read an Android phone's screen over Wi-Fi (`src-tauri/src/android.rs`):
+wireless debugging paired by a QR code and connected over TLS with `libadb`, its services
+found over mDNS, and the screen recorded as raw frames (`screenrecord --output-format=frames`,
+no video to decode). The key and the phone paired are kept in the app's data folder
+(`adbkey.pem`, `android.json`). A phone's frame is cut to its safe area and scaled to the
+2222-wide window the references were drawn from (`screen::normalize`); the readers measure
+in a 16:9 window's height (`screen::unit`), each part kept to the top, the middle or the
+bottom of a wider screen (`screen::Anchor`).
 
 - [Data and file formats](data.md): where the item data comes from, what is counted and
   when, and the YAML Aoi writes.

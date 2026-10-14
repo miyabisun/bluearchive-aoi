@@ -16,6 +16,8 @@ fn main() {
     watch::start(
         recognizer,
         aoi::keep::Kept::default(),
+        // No phone is paired in a folder of its own.
+        std::env::temp_dir().join("aoi-watch"),
         move |status, rows| {
             let at = started.elapsed().as_secs_f32();
             match rows {
@@ -35,6 +37,9 @@ fn main() {
                         .map(|s| format!("{} {}", s.name, s.goods.len()))
                         .collect();
                     println!("{at:6.1}s shops {}", sizes.join(" / "));
+                }
+                Some(aoi::watch::Update::Phone(link)) => {
+                    println!("{at:6.1}s phone {}", serde_json::to_string(&link).unwrap());
                 }
                 None => println!("{at:6.1}s {}", serde_json::to_string(status).unwrap()),
             }

@@ -9,6 +9,7 @@ mod window;
 
 use std::{
     collections::{BTreeMap, HashMap},
+    path::PathBuf,
     sync::{
         Arc, Condvar, Mutex, PoisonError,
         atomic::{AtomicBool, AtomicU32, Ordering},
@@ -21,6 +22,7 @@ use serde::Serialize;
 
 use crate::{
     Frame as Shown, List, Recognizer, Row,
+    android::{Link, Phone},
     keep::{Kept, now},
     quantity::Count,
     screen,
@@ -70,13 +72,14 @@ pub struct StudentRow {
     pub training: Training,
 }
 
-/// What changed in a tally.
+/// What changed in a tally, or in the link to a phone.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Update {
     List(List, Vec<Row>),
     Students(Vec<StudentRow>),
     Credits(u64),
     Shops(Vec<ShopRow>),
+    Phone(Link),
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -100,13 +103,21 @@ struct Seen {
     dropped: u32,
     /// Whether the user paused the reading.
     paused: bool,
+    /// Whether a phone's screen comes in (see `android`), read as the game's
+    /// window is.
+    phone: bool,
 }
 
 fn status(seen: &Seen) -> Status {
     if seen.paused {
         return Status::Paused;
     }
-    match &seen.game {
+    let game = if seen.phone {
+        &Game::Captured
+    } else {
+        &seen.game
+    };
+    match game {
         Game::Absent => Status::NoGame,
         Game::NoSource => Status::NoSource,
         Game::Failed(message) => Status::Failed {
@@ -155,9 +166,19 @@ struct Latest {
     ready: Condvar,
     /// Frames replaced before the reader took them.
     dropped: AtomicU32,
+    /// Whether a phone's screen comes in: then the game's window is left out,
+    /// one game read at a time.
+    phone: AtomicBool,
 }
 
 impl Latest {
+    /// Puts a frame of the game's window, unless a phone's screen comes in.
+    fn put_window(&self, frame: RgbImage) {
+        if !self.phone.load(Ordering::Relaxed) {
+            self.put(frame);
+        }
+    }
+
     fn put(&self, frame: RgbImage) {
         let mut slot = self.frame.lock().unwrap_or_else(PoisonError::into_inner);
         if slot.replace(frame).is_some() {
@@ -249,10 +270,12 @@ pub fn student_rows(recognizer: &Recognizer, known: &BTreeMap<i64, Training>) ->
 }
 
 /// Start watching from what was `kept`; `report` hears every change of status,
-/// and every change of a tally with the rows to show.
+/// and every change of a tally with the rows to show. A phone's link keeps its
+/// key and the phone paired in `phone_dir`.
 pub fn start(
     recognizer: Arc<Recognizer>,
     kept: Kept,
+    phone_dir: PathBuf,
     report: impl Fn(&Status, Option<Update>) + Send + Sync + 'static,
 ) -> Watcher {
     let board = Arc::new(Board {
@@ -261,9 +284,25 @@ pub fn start(
     });
     let latest = Arc::new(Latest::default());
     let frames = Arc::new(AtomicU32::new(0));
+    let paused = Arc::new(AtomicBool::new(false));
+    let phone = {
+        let (latest, windowed, board) = (latest.clone(), latest.clone(), board.clone());
+        Arc::new(Phone::new(
+            phone_dir,
+            paused.clone(),
+            move |frame| latest.put(frame),
+            move |link| {
+                let streaming = matches!(link, Link::Streaming { .. });
+                windowed.phone.store(streaming, Ordering::Relaxed);
+                board.update(|seen| seen.phone = streaming);
+                board.changed(Update::Phone(link.clone()));
+            },
+        ))
+    };
     let watcher = Watcher {
-        paused: Arc::new(AtomicBool::new(false)),
+        paused,
         board: board.clone(),
+        phone: phone.clone(),
     };
 
     // The reader: the newest frame into the tally.
@@ -334,6 +373,7 @@ pub fn start(
         });
     }
 
+    phone.start();
     // The watcher: the game's window into a capture, and the frame rate.
     #[cfg(windows)]
     thread::spawn(move || window::look(&board, &latest, &frames));
@@ -342,10 +382,12 @@ pub fn start(
     watcher
 }
 
-/// The watcher as the window controls it: its reading paused or not.
+/// The watcher as the window controls it: its reading paused or not, and the
+/// link to a phone.
 pub struct Watcher {
     paused: Arc<AtomicBool>,
     board: Arc<Board>,
+    phone: Arc<Phone>,
 }
 
 impl Watcher {
@@ -354,11 +396,33 @@ impl Watcher {
         self.paused.store(paused, Ordering::Relaxed);
         self.board.update(|seen| seen.paused = paused);
     }
+
+    /// The link to a phone (see `android::Phone`).
+    pub fn phone(&self) -> &Phone {
+        &self.phone
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{Game, Screen, Seen, Status, status};
+
+    /// One game is read at a time: the phone's while its screen comes in.
+    #[test]
+    fn the_window_waits_while_a_phone_streams() {
+        let latest = super::Latest::default();
+        latest
+            .phone
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        latest.put_window(image::RgbImage::new(2, 1));
+        latest.put(image::RgbImage::new(3, 1));
+        assert_eq!(latest.take().width(), 3);
+        latest
+            .phone
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+        latest.put_window(image::RgbImage::new(2, 1));
+        assert_eq!(latest.take().width(), 2);
+    }
 
     #[test]
     fn the_credits_are_taken_once_readings_agree_and_change() {
@@ -384,6 +448,7 @@ mod tests {
             fps: 28.5,
             dropped: 4,
             paused: false,
+            phone: false,
         };
         let items = Some(Screen::Items);
         assert_eq!(status(&seen(Game::Absent, items)), Status::NoGame);
@@ -403,6 +468,20 @@ mod tests {
                 dropped: 4
             }
         );
+        // A phone's screen coming in reads without the game's window.
+        for game in [Game::Absent, Game::NoSource] {
+            let phone = Seen {
+                phone: true,
+                ..seen(game, Some(Screen::Shops))
+            };
+            assert!(matches!(
+                status(&phone),
+                Status::Reading {
+                    list: Screen::Shops,
+                    ..
+                }
+            ));
+        }
         // Paused, whatever the game shows.
         for game in [Game::Captured, Game::Absent] {
             let paused = Seen {

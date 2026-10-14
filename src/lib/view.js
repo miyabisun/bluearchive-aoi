@@ -559,3 +559,33 @@ export function updateText(update) {
       return `アップデートできませんでした: ${update.error}`;
   }
 }
+
+/** Where the link to a phone stands (the snapshot's `phone`), as one line. */
+export function phoneLine(link) {
+  switch (link.state) {
+    case "pairing":
+      return "スマホでこの QR コードを読み取ってください";
+    case "searching":
+      return `${link.device} を探しています…`;
+    case "streaming":
+      return `${link.device} の画面を受け取っています`;
+    case "stopped":
+      return `${link.device} とは切断しています`;
+    case "failed":
+      return link.message;
+    default:
+      return "スマホとはまだペア設定していません";
+  }
+}
+
+/** Modules of light margin a QR code needs around it to be read. */
+const QR_QUIET = 4;
+
+/** An SVG path of a QR code's dark `modules` (rows of booleans), one unit each, inside its quiet zone. */
+export function qrPath(modules) {
+  return modules
+    .flatMap((row, y) =>
+      row.flatMap((dark, x) => (dark ? [`M${x + QR_QUIET} ${y + QR_QUIET}h1v1h-1z`] : [])),
+    )
+    .join(" ");
+}

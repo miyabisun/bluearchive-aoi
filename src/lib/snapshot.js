@@ -95,6 +95,32 @@ export async function checkUpdate() {
 }
 
 /**
+ * Shows a QR code to pair a phone with; the snapshot's `phone` carries it.
+ * Outside the app it notes the call in `window.__AOI_CALLS__`.
+ */
+export async function pairPhone() {
+  if (!("__TAURI_INTERNALS__" in window)) {
+    const w = /** @type {any} */ (window);
+    (w.__AOI_CALLS__ ??= []).push({ pair: true });
+    return;
+  }
+  return invoke("pair_phone");
+}
+
+/**
+ * Connects to the paired phone, or leaves it unconnected. Outside the app it
+ * notes the call in `window.__AOI_CALLS__`.
+ */
+export async function connectPhone(/** @type {boolean} */ connect) {
+  if (!("__TAURI_INTERNALS__" in window)) {
+    const w = /** @type {any} */ (window);
+    (w.__AOI_CALLS__ ??= []).push({ connect });
+    return;
+  }
+  return invoke("connect_phone", { connect });
+}
+
+/**
  * Puts the latest release in place of the running app and starts it (on macOS
  * opens the release page instead); rejects
  * with why it could not. Outside the app it notes the call in

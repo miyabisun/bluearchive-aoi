@@ -20,6 +20,8 @@ import {
   placeName,
   stockCells,
   updateText,
+  phoneLine,
+  qrPath,
   shopStale,
   formatCount,
   sortStudents,
@@ -777,5 +779,31 @@ describe("update", () => {
     expect(updateText({ state: "failed", error: "通信できません" })).toBe(
       "アップデートできませんでした: 通信できません",
     );
+  });
+});
+
+describe("phone", () => {
+  it("tells where the link to a phone stands", () => {
+    expect(phoneLine({ state: "unpaired" })).toBe("スマホとはまだペア設定していません");
+    expect(phoneLine({ state: "pairing", qr: [] })).toBe(
+      "スマホでこの QR コードを読み取ってください",
+    );
+    expect(phoneLine({ state: "searching", device: "Pixel 9" })).toBe("Pixel 9 を探しています…");
+    expect(phoneLine({ state: "streaming", device: "Pixel 9" })).toBe(
+      "Pixel 9 の画面を受け取っています",
+    );
+    expect(phoneLine({ state: "stopped", device: "Pixel 9" })).toBe("Pixel 9 とは切断しています");
+    expect(phoneLine({ state: "failed", message: "ペア設定できませんでした" })).toBe(
+      "ペア設定できませんでした",
+    );
+  });
+
+  it("draws a QR code's dark modules inside its quiet zone", () => {
+    const modules = [
+      [true, false],
+      [false, true],
+    ];
+    // Four modules of quiet zone around the code.
+    expect(qrPath(modules)).toBe("M4 4h1v1h-1z M5 5h1v1h-1z");
   });
 });

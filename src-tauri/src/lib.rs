@@ -6,6 +6,7 @@
 //! (`icon`, `catalog`); what is on each list and how it is ordered is decided
 //! apart (`items`, `equipment`).
 
+pub mod android;
 pub mod app;
 pub mod catalog;
 pub mod credit;
