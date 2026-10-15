@@ -77,14 +77,18 @@ fn every_field_reads_right_or_unknown() {
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
 }
 
-/// On a smaller screen (a phone's, or a stream of one) every field of the
-/// student screen reads right or not at all.
+/// On a smaller screen (a Full HD window, a phone's, or a stream of one)
+/// every field of the student screen reads right or not at all, and at each
+/// width at least the share of `LEAST` right. Measured on 2026-10-15: 96% at
+/// 1920, 79% at 1600 and 71% at 1280, where the equipment's levels do not read.
 #[test]
 fn a_smaller_screen_reads_fields_right_or_not_at_all() {
     use image::imageops::{FilterType, resize};
+    const LEAST: [(u32, f32); 3] = [(1920, 0.93), (1600, 0.75), (1280, 0.65)];
     let recognizer = recognizer();
     let mut wrong = Vec::new();
-    for width in [1600, 1280] {
+    for (width, least) in LEAST {
+        let (mut right, mut total) = (0, 0);
         for label in labels() {
             let image = image::open(root().join("tests/fixtures").join(&label.image))
                 .unwrap()
@@ -99,13 +103,19 @@ fn a_smaller_screen_reads_fields_right_or_not_at_all() {
             );
             let read = fields(&student::read(&image, recognizer.references(&image).1));
             for ((name, got), (_, want)) in read.into_iter().zip(fields(&label.training())) {
+                total += 1;
                 if got.is_some() && got != want {
                     wrong.push(format!(
                         "{width} {} {name}: read {got:?}, is {want:?}",
                         label.image
                     ));
+                } else if got.is_some() {
+                    right += 1;
                 }
             }
+        }
+        if (right as f32) < least * total as f32 {
+            wrong.push(format!("{width}: {right} of {total} fields read"));
         }
     }
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));

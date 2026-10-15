@@ -237,15 +237,16 @@ fn right_or_not_at_all(
     (cells, right)
 }
 
-/// A phone with a smaller screen (or a stream of one) shows the list smaller:
-/// the screens kept for evaluation, scaled to 1600 and 1280 wide, read every
-/// cell's item and count right or not at all, and most of them right.
+/// A Full HD window, or a phone with a smaller screen (or a stream of one),
+/// shows the list smaller: the screens kept for evaluation, scaled to 1920,
+/// 1600 and 1280 wide, read every cell's item and count right or not at all,
+/// and most of them right.
 #[test]
 fn a_smaller_screen_reads_right_or_not_at_all() {
     use image::imageops::{FilterType, resize};
     let recognizer = recognizer();
     let mut failures = Vec::new();
-    for width in [1600, 1280] {
+    for width in [1920, 1600, 1280] {
         let (mut cells, mut right) = (0, 0);
         for fixture in fixtures().into_iter().filter(|f| f.role == "eval") {
             let image = open(&fixture.image);

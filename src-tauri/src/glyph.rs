@@ -66,12 +66,32 @@ const LEAD: f32 = 0.6;
 /// A rectangle of the screen in pixels: left, top, right, bottom.
 pub type Rect = (u32, u32, u32, u32);
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Blob {
     left: u32,
     right: u32,
     top: u32,
     bottom: u32,
+}
+
+/// `blobs` with the pieces of a character side by side joined: those sharing
+/// columns, together no wider than `tallest` (the fill of an outlined
+/// character comes apart on a smaller screen; neighbours' fills, kept apart by
+/// their outlines, share none).
+fn side_by_side(mut blobs: Vec<Blob>, tallest: u32) -> Vec<Blob> {
+    blobs.sort_by_key(|b| b.left);
+    let mut out: Vec<Blob> = Vec::new();
+    for b in blobs {
+        match out.last_mut() {
+            Some(a) if b.left <= a.right && b.right.max(a.right) - a.left < tallest => {
+                a.right = a.right.max(b.right);
+                a.top = a.top.min(b.top);
+                a.bottom = a.bottom.max(b.bottom);
+            }
+            _ => out.push(b),
+        }
+    }
+    out
 }
 
 /// Which pixels of `rect` are of the ink, each row moved right by `skew`
@@ -221,10 +241,11 @@ pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
         .map(|b| b.bottom - b.top + 1)
         .max()
         .unwrap_or(0);
-    let (kept, short): (Vec<Blob>, Vec<Blob>) = blobs
+    let (mut kept, short): (Vec<Blob>, Vec<Blob>) = blobs
         .into_iter()
         .partition(|b| (b.bottom - b.top + 1) as f32 >= tallest as f32 * style.tall);
     if style.entire {
+        kept = side_by_side(kept, tallest);
         let first = kept.iter().map(|b| b.left).min().unwrap_or(0);
         let last = kept.iter().map(|b| b.right).max().unwrap_or(0);
         let line = kept.iter().map(|b| b.bottom).max().unwrap_or(0);
@@ -353,5 +374,42 @@ impl Fonts {
         let (c, d) = *nearest.first()?;
         let next = nearest.get(1).map_or(f32::INFINITY, |n| n.1);
         (d <= MAX_DISTANCE && d <= LEAD * next).then_some(c)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn blob(left: u32, right: u32, top: u32, bottom: u32) -> Blob {
+        Blob {
+            left,
+            right,
+            top,
+            bottom,
+        }
+    }
+
+    /// The "Lv.70" of an equipment level at 1920 wide (characters 15 px
+    /// high): the fill of the "0" came apart in two pieces side by side,
+    /// sharing columns. They are one character; neighbours stay apart.
+    #[test]
+    fn the_pieces_of_a_character_side_by_side_are_joined() {
+        let (l, v, seven) = (
+            blob(11, 18, 9, 23),
+            blob(25, 34, 13, 23),
+            blob(43, 52, 10, 23),
+        );
+        let pieces = vec![
+            l.clone(),
+            v.clone(),
+            seven.clone(),
+            blob(54, 61, 10, 23),
+            blob(60, 64, 9, 19),
+        ];
+        assert_eq!(
+            side_by_side(pieces, 15),
+            vec![l, v, seven, blob(54, 64, 9, 23)]
+        );
     }
 }

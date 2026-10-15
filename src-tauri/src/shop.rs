@@ -97,12 +97,14 @@ const MENU_WORST: f32 = 24.0;
 /// squared are specks.
 const SPECK: f32 = 6.0 / (1250.0 * 1250.0);
 /// The letters of a bar lie farther than this from every digit, in a window
-/// and on a smaller screen (see `screen::WIDTHS`). Measured on 2026-10-14 over
-/// the shop fixtures: 27 or farther; the digits read lie within 10 of their
-/// references, one left unread at 11. On 2026-10-15 over them scaled to 1600
-/// wide: the letters 29 or farther, a "0" read as none of the digits at 22
-/// (taken for a letter, "30" read "3").
+/// (and a Full HD screen) and on a smaller screen (see `screen::WIDTHS`).
+/// Measured on 2026-10-14 over the shop fixtures: 27 or farther; the digits
+/// read lie within 10 of their references, one left unread at 11. On
+/// 2026-10-15 over them scaled to 1600 wide: the letters 29 or farther, a "0"
+/// read as none of the digits at 22 (taken for a letter, "30" read "3"); at
+/// 1920 the window's share reads 59 offers, the smaller screens' 49.
 const LETTER: (f32, f32) = (20.0, 27.0);
+const FULL_HD: u32 = 1920;
 /// The light letters of a card's bar ("あと6回購入可能"), on a bar brightened
 /// back first when its card is bought up. Only their lightest pixels: with
 /// their soft edges the small digits touch ("57" one part; measured on
@@ -344,7 +346,7 @@ impl Goods {
         let u = unit(image);
         let (left, _, _, _) = card_area(image, bar)?;
         let bottom = bar.bottom as f32;
-        let letter = if screen::nearest_width(screen::drawn_width(image)) == screen::WIDTHS[0] {
+        let letter = if screen::nearest_width(screen::drawn_width(image)) >= FULL_HD {
             LETTER.0
         } else {
             LETTER.1

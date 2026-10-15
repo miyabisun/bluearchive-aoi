@@ -19,10 +19,10 @@ The `openh264` crate builds Cisco's decoder from source; Cisco's H.264 patent li
 only its own prebuilt binaries. The key and the phone paired are kept in the app's data folder
 (`adbkey.pem`, `android.json`). A phone's frame is cut to its safe area and scaled to the
 nearest of the widths the texts are read at (`screen::WIDTHS`: 2222, the window the
-references were drawn from, 1600 and 1280); the readers measure in a 16:9 window's height
+references were drawn from, 1920, 1600 and 1280); the readers measure in a 16:9 window's height
 (`screen::unit`), each part kept to the top, the middle or the bottom of a wider screen
 (`screen::Anchor`). Each width has references of its own, drawn from the tuning fixtures
-scaled to it (`data/glyphs*.png`, `data/digits.json`; `examples/build_glyphs.rs`,
+scaled to it, Full HD's with the window's besides (`data/glyphs*.png`, `data/digits.json`; `examples/build_glyphs.rs`,
 `examples/build_digits.rs`), and the tests read the evaluation fixtures scaled down too:
 right or not at all. A stream blurs the counts beyond any scaling, so their references also
 come from a tablet's own stream at 1920, 1600 and 1280 wide, and the tests read a few of its

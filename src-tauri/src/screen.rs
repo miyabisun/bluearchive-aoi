@@ -285,11 +285,12 @@ pub fn trim(image: &RgbImage) -> Cow<'_, RgbImage> {
 
 /// The widths the texts are read at, with references of their own: the
 /// 2222x1250 window the references were first drawn from, and smaller screens
-/// (a phone's, or a stream of one, at 1080 lines or 720), whose letters lose
-/// their shapes too far for the window's references (measured on 2026-10-15:
-/// the student screen's names and stars, the credits and the shops' bars read
-/// wrong or not at all at 1600 wide with the window's).
-pub const WIDTHS: [u32; 3] = [2222, 1600, 1280];
+/// (a Full HD window, a phone's, or a stream of one, at 1080 lines or 720),
+/// whose letters lose their shapes too far for the window's references
+/// (measured on 2026-10-15: the student screen's names and stars, the credits
+/// and the shops' bars read wrong or not at all at 1600 wide with the
+/// window's; the equipment levels not at all at 1920).
+pub const WIDTHS: [u32; 4] = [2222, 1920, 1600, 1280];
 
 /// The width of a 16:9 window drawing the game's parts as large as `image`.
 pub fn drawn_width(image: &RgbImage) -> f32 {
@@ -541,7 +542,8 @@ mod tests {
     fn a_screen_is_read_at_the_nearest_width() {
         assert_eq!(nearest_width(2222.0), 2222);
         assert_eq!(nearest_width(3040.0), 2222);
-        assert_eq!(nearest_width(1920.0), 2222);
+        assert_eq!(nearest_width(1920.0), 1920);
+        assert_eq!(nearest_width(2100.0), 2222);
         assert_eq!(nearest_width(1700.0), 1600);
         assert_eq!(nearest_width(1400.0), 1280);
         assert_eq!(nearest_width(800.0), 1280);

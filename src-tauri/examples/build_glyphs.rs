@@ -54,6 +54,12 @@ const JOIN: f32 = 10.0;
 /// (measured on 2026-10-14: the game's digits lie 12 to 30 from the font's,
 /// the letters around them 38 or farther).
 const LOOSE: (f32, f32) = (34.0, 0.85);
+/// A Full HD screen draws its texts near enough the window's to keep the
+/// window's references besides its own (measured on 2026-10-15 over the
+/// fixtures scaled to 1920 wide: with both, 59 shop offers and 566 of 600
+/// student fields read; with the window's alone 44 and 446, the equipment
+/// levels unread; with its own alone 47 and 566).
+const FULL_HD: u32 = 1920;
 /// The size the names are drawn at, in pixels.
 const SIZE: f32 = 64.0;
 
@@ -542,6 +548,8 @@ fn main() {
     let weights = ["Regular", "Medium", "Bold"].map(weight);
     // The window's cards, and where their values were found among their shapes.
     let mut at_window: Vec<(Card, Option<(String, usize)>)> = Vec::new();
+    // The window's references, which a Full HD screen keeps as well.
+    let mut window: Vec<(String, char, Vec<f32>)> = Vec::new();
 
     // Each width the screens are read at keeps a bank of its own: the
     // fixtures' (a window 2222 wide), and theirs scaled to smaller screens.
@@ -572,6 +580,26 @@ fn main() {
             at_window = shop_cards.into_iter().zip(found).collect();
         } else {
             take_scaled_card_digits(&mut cuts, &at_window, &shop_cards);
+        }
+        if width == screen::WIDTHS[0] {
+            window = cuts
+                .iter()
+                .flat_map(|(style, chars)| {
+                    chars.iter().flat_map(move |(c, gs)| {
+                        gs.iter().map(move |g| (style.clone(), *c, g.mean()))
+                    })
+                })
+                .collect();
+        } else if width == FULL_HD {
+            for (style, c, mean) in &window {
+                join(
+                    cuts.entry(style.clone())
+                        .or_default()
+                        .entry(*c)
+                        .or_default(),
+                    mean.clone(),
+                );
+            }
         }
         for (style, chars) in &cuts {
             let counts: Vec<String> = chars

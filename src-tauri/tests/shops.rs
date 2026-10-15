@@ -48,11 +48,11 @@ fn every_offer_read_is_right() {
     );
 }
 
-/// A smaller screen (a phone's, or a stream of one, 1600 and 1280 wide) reads
-/// every shop and offer right or not at all.
+/// A smaller screen (a Full HD window, a phone's, or a stream of one, 1920,
+/// 1600 and 1280 wide) reads every shop and offer right or not at all.
 #[test]
 fn a_smaller_screen_reads_offers_right_or_not_at_all() {
-    for width in [1600, 1280] {
+    for width in [1920, 1600, 1280] {
         let (wrong, ..) = offers_read(Some(width));
         assert!(wrong.is_empty(), "{width}:\n{}", wrong.join("\n"));
     }
