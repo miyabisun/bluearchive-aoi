@@ -17,16 +17,16 @@ debugging paired by a QR code and connected over TLS with `libadb`, its services
 phone's hardware encoder, at most 5 frames a second and 1920 pixels on the longer side, and decoded by `openh264` (`src-tauri/src/video.rs`).
 The `openh264` crate builds Cisco's decoder from source; Cisco's H.264 patent licence covers
 only its own prebuilt binaries. The key and the phone paired are kept in the app's data folder
-(`adbkey.pem`, `android.json`). A phone's frame is cut to its safe area and scaled to the
-nearest of the widths the texts are read at (`screen::WIDTHS`: 2222, the window the
-references were drawn from, 1920, 1600 and 1280); the readers measure in a 16:9 window's height
+(`adbkey.pem`, `android.json`). Every frame, a phone's cut to its safe area, is scaled down to
+the widest of the widths the texts are read at no wider than it (`screen::WIDTHS`: 1920, 1600
+and 1500; `screen::normalize`); the readers measure in a 16:9 window's height
 (`screen::unit`), each part kept to the top, the middle or the bottom of a wider screen
 (`screen::Anchor`). Each width has references of its own, drawn from the tuning fixtures
-scaled to it, Full HD's with the window's besides (`data/glyphs*.png`, `data/digits.json`; `examples/build_glyphs.rs`,
-`examples/build_digits.rs`), and the tests read the evaluation fixtures scaled down too:
-right or not at all. A stream blurs the counts beyond any scaling, so their references also
-come from a tablet's own stream at 1920, 1600 and 1280 wide, and the tests read a few of its
-frames (`tests/fixtures/tablet.json`). A screen drawn smaller than about 1240 wide is not read
+scaled to it (`data/glyphs-*.png`, `data/digits.json`; `examples/build_glyphs.rs`,
+`examples/build_digits.rs`), and the tests read the evaluation fixtures drawn at widths between
+them too: right or not at all. A stream blurs the counts beyond any scaling, so their references
+also come from a tablet's own stream at 1920 and 1600 wide, and the tests read a few of its
+frames (`tests/fixtures/tablet.json`). A screen drawn narrower than 1500 is not read
 (`screen::too_small`).
 
 Any phone can also send its screen from a streaming app over RTMP (`src-tauri/src/broadcast.rs`,

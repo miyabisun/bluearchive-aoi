@@ -54,12 +54,6 @@ const JOIN: f32 = 10.0;
 /// (measured on 2026-10-14: the game's digits lie 12 to 30 from the font's,
 /// the letters around them 38 or farther).
 const LOOSE: (f32, f32) = (34.0, 0.85);
-/// A Full HD screen draws its texts near enough the window's to keep the
-/// window's references besides its own (measured on 2026-10-15 over the
-/// fixtures scaled to 1920 wide: with both, 59 shop offers and 566 of 600
-/// student fields read; with the window's alone 44 and 446, the equipment
-/// levels unread; with its own alone 47 and 566).
-const FULL_HD: u32 = 1920;
 /// The size the names are drawn at, in pixels.
 const SIZE: f32 = 64.0;
 
@@ -363,8 +357,8 @@ fn take_card_digits(cuts: &mut Cuts, cards: &[Card]) -> Vec<Option<(String, usiz
     done
 }
 
-/// Adds the digits of the `cards` scaled down, at the places the window's
-/// cards (`at_window`, with where their values were found) showed them: a
+/// Adds the digits of the `cards` scaled down, at the places the fixtures'
+/// own cards (`at_window`, with where their values were found) showed them: a
 /// small screen's letters are read too loosely to place them anew. A fixture
 /// whose cards cut into other shapes is left out.
 fn take_scaled_card_digits(
@@ -546,22 +540,29 @@ fn main() {
     let credits: Vec<CreditsLabel> = read_json(&dir.join("credits.json"));
     let shops: Vec<ShopLabel> = read_json(&dir.join("shops.json"));
     let weights = ["Regular", "Medium", "Bold"].map(weight);
-    // The window's cards, and where their values were found among their shapes.
-    let mut at_window: Vec<(Card, Option<(String, usize)>)> = Vec::new();
-    // The window's references, which a Full HD screen keeps as well.
-    let mut window: Vec<(String, char, Vec<f32>)> = Vec::new();
+    // The fixtures' cards at their own size, and where their values were
+    // found among their shapes.
+    let at_window: Vec<(Card, Option<(String, usize)>)> = {
+        let open = |path: &str| image::open(dir.join(path)).unwrap().to_rgb8();
+        let (mut cuts, mut bank) = (Cuts::new(), Bank::default());
+        dark_digits_and_shops(&mut cuts, &mut bank, &credits, &shops, &open);
+        font_card_digits(&mut cuts, &weights);
+        let found_cards = cards(&shops, &open);
+        let found = take_card_digits(&mut cuts, &found_cards);
+        found_cards.into_iter().zip(found).collect()
+    };
 
-    // Each width the screens are read at keeps a bank of its own: the
-    // fixtures' (a window 2222 wide), and theirs scaled to smaller screens.
+    // Each width the screens are read at keeps a bank of its own, drawn from
+    // the fixtures scaled to it.
     for width in screen::WIDTHS {
         let mut bank = Bank::default();
         names(&mut bank, &weights[0]);
-        let scale = width as f32 / 2222.0;
+        // As a window drawn at the width shows them (smoothly, as the game
+        // draws them; a screen read is scaled down sharper, see
+        // `screen::normalize`).
         let open = |path: &str| {
             let image = image::open(dir.join(path)).unwrap().to_rgb8();
-            if width == 2222 {
-                return image;
-            }
+            let scale = width as f32 / screen::drawn_width(&image);
             let (w, h) = (image.width() as f32 * scale, image.height() as f32 * scale);
             resize(
                 &image,
@@ -574,33 +575,7 @@ fn main() {
         student_styles(&mut cuts, &labels, &levels, &open);
         dark_digits_and_shops(&mut cuts, &mut bank, &credits, &shops, &open);
         font_card_digits(&mut cuts, &weights);
-        let shop_cards = cards(&shops, &open);
-        if width == screen::WIDTHS[0] {
-            let found = take_card_digits(&mut cuts, &shop_cards);
-            at_window = shop_cards.into_iter().zip(found).collect();
-        } else {
-            take_scaled_card_digits(&mut cuts, &at_window, &shop_cards);
-        }
-        if width == screen::WIDTHS[0] {
-            window = cuts
-                .iter()
-                .flat_map(|(style, chars)| {
-                    chars.iter().flat_map(move |(c, gs)| {
-                        gs.iter().map(move |g| (style.clone(), *c, g.mean()))
-                    })
-                })
-                .collect();
-        } else if width == FULL_HD {
-            for (style, c, mean) in &window {
-                join(
-                    cuts.entry(style.clone())
-                        .or_default()
-                        .entry(*c)
-                        .or_default(),
-                    mean.clone(),
-                );
-            }
-        }
+        take_scaled_card_digits(&mut cuts, &at_window, &cards(&shops, &open));
         for (style, chars) in &cuts {
             let counts: Vec<String> = chars
                 .iter()

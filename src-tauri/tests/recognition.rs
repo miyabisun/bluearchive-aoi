@@ -3,6 +3,8 @@
 //! the game shows them ("1383", "51K"); cut-off cells are not listed and must
 //! not be reported.
 
+mod common;
+
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -237,21 +239,18 @@ fn right_or_not_at_all(
     (cells, right)
 }
 
-/// A Full HD window, or a phone with a smaller screen (or a stream of one),
-/// shows the list smaller: the screens kept for evaluation, scaled to 1920,
-/// 1600 and 1280 wide, read every cell's item and count right or not at all,
-/// and most of them right.
+/// A screen of any width read, and any between them (a window as it was
+/// resized), shows the list smaller or larger: the screens kept for
+/// evaluation, drawn at widths from 1500 to 2222, read every cell's item and
+/// count right or not at all, and most of them right.
 #[test]
 fn a_smaller_screen_reads_right_or_not_at_all() {
-    use image::imageops::{FilterType, resize};
     let recognizer = recognizer();
     let mut failures = Vec::new();
-    for width in [1920, 1600, 1280] {
+    for width in [2222, 2100, 1920, 1760, 1600, 1550, 1500] {
         let (mut cells, mut right) = (0, 0);
         for fixture in fixtures().into_iter().filter(|f| f.role == "eval") {
-            let image = open(&fixture.image);
-            let height = image.height() * width / image.width();
-            let small = resize(&image, width, height, FilterType::Triangle);
+            let small = common::drawn_at(&open(&fixture.image), width);
             let read = recognizer.read(&small, fixture.list);
             let name = format!("{width}: {}", fixture.image);
             let (c, r) = right_or_not_at_all(&name, &read, &fixture.cells, &mut failures);
@@ -283,11 +282,10 @@ struct Stream {
 /// A stream blurs the counts beyond any scaling (H.264): the tablet's screens
 /// read every cell's item and count right or not at all, and at each width
 /// at least the share of `LEAST` right. Measured on 2026-10-15 over the
-/// collection's stops kept for evaluation: 99.6% at 1920 and 1600, 64% at
-/// 1280.
+/// collection's stops kept for evaluation: 99.6% at 1920 and 1600.
 #[test]
 fn a_streamed_screen_reads_right_or_not_at_all() {
-    const LEAST: [(u32, f32); 3] = [(1920, 0.95), (1600, 0.9), (1280, 0.5)];
+    const LEAST: [(u32, f32); 2] = [(1920, 0.95), (1600, 0.9)];
     let json = std::fs::read_to_string(fixtures_dir().join("tablet.json")).unwrap();
     let streams: Vec<Stream> = serde_json::from_str(&json).unwrap();
     let recognizer = recognizer();

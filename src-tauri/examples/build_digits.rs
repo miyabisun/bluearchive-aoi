@@ -3,8 +3,8 @@
 //!
 //! - The fixtures labeled `"role": "tune"` in `labels.json`, scaled to each of
 //!   `WIDTHS`: a window's screen, drawn smaller.
-//! - A tablet's screens as scrcpy streams them (H.264, 1920, 1600 and 1280
-//!   wide), which blur the digits beyond any scaling: a collection of stops
+//! - A tablet's screens as scrcpy streams them (H.264, 1920 and 1600 wide),
+//!   which blur the digits beyond any scaling: a collection of stops
 //!   of the item and equipment lists, `<stop>-native.png` (the screen as
 //!   screencap gives it) and `<stop>-<size>.png` (a frame of the stream) each.
 //!   The native screen, read as it is, labels the cards; the even-numbered
@@ -25,11 +25,10 @@ use image::{
 use serde::Deserialize;
 
 const CHARACTERS: &str = "x0123456789K";
-/// The widths the list is drawn at: a PC window (the fixtures' own, 2222)
-/// down to a small phone's screen or a stream of it.
-const WIDTHS: [u32; 5] = [2222, 1920, 1600, 1280, 1024];
-/// The sizes the tablet's screens were streamed at.
-const STREAMED: [&str; 3] = ["1920", "1600", "1280"];
+/// The widths the list is read at (`screen::WIDTHS`).
+const WIDTHS: [u32; 3] = aoi::screen::WIDTHS;
+/// The sizes the tablet's screens were streamed at that are read.
+const STREAMED: [&str; 2] = ["1920", "1600"];
 
 #[derive(Deserialize)]
 struct ItemFixture {

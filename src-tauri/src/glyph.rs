@@ -97,6 +97,17 @@ struct Blob {
     bottom: u32,
 }
 
+/// Whether a blob too wide for a character (characters run together) of a
+/// character's height lies among the characters `kept`: read without it, the
+/// text would read short ("589" read "9" where "58" ran together).
+fn merged_among(kept: &[Blob], wide: &[Blob], tallest: u32, tall: f32) -> bool {
+    let first = kept.iter().map(|b| b.left).min().unwrap_or(0);
+    let last = kept.iter().map(|b| b.right).max().unwrap_or(0);
+    wide.iter().any(|b| {
+        b.left > first && b.right < last && (b.bottom - b.top + 1) as f32 >= tallest as f32 * tall
+    })
+}
+
 /// Whether a piece of the `short` ones lies among the characters `kept` (see
 /// `Style::entire`).
 fn piece_left_out(kept: &[Blob], short: &[Blob], tallest: u32) -> bool {
@@ -345,7 +356,9 @@ pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
                 && (top..=bottom).all(|y| !reached(left, y) && !reached(right, y))
         });
     }
-    blobs.retain(|b| (b.right - b.left + 1) as f32 <= (b.bottom - b.top + 1) as f32 * style.widest);
+    let (blobs, wide): (Vec<Blob>, Vec<Blob>) = blobs.into_iter().partition(|b| {
+        (b.right - b.left + 1) as f32 <= (b.bottom - b.top + 1) as f32 * style.widest
+    });
     let tallest = blobs
         .iter()
         .map(|b| b.bottom - b.top + 1)
@@ -354,6 +367,9 @@ pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
     let (mut kept, short): (Vec<Blob>, Vec<Blob>) = blobs
         .into_iter()
         .partition(|b| (b.bottom - b.top + 1) as f32 >= tallest as f32 * style.tall);
+    if merged_among(&kept, &wide, tallest, style.tall) {
+        return Vec::new();
+    }
     if style.entire {
         kept = side_by_side(kept, tallest);
         if piece_left_out(&kept, &short, tallest) {

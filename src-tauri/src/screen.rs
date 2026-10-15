@@ -283,61 +283,71 @@ pub fn trim(image: &RgbImage) -> Cow<'_, RgbImage> {
     Cow::Owned(imageops::crop_imm(image, left, top, kept_width, kept_height).to_image())
 }
 
-/// The widths the texts are read at, with references of their own: the
-/// 2222x1250 window the references were first drawn from, and smaller screens
-/// (a Full HD window, a phone's, or a stream of one, at 1080 lines or 720),
-/// whose letters lose their shapes too far for the window's references
-/// (measured on 2026-10-15: the student screen's names and stars, the credits
-/// and the shops' bars read wrong or not at all at 1600 wide with the
-/// window's; the equipment levels not at all at 1920).
-pub const WIDTHS: [u32; 4] = [2222, 1920, 1600, 1280];
+/// The widths the texts are read at, with references of their own drawn from
+/// the fixtures scaled to each: a Full HD screen, a window on one (about 1600
+/// wide), and a little narrower. A wider screen is scaled down to Full HD
+/// (see `normalize`); a narrower one is not read (`too_small`).
+pub const WIDTHS: [u32; 3] = [1920, 1600, 1500];
 
 /// The width of a 16:9 window drawing the game's parts as large as `image`.
 pub fn drawn_width(image: &RgbImage) -> f32 {
     unit(image.width(), image.height()) * 16.0 / 9.0
 }
 
-/// The least width a screen is read at: a little short of the smallest of
-/// `WIDTHS`, where reading was measured right or not at all (on 2026-10-15:
-/// scaled to about 1150 wide, a bond of "25" read "5").
-const SMALLEST: f32 = 1240.0;
+/// The least width a screen is read at, the narrowest of `WIDTHS`: a little
+/// short of a window on a Full HD screen (about 1600 wide). A stream of 720
+/// lines is not read.
+const SMALLEST: f32 = 1500.0;
 
-/// Whether `image` draws the game's parts too small to read. An upright
-/// screen is no game's (the game is drawn sideways only), small or not.
+/// Whether `image` draws the game's parts too small to read: its safe area
+/// (see `safe_area`) before it is scaled to a width read at. An upright screen
+/// is no game's (the game is drawn sideways only), small or not.
 pub fn too_small(image: &RgbImage) -> bool {
-    image.width() > image.height() && drawn_width(image) < SMALLEST
+    let (left, right) = safe_area(image);
+    image.width() > image.height() && unit(right - left, image.height()) * 16.0 / 9.0 < SMALLEST
 }
 
-/// The width among `WIDTHS` nearest to `width`.
-pub fn nearest_width(width: f32) -> u32 {
+/// The width among `WIDTHS` a screen drawing the game `width` wide is read
+/// at: the widest no wider than it (a screen is scaled down to it, never up),
+/// or else the narrowest.
+pub fn width_read_at(width: f32) -> u32 {
     WIDTHS
         .into_iter()
-        .min_by(|a, b| {
-            (*a as f32 - width)
-                .abs()
-                .total_cmp(&(*b as f32 - width).abs())
-        })
-        .unwrap_or(WIDTHS[0])
+        .filter(|&w| w as f32 <= width)
+        .max()
+        .unwrap_or(WIDTHS[WIDTHS.len() - 1])
 }
 
-/// The frame as the game lays it out: a phone's safe area (see `safe_area`)
-/// scaled to the nearest of `WIDTHS` (a phone draws its letters smaller than
-/// a window as wide); a window's frame as it is.
+/// The frame as the game lays it out (a phone's safe area, see `safe_area`),
+/// scaled down to the width it is read at (`width_read_at`): the letters'
+/// shapes vary with a pixel's difference in size, and the references are
+/// drawn at `WIDTHS` alone. Measured on 2026-10-15 over the student fixtures
+/// drawn at widths from 1560 to 2200: read as they are, a field in four to
+/// one in three went unread between the widths read and a level "55" read
+/// "5"; scaled down, none read wrong and at most a field in seven unread.
+/// Near a width read the screen is scaled sharply (Catmull-Rom; smoothly, a
+/// bond "34" read "31" from 1550), farther down smoothly (`SMOOTH_FROM`, as
+/// the references are drawn; sharply, 8 of the 42 student fixtures were not
+/// named from 2222, 1 smoothly).
 pub fn normalize(image: &RgbImage) -> Cow<'_, RgbImage> {
     let (left, right) = safe_area(image);
-    if (left, right) == (0, image.width()) {
+    let width = width_read_at((right - left) as f32);
+    if (left, right) == (0, width) {
         return Cow::Borrowed(image);
     }
     let area = imageops::crop_imm(image, left, 0, right - left, image.height());
-    let width = nearest_width((right - left) as f32);
     let height = (image.height() as f32 * width as f32 / (right - left) as f32).round();
-    Cow::Owned(imageops::resize(
-        &*area,
-        width,
-        height as u32,
-        FilterType::Nearest,
-    ))
+    let filter = if (right - left) as f32 > width as f32 * SMOOTH_FROM {
+        FilterType::Triangle
+    } else {
+        FilterType::CatmullRom
+    };
+    Cow::Owned(imageops::resize(&*area, width, height as u32, filter))
 }
+
+/// A screen this many times as wide as the width it is read at, or more, is
+/// scaled down smoothly (see `normalize`).
+const SMOOTH_FROM: f32 = 1.1;
 
 /// Normalized cross-correlation of the template's columns `columns` with the
 /// image placed at `(ox, oy)`.
@@ -469,8 +479,8 @@ mod tests {
     use image::RgbImage;
 
     use super::{
-        Turn, drawn_width, nearest_width, normalize, safe_area, sorted_by_default, too_small, trim,
-        turn,
+        Turn, drawn_width, normalize, safe_area, sorted_by_default, too_small, trim, turn,
+        width_read_at,
     };
     use crate::grid::find_panel;
 
@@ -536,31 +546,42 @@ mod tests {
         }
     }
 
-    /// Each screen is read with the references of the width nearest to the
-    /// one it draws the game's parts at, a 16:9 window's.
+    /// Each screen is read at the widest of the widths read that it draws the
+    /// game's parts no narrower than (a 16:9 window's), scaled down to it.
     #[test]
-    fn a_screen_is_read_at_the_nearest_width() {
-        assert_eq!(nearest_width(2222.0), 2222);
-        assert_eq!(nearest_width(3040.0), 2222);
-        assert_eq!(nearest_width(1920.0), 1920);
-        assert_eq!(nearest_width(2100.0), 2222);
-        assert_eq!(nearest_width(1700.0), 1600);
-        assert_eq!(nearest_width(1400.0), 1280);
-        assert_eq!(nearest_width(800.0), 1280);
+    fn a_screen_is_read_scaled_down_to_a_width_read_at() {
+        assert_eq!(width_read_at(2222.0), 1920);
+        assert_eq!(width_read_at(3040.0), 1920);
+        assert_eq!(width_read_at(2100.0), 1920);
+        assert_eq!(width_read_at(1920.0), 1920);
+        assert_eq!(width_read_at(1700.0), 1600);
+        assert_eq!(width_read_at(1550.0), 1500);
+        assert_eq!(width_read_at(1400.0), 1500);
         assert!((drawn_width(&RgbImage::new(1600, 900)) - 1600.0).abs() < 1.0);
         // A 4:3 window draws its parts as large as a 16:9 window as wide.
         assert!((drawn_width(&RgbImage::new(1744, 1308)) - 1744.0).abs() < 1.0);
-        // A smaller phone's screen is scaled to the nearest width, not up to
-        // the largest.
+        // A window between the widths read is scaled down; one at a width read
+        // is read as it is.
+        assert_eq!(
+            normalize(&RgbImage::new(1700, 956)).dimensions(),
+            (1600, 900)
+        );
+        assert!(matches!(
+            normalize(&RgbImage::new(1600, 900)),
+            std::borrow::Cow::Borrowed(_)
+        ));
+        // A phone's safe area is scaled down too.
         let phone = fixture("android/top-bar.png");
         let small =
             image::imageops::resize(&phone, 1600, 713, image::imageops::FilterType::Triangle);
-        assert_eq!(normalize(&small).width(), 1280);
-        assert_eq!(normalize(&phone).width(), 2222);
-        // Smaller than the smallest width read, a screen is not read at all.
-        assert!(!too_small(&RgbImage::new(1280, 720)));
-        assert!(!too_small(&normalize(&small)));
-        assert!(too_small(&RgbImage::new(1100, 619)));
+        assert_eq!(normalize(&phone).width(), 1920);
+        // Smaller than the smallest width read, a screen is not read at all:
+        // a window on a Full HD screen is read, a stream of 720 lines not, nor
+        // a phone's drawing the game smaller, scaled up or not.
+        assert!(!too_small(&RgbImage::new(1600, 900)));
+        assert!(!too_small(&phone));
+        assert!(too_small(&RgbImage::new(1280, 720)));
+        assert!(too_small(&small));
         // Upright, it is no game (it is drawn sideways only), small or not.
         assert!(!too_small(&RgbImage::new(1202, 1920)));
     }
@@ -577,11 +598,11 @@ mod tests {
             left.abs_diff(171) <= 2 && left + right == 2424,
             "{left}..{right}"
         );
-        // Scaled to the window the references were drawn from.
+        // Scaled down to the width it is read at.
         let phone = fixture("android/top-bar.png");
         let normal = normalize(&phone);
-        let height = 1080.0 * 2222.0 / f64::from(right - left);
-        assert_eq!(normal.width(), 2222);
+        let height = 1080.0 * 1920.0 / f64::from(right - left);
+        assert_eq!(normal.width(), 1920);
         assert!((f64::from(normal.height()) - height).abs() < 1.0);
         for name in [
             "items-16x9-list-top.png",
@@ -590,10 +611,6 @@ mod tests {
         ] {
             let image = fixture(name);
             assert_eq!(safe_area(&image), (0, image.width()), "{name}");
-            assert!(
-                matches!(normalize(&image), std::borrow::Cow::Borrowed(_)),
-                "{name}"
-            );
         }
     }
 

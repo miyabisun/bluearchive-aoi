@@ -322,7 +322,7 @@ impl Recognizer {
     /// The references to read `image` with: those of the width nearest to the
     /// one it draws the game's parts at.
     fn texts(&self, image: &RgbImage) -> &Texts {
-        let width = screen::nearest_width(screen::drawn_width(image));
+        let width = screen::width_read_at(screen::drawn_width(image));
         self.texts
             .iter()
             .find(|t| t.width == width)

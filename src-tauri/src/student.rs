@@ -121,11 +121,13 @@ const SKILL_MAX: [u8; 4] = [5, 10, 10, 10];
 const WEAPON_LEVEL: Area = on_panel((0.698, 0.614), (0.629, 0.659));
 /// Room for four stars, which stand right-aligned.
 const WEAPON_STARS: Area = on_panel((0.400, 0.258), (0.706, 0.740));
-/// Up to the "E" badge of the equipped piece.
+/// Up to the "E" badge of the equipped piece, and down past the digits' foot
+/// with a few pixels to spare: cut at it (0.797), a smaller screen's "0" lost
+/// its foot to the edge, taken for the ground, and "Lv70" read "Lv7".
 const EQUIPMENT_LEVEL: [Area; 3] = [
-    on_panel((0.822, 0.738), (0.774, 0.797)),
-    on_panel((0.690, 0.606), (0.774, 0.797)),
-    on_panel((0.558, 0.474), (0.774, 0.797)),
+    on_panel((0.822, 0.738), (0.774, 0.802)),
+    on_panel((0.690, 0.606), (0.774, 0.802)),
+    on_panel((0.558, 0.474), (0.774, 0.802)),
 ];
 /// The tier badges at the bottom left of the pieces, whole with a few pixels
 /// to spare (measured on 2026-10-12: the gear's badge spans 0.444 to 0.406

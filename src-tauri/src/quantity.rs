@@ -302,19 +302,16 @@ pub struct Digits {
 
 /// The nearest character must be at most this share of the distance to the
 /// next nearest one, or the character is unknown: a small "8" near a "6" is no
-/// digit. Smaller cards (under `SMALL_CARD` px high) take the stricter share.
-/// Measured on 2026-10-15 over the evaluation screens scaled down: characters
-/// read right are at most 0.83 at the screens' own size, the ones read wrong
-/// 0.90 or more at 1280 wide (95 px cards) and 0.83 or more at 1024 (76 px);
-/// over a tablet's stream at 1280 wide (95 px cards), 0.67 or more, where 90%
-/// of those read right are under 0.63 (at 1600, 119 px, 0.94 and 0.41).
-const LEAD: (f32, f32) = (0.85, 0.65);
-const SMALL_CARD: u32 = 100;
+/// digit. Measured on 2026-10-15 over the evaluation screens: characters read
+/// right are at most 0.83 at the screens' own size; over a tablet's stream at
+/// 1600 wide (119 px cards), the ones read wrong 0.94 or more, 90% of those
+/// read right under 0.41.
+const LEAD: f32 = 0.85;
 
 impl Digits {
     /// The character the glyph shows, if it is close enough to one and clearly
-    /// nearer to it than to any other (`lead`, see `LEAD`) of those `possible`.
-    fn closest(&self, glyph: &[f32], lead: f32, possible: impl Fn(char) -> bool) -> Option<char> {
+    /// nearer to it than to any other (see `LEAD`) of those `possible`.
+    fn closest(&self, glyph: &[f32], possible: impl Fn(char) -> bool) -> Option<char> {
         let dist = |r: &Vec<f32>| {
             r.iter()
                 .zip(glyph)
@@ -330,26 +327,18 @@ impl Digits {
         nearest.sort_by(|a, b| a.1.total_cmp(&b.1));
         let (c, d) = *nearest.first()?;
         let next = nearest.get(1).map_or(f32::INFINITY, |n| n.1);
-        (d <= MAX_DISTANCE && d <= lead * next).then_some(c)
+        (d <= MAX_DISTANCE && d <= LEAD * next).then_some(c)
     }
 
     pub fn read(&self, image: &RgbImage, card: &Card) -> Option<Count> {
-        let lead = if card.height < SMALL_CARD {
-            LEAD.1
-        } else {
-            LEAD.0
-        };
         let (x, digits) = count_glyphs(image, card)?;
         // What stands before the digits must be told as the "x" (a "K", which
         // only ends a count, is not taken for it): a piece of a digit broken
         // on a small screen would leave the count short.
-        if self.closest(&x, lead, |c| c != 'K') != Some('x') {
+        if self.closest(&x, |c| c != 'K') != Some('x') {
             return None;
         }
-        let text: Option<String> = digits
-            .iter()
-            .map(|g| self.closest(g, lead, |_| true))
-            .collect();
+        let text: Option<String> = digits.iter().map(|g| self.closest(g, |_| true)).collect();
         parse(&text?)
     }
 }

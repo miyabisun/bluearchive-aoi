@@ -96,15 +96,13 @@ const MENU_WORST: f32 = 24.0;
 /// Parts of the menu's letters smaller than this share of the window height
 /// squared are specks.
 const SPECK: f32 = 6.0 / (1250.0 * 1250.0);
-/// The letters of a bar lie farther than this from every digit, in a window
-/// (and a Full HD screen) and on a smaller screen (see `screen::WIDTHS`).
-/// Measured on 2026-10-14 over the shop fixtures: 27 or farther; the digits
-/// read lie within 10 of their references, one left unread at 11. On
+/// The letters of a bar lie farther than this from every digit. Measured on
+/// 2026-10-14 over the shop fixtures at their own size: 27 or farther; the
+/// digits read lie within 10 of their references, one left unread at 11. On
 /// 2026-10-15 over them scaled to 1600 wide: the letters 29 or farther, a "0"
-/// read as none of the digits at 22 (taken for a letter, "30" read "3"); at
-/// 1920 the window's share reads 59 offers, the smaller screens' 49.
-const LETTER: (f32, f32) = (20.0, 27.0);
-const FULL_HD: u32 = 1920;
+/// read as none of the digits at 22 (taken for a letter, "30" read "3", at
+/// 20); scaled to 2100 and down to 1920, "589" read "9" at 20.
+const LETTER: f32 = 27.0;
 /// The light letters of a card's bar ("あと6回購入可能"), on a bar brightened
 /// back first when its card is bought up. Only their lightest pixels: with
 /// their soft edges the small digits touch ("57" one part; measured on
@@ -348,12 +346,7 @@ impl Goods {
         let u = unit(image);
         let (left, _, _, _) = card_area(image, bar)?;
         let bottom = bar.bottom as f32;
-        let letter = if screen::nearest_width(screen::drawn_width(image)) >= FULL_HD {
-            LETTER.0
-        } else {
-            LETTER.1
-        };
-        let times = times_left(fonts, &bar_shapes(image, bar), letter)?;
+        let times = times_left(fonts, &bar_shapes(image, bar), LETTER)?;
         let price = if read_price {
             Some(u32::try_from(number(&fonts.read("price", &price_shapes(image, bar)?)?)?).ok()?)
         } else {
@@ -462,14 +455,17 @@ pub fn bar_shapes(image: &RgbImage, bar: &Bar) -> Vec<Vec<f32>> {
 /// How many more times the card's bar says it can be bought: the digits among
 /// its letters, which are the only ones the bar's references know. A part
 /// within `letter` of a digit but not told as one leaves it unread, as a
-/// number read short would be wrong.
+/// number read short would be wrong; so does a digit apart from the number's
+/// run of them (a letter told as one).
 pub fn times_left(fonts: &Fonts, shapes: &[Vec<f32>], letter: f32) -> Option<u32> {
     let mut digits = String::new();
+    let mut ended = false;
     for shape in shapes {
         match fonts.character("bar", shape) {
+            Some(_) if ended => return None,
             Some(c) => digits.push(c),
             None if fonts.nearest("bar", shape)? <= letter => return None,
-            None => {}
+            None => ended = !digits.is_empty(),
         }
     }
     u32::try_from(number(&digits)?).ok()
@@ -876,6 +872,36 @@ mod tests {
     use super::*;
 
     const NOW: &str = "2026-10-12 22:00:00";
+
+    /// The number of a bar is one run of digits: a letter of the bar told as
+    /// a digit after it ("あと30回購入可能" read "30" and then "2" of a kanji)
+    /// leaves it unread, where it would read "302".
+    #[test]
+    fn times_left_are_one_run_of_digits() {
+        let size = glyph::GLYPH.0 * glyph::GLYPH.1;
+        let block = |from: usize| -> Vec<f32> {
+            (0..size)
+                .map(|i| {
+                    if (from..from + 48).contains(&i) {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                })
+                .collect()
+        };
+        let mut digits = std::collections::BTreeMap::new();
+        for (c, from) in [('3', 0), ('0', 48), ('2', 96)] {
+            digits.insert(c, vec![block(from)]);
+        }
+        let fonts = Fonts([("bar".to_owned(), digits)].into_iter().collect());
+        let letter = block(144);
+        let (three, zero, two) = (block(0), block(48), block(96));
+        let bar = [letter.clone(), three.clone(), zero.clone(), letter.clone()];
+        assert_eq!(times_left(&fonts, &bar, 27.0), Some(30));
+        let bar = [letter.clone(), three, zero, letter.clone(), two, letter];
+        assert_eq!(times_left(&fonts, &bar, 27.0), None);
+    }
 
     fn seen(shop: &'static str, offers: &[Offer]) -> Seen {
         Seen {

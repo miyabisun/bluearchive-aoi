@@ -400,12 +400,12 @@ impl Read {
         frames: &AtomicU32,
         shot: &RgbImage,
     ) {
-        // A phone's frame as the game lays it out (a window's as it is).
-        let shot = screen::normalize(shot);
-        if screen::too_small(&shot) {
+        if screen::too_small(shot) {
             board.update(|seen| seen.sight = Sight::TooSmall);
             return;
         }
+        // A phone's frame as the game lays it out (a window's as it is).
+        let shot = screen::normalize(shot);
         let read = recognizer.read_frame(&shot);
         // The credits change seldom.
         if frames

@@ -133,10 +133,20 @@ pub struct Panel {
     pub shows_start: bool,
 }
 
+/// The panel's run of background shows in at least this many rows (its gaps
+/// between the card rows are several rows high each).
+const PANEL_ROWS: usize = 3;
+
 /// The panel and its card rows `(top, bottom)`, when the frame shows the list.
 fn layout(image: &RgbImage) -> Option<(Panel, Vec<(u32, u32)>)> {
     let runs: Vec<(u32, u32)> = (0..image.height()).map(|y| longest_run(image, y)).collect();
-    let &(panel_left, panel_width) = runs.iter().max_by_key(|r| r.1)?;
+    // The panel's run, the longest that several rows share: a stray row of its
+    // colour elsewhere is one row alone.
+    let alike = |a: &(u32, u32), b: &(u32, u32)| a.0.abs_diff(b.0) <= 2 && a.1.abs_diff(b.1) <= 2;
+    let &(panel_left, panel_width) = runs
+        .iter()
+        .filter(|r| runs.iter().filter(|o| alike(r, o)).count() >= PANEL_ROWS)
+        .max_by_key(|r| r.1)?;
     if panel_width < image.width() / 4 {
         return None;
     }
@@ -330,6 +340,21 @@ mod tests {
         assert_eq!(cards[3], (1521.0, 157.0));
     }
 
+    /// A row outside the panel can take the panel's colour across the screen
+    /// for a pixel's height (the top bar's edge, scaled to 1500x844): the
+    /// panel is the run of its colour many rows share.
+    #[test]
+    fn a_stray_row_of_the_panels_colour_is_no_panel() {
+        use image::imageops::{FilterType, resize};
+        let small = resize(
+            &fixture("items-16x9-tech-notes.png"),
+            1500,
+            844,
+            FilterType::Triangle,
+        );
+        assert_eq!(find_cards(&small).len(), 20);
+    }
+
     #[test]
     fn finds_full_rows_in_16_by_9() {
         check("items-16x9-secretstone.png", 15, 164, 184.0);
@@ -354,8 +379,8 @@ mod tests {
         }
     }
 
-    /// A smaller window (a phone's screen, or a stream of it, 1280 wide) draws
-    /// the gaps between cards 3 px wide or less: every card is still found.
+    /// The smallest screen read (1500 wide, see `screen::too_small`) draws the
+    /// gaps between cards narrower: every card is still found.
     #[test]
     fn a_small_frame_shows_every_card() {
         use image::imageops::{FilterType, resize};
@@ -366,8 +391,8 @@ mod tests {
         let mut wrong = Vec::new();
         for fixture in fixtures {
             let image = fixture_image(&dir, &fixture.image);
-            let height = image.height() * 1280 / image.width();
-            let small = resize(&image, 1280, height, FilterType::Triangle);
+            let height = image.height() * 1500 / image.width();
+            let small = resize(&image, 1500, height, FilterType::Triangle);
             let found = find_cards(&small).len();
             if found != fixture.cells.len() {
                 wrong.push(format!(
