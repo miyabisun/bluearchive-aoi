@@ -6,5 +6,9 @@
 {"image": "credits/levelup-2.png", "role": "eval", "credits": 243819369},
 {"image": "credits/dimmed.png", "role": "eval", "credits": null},
 {"image": "android/items-choco.png", "role": "eval", "credits": 198123286},
-{"image": "android/tablet-credits.png", "role": "eval", "credits": 198123286}
+{"image": "android/tablet-credits.png", "role": "eval", "credits": 198123286},
+{"image": "credits/tablet-stu-00-native.png", "role": "tune", "credits": 133953627},
+{"image": "credits/tablet-shop-kakera-0-native.png", "role": "tune", "credits": 133953627},
+{"image": "credits/tablet-items-03-native.png", "role": "tune", "credits": 133953627},
+{"image": "credits/tablet-stu-10-native.png", "role": "eval", "credits": 133953627}
 ]

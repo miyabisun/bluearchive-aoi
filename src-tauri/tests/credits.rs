@@ -20,13 +20,12 @@ fn recognizer() -> aoi::Recognizer {
     aoi::Recognizer::load(&root().join("data")).unwrap()
 }
 
-/// Every screen's credits read right or not at all, read as Aoi reads them
-/// (scaled down to Full HD), and at least `READ` of them (3 of 7 on
-/// 2026-10-15: a "3" comes as near an "8" there); a screen with no credits
-/// shown reads none.
+/// Every screen's credits read, right, as Aoi reads them (scaled down to Full
+/// HD, where a "3" comes near an "8": with the tablet's credits among the
+/// references, 11 of 11 on 2026-10-15); a screen with no credits shown reads
+/// none.
 #[test]
 fn every_screen_reads_its_credits() {
-    const READ: f32 = 0.4;
     let recognizer = recognizer();
     let labels: Vec<Label> = serde_json::from_str(
         &std::fs::read_to_string(root().join("tests/fixtures/credits.json")).unwrap(),
@@ -50,7 +49,7 @@ fn every_screen_reads_its_credits() {
             None => assert_eq!(credits, None, "{}", label.image),
         }
     }
-    assert!(read as f32 >= READ * shown as f32, "{read} of {shown} read");
+    assert_eq!(read, shown, "credits read");
 }
 
 #[test]

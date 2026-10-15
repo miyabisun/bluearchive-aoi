@@ -54,6 +54,9 @@ const JOIN: f32 = 10.0;
 /// (measured on 2026-10-14: the game's digits lie 12 to 30 from the font's,
 /// the letters around them 38 or farther).
 const LOOSE: (f32, f32) = (34.0, 0.85);
+/// A digit of a smaller screen's card lies at most this far from the
+/// window's digit at its place (see `take_scaled_card_digits`).
+const ALIKE: f32 = 30.0;
 /// The size the names are drawn at, in pixels.
 const SIZE: f32 = 64.0;
 
@@ -382,10 +385,16 @@ fn take_scaled_card_digits(
             let Some((value, at)) = found else {
                 continue;
             };
-            if card.style != big.style || card.shapes.len() != big.shapes.len() {
+            let n = value.chars().count();
+            // At the window's place, where the shapes there look like the
+            // window's digits: past them a smaller screen's letters may cut
+            // into other shapes.
+            let alike = card.shapes.len() >= at + n
+                && (0..n)
+                    .all(|i| glyph::distance(&card.shapes[at + i], &big.shapes[at + i]) <= ALIKE);
+            if card.style != big.style || !alike {
                 continue;
             }
-            let n = value.chars().count();
             add(
                 cuts,
                 &card.path,
@@ -393,6 +402,19 @@ fn take_scaled_card_digits(
                 card.shapes[*at..*at + n].to_vec(),
                 value,
             );
+            // The bar's letters around the number, references of their own.
+            if card.style == "bar" {
+                let letters = cuts
+                    .entry(card.style.to_owned())
+                    .or_default()
+                    .entry(shop::BAR_LETTER)
+                    .or_default();
+                for (i, shape) in card.shapes.iter().enumerate() {
+                    if !(*at..*at + n).contains(&i) {
+                        join(letters, shape.clone());
+                    }
+                }
+            }
             taken += 1;
         }
     }

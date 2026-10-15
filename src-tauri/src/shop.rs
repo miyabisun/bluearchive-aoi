@@ -452,19 +452,35 @@ pub fn bar_shapes(image: &RgbImage, bar: &Bar) -> Vec<Vec<f32>> {
     glyph::shapes(&picture, (0, 0, w, h), BAR_STYLE)
 }
 
+/// The references of a bar's letters ("あと…回購入可能", in pieces) are kept
+/// under this character among its digits'.
+pub const BAR_LETTER: char = '#';
+
 /// How many more times the card's bar says it can be bought: the digits among
-/// its letters, which are the only ones the bar's references know. A part
-/// within `letter` of a digit but not told as one leaves it unread, as a
-/// number read short would be wrong; so does a digit apart from the number's
-/// run of them (a letter told as one).
+/// its letters (told as `BAR_LETTER`). A part told as neither but within
+/// `letter` of a digit leaves it unread, as a number read short would be
+/// wrong; so does a digit apart from the number's run of them (a letter told
+/// as one).
 pub fn times_left(fonts: &Fonts, shapes: &[Vec<f32>], letter: f32) -> Option<u32> {
+    let near_digit = |shape: &[f32]| {
+        fonts
+            .0
+            .get("bar")
+            .into_iter()
+            .flatten()
+            .filter(|(c, _)| **c != BAR_LETTER)
+            .flat_map(|(_, refs)| refs)
+            .map(|r| glyph::distance(r, shape))
+            .any(|d| d <= letter)
+    };
     let mut digits = String::new();
     let mut ended = false;
     for shape in shapes {
         match fonts.character("bar", shape) {
+            Some(BAR_LETTER) => ended = !digits.is_empty(),
             Some(_) if ended => return None,
             Some(c) => digits.push(c),
-            None if fonts.nearest("bar", shape)? <= letter => return None,
+            None if near_digit(shape) => return None,
             None => ended = !digits.is_empty(),
         }
     }
@@ -901,6 +917,28 @@ mod tests {
         assert_eq!(times_left(&fonts, &bar, 27.0), Some(30));
         let bar = [letter.clone(), three, zero, letter.clone(), two, letter];
         assert_eq!(times_left(&fonts, &bar, 27.0), None);
+    }
+
+    /// The bar's letters have references of their own (`BAR_LETTER`): one
+    /// told as a letter is no digit, and leaves the number read however near
+    /// a digit it lies.
+    #[test]
+    fn a_bars_letters_told_as_such_leave_its_number() {
+        let size = glyph::GLYPH.0 * glyph::GLYPH.1;
+        let block = |from: usize, to: usize| -> Vec<f32> {
+            (0..size)
+                .map(|i| if (from..to).contains(&i) { 1.0 } else { 0.0 })
+                .collect()
+        };
+        let mut refs = std::collections::BTreeMap::new();
+        refs.insert('3', vec![block(0, 48)]);
+        refs.insert('0', vec![block(48, 96)]);
+        // A letter as near the "3" as to be taken for a broken digit without
+        // a reference of its own.
+        refs.insert(BAR_LETTER, vec![block(10, 48)]);
+        let fonts = Fonts([("bar".to_owned(), refs)].into_iter().collect());
+        let bar = [block(10, 48), block(0, 48), block(48, 96), block(10, 48)];
+        assert_eq!(times_left(&fonts, &bar, 27.0), Some(30));
     }
 
     fn seen(shop: &'static str, offers: &[Offer]) -> Seen {

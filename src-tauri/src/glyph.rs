@@ -466,15 +466,6 @@ impl Fonts {
         shapes.iter().map(|s| self.character(style, s)).collect()
     }
 
-    /// How far `shape` lies from the nearest reference of `style`.
-    pub fn nearest(&self, style: &str, shape: &[f32]) -> Option<f32> {
-        let refs = self.0.get(style)?.values().flatten();
-        Some(
-            refs.map(|r| distance(r, shape))
-                .fold(f32::INFINITY, f32::min),
-        )
-    }
-
     /// The character `shape` is in `style`, if it is close to a reference and
     /// clearly nearer to it than to any other character.
     pub fn character(&self, style: &str, shape: &[f32]) -> Option<char> {

@@ -38,15 +38,15 @@ fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
 }
 
-/// Every offer read is a labeled one with its labeled values, and over half
-/// the labeled offers read in a single frame, the fixtures read as Aoi reads
-/// them (scaled down to Full HD; 50 of 82 on 2026-10-15).
+/// Every offer read is a labeled one with its labeled values, and most
+/// labeled offers read in a single frame, the fixtures read as Aoi reads them
+/// (scaled down to Full HD; 70 of 82 on 2026-10-15).
 #[test]
 fn every_offer_read_is_right() {
     let (wrong, read, labeled) = offers_read(None);
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
     assert!(
-        read * 2 >= labeled,
+        read * 5 >= labeled * 4,
         "{read} of {labeled} labeled offers read"
     );
 }
