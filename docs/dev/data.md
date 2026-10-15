@@ -57,8 +57,9 @@ cargo run --release --example build_digits -- <collection>
 - A list is read only in its default order (デフォルト, ascending). A count is taken once
   the same number has been read in three frames in a row, so a single misread frame does
   not change it. An item used up leaves the game's list; Aoi drops it once the entries
-  before and after it show side by side, or, for the list's first entries, once the list
-  is scrolled to its top.
+  before and after it show side by side in three frames in a row, or, for the list's first
+  entries, once the list is scrolled to its top. More than four items held lying between
+  two cards side by side is taken for a misread, and drops nothing.
 - Counts of 10,000 or more are read as the game shows them, in thousands: 51K stands for
   50,500 to 51,499.
 - A count Aoi cannot read for sure is skipped in that frame rather than guessed. The

@@ -38,8 +38,12 @@ impl Tally {
             .filter(|c| !c.ignored)
             .filter_map(|c| Some((c.id?, Some(c.quantity?))));
         let lacking = gone.iter().map(|&id| (id, None));
+        let seen: Vec<(i64, Option<Count>)> = shown.chain(lacking).collect();
+        // A run is of frames in a row: one that tells nothing of an item ends it.
+        self.streaks
+            .retain(|id, _| seen.iter().any(|(s, _)| s == id));
         let mut changed = false;
-        for (id, read) in shown.chain(lacking) {
+        for (id, read) in seen {
             let streak = self.streaks.entry(id).or_insert((read, 0));
             if streak.0 == read {
                 streak.1 = streak.1.saturating_add(1);
@@ -123,6 +127,24 @@ mod tests {
         tally.observe(&[], &[110]);
         frames(&mut tally, &[cell(110, 5)], 1);
         tally.observe(&[], &[110]);
+        assert_eq!(tally.counts().get(&110), Some(&Count::Exact(5)));
+    }
+
+    /// Frames that show other parts of the list between break the run: frames
+    /// apart that each misread the list (a card pressed) never add up to a
+    /// drop, nor to a count.
+    #[test]
+    fn frames_apart_never_add_up() {
+        let mut tally = Tally::seeded(HashMap::from([(110, Count::Exact(5))]));
+        for _ in 0..CONFIRM {
+            tally.observe(&[], &[110]);
+            tally.observe(&[cell(120, 3)], &[]);
+        }
+        assert_eq!(tally.counts().get(&110), Some(&Count::Exact(5)));
+        for _ in 0..CONFIRM {
+            tally.observe(&[cell(110, 6)], &[]);
+            tally.observe(&[cell(120, 3)], &[]);
+        }
         assert_eq!(tally.counts().get(&110), Some(&Count::Exact(5)));
     }
 

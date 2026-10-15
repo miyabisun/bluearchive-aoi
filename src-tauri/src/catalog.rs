@@ -94,8 +94,8 @@ impl Catalog {
     }
 
     /// The entries the list shown in `cells` lacks (see `gaps`).
-    pub fn gaps(&self, cells: &[Cell], start: bool) -> Vec<i64> {
-        gaps(&self.entries, &self.rules, cells, start)
+    pub fn gaps(&self, cells: &[Cell], start: bool, held: impl Fn(i64) -> bool) -> Vec<i64> {
+        gaps(&self.entries, &self.rules, cells, start, held)
     }
 
     /// The index of the icon `id` is drawn with.
@@ -208,11 +208,24 @@ fn rows(entries: &[Item], rules: &Rules, counts: &HashMap<i64, Count>) -> Vec<Ro
         .collect()
 }
 
+/// The most entries `held` that can leave the list between two cells side by
+/// side: an oopart's four tiers used up at once. More is a cell told as an
+/// entry far off, or the start seen where it is not, which would drop much of
+/// the list (as on 2026-10-16).
+const MOST_GONE: usize = 4;
+
 /// The entries a list in its default order lacks: those whose place lies
 /// between two cells shown side by side, both told apart, and, where the
-/// list's `start` shows, before its first cell. An item used up leaves the
+/// list's `start` shows, before its first cell; but none between two with more
+/// than `MOST_GONE` entries `held` between them. An item used up leaves the
 /// list, and this is how its going is seen.
-pub fn gaps(entries: &[Item], rules: &Rules, cells: &[Cell], start: bool) -> Vec<i64> {
+pub fn gaps(
+    entries: &[Item],
+    rules: &Rules,
+    cells: &[Cell],
+    start: bool,
+    held: impl Fn(i64) -> bool,
+) -> Vec<i64> {
     let key = |id: i64| entries.iter().find(|e| e.id == id).map(rules.key);
     let before_all = start.then_some(Some((0, i64::MIN)));
     let keys: Vec<Option<ListKey>> = before_all
@@ -223,10 +236,17 @@ pub fn gaps(entries: &[Item], rules: &Rules, cells: &[Cell], start: bool) -> Vec
         .windows(2)
         .filter_map(|pair| Some((pair[0]?, pair[1]?)))
         .flat_map(|(after, before)| {
-            entries
+            let between: Vec<(ListKey, i64)> = entries
                 .iter()
                 .map(|e| ((rules.key)(e), e.id))
-                .filter(move |(k, _)| after < *k && *k < before)
+                .filter(|(k, _)| after < *k && *k < before)
+                .collect();
+            let held_between = between.iter().filter(|(_, id)| held(*id)).count();
+            if held_between > MOST_GONE {
+                Vec::new()
+            } else {
+                between
+            }
         })
         .collect();
     gone.sort_unstable();
@@ -317,7 +337,10 @@ mod tests {
             entry(14, "e", "Material", 0),
         ];
         let cells = [cell(Some(10)), cell(Some(13)), cell(Some(14))];
-        assert_eq!(gaps(&entries, &items::RULES, &cells, false), [11, 12]);
+        assert_eq!(
+            gaps(&entries, &items::RULES, &cells, false, |_| false),
+            [11, 12]
+        );
     }
 
     #[test]
@@ -328,15 +351,44 @@ mod tests {
             entry(12, "c", "Material", 0),
         ];
         let cells = [cell(Some(12))];
-        assert_eq!(gaps(&entries, &items::RULES, &cells, true), [10, 11]);
         assert_eq!(
-            gaps(&entries, &items::RULES, &cells, false),
+            gaps(&entries, &items::RULES, &cells, true, |_| false),
+            [10, 11]
+        );
+        assert_eq!(
+            gaps(&entries, &items::RULES, &cells, false, |_| false),
             Vec::<i64>::new()
         );
         let untold = [cell(None), cell(Some(12))];
         assert_eq!(
-            gaps(&entries, &items::RULES, &untold, true),
+            gaps(&entries, &items::RULES, &untold, true, |_| false),
             Vec::<i64>::new()
+        );
+    }
+
+    /// Cells side by side with more entries held between them than can be used
+    /// up at once tell nothing: one of them is told as an entry far off, or the
+    /// start is seen where it is not (2026-10-16: most of the items were
+    /// dropped so).
+    #[test]
+    fn cells_with_many_entries_held_between_tell_nothing() {
+        let entries: Vec<Item> = (10..30).map(|id| entry(id, "a", "Material", 0)).collect();
+        let held = |id: i64| id != 12;
+        let cells = [cell(Some(10)), cell(Some(29))];
+        assert_eq!(
+            gaps(&entries, &items::RULES, &cells, false, held),
+            Vec::<i64>::new()
+        );
+        let first = [cell(Some(29))];
+        assert_eq!(
+            gaps(&entries, &items::RULES, &first, true, held),
+            Vec::<i64>::new()
+        );
+        // As many as an oopart's tiers used up at once are gone.
+        let cells = [cell(Some(10)), cell(Some(10 + MOST_GONE as i64 + 2))];
+        assert_eq!(
+            gaps(&entries, &items::RULES, &cells, false, held).len(),
+            MOST_GONE + 1
         );
     }
 
@@ -349,7 +401,7 @@ mod tests {
         ];
         let cells = [cell(Some(10)), cell(None), cell(Some(12))];
         assert_eq!(
-            gaps(&entries, &items::RULES, &cells, false),
+            gaps(&entries, &items::RULES, &cells, false, |_| false),
             Vec::<i64>::new()
         );
     }

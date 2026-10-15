@@ -174,8 +174,11 @@ fn a_run_of_frames_tallies_to_the_labels() {
             for _ in 0..CONFIRM {
                 if let Some((list, cells, start)) = recognizer.read_list(&image) {
                     // What each screen shows lacking must be no labeled item.
-                    let gone = recognizer.catalog(list).gaps(&cells, start);
-                    tallies.entry(list).or_default().observe(&cells, &gone);
+                    let tally = tallies.entry(list).or_default();
+                    let gone = recognizer
+                        .catalog(list)
+                        .gaps(&cells, start, |id| tally.counts().contains_key(&id));
+                    tally.observe(&cells, &gone);
                 }
             }
         }

@@ -428,7 +428,9 @@ impl Read {
         match read {
             Some(Shown::List(list, cells, start)) => {
                 let tally = self.tallies.entry(list).or_default();
-                let gone = recognizer.catalog(list).gaps(&cells, start);
+                let gone = recognizer
+                    .catalog(list)
+                    .gaps(&cells, start, |id| tally.counts().contains_key(&id));
                 if tally.observe(&cells, &gone) {
                     board.changed(Update::List(list, recognizer.rows(list, tally)));
                     // The shops show the coins held as the item list counts them.
