@@ -39,8 +39,8 @@ fn fields(t: &Training) -> Vec<(String, Option<String>)> {
 }
 
 /// Every field of the labeled screens reads right or not at all, and nearly
-/// every one right: at most `UNKNOWN` of them unknown (3 of 600 on
-/// 2026-10-15).
+/// every one right: at most `UNKNOWN` of them unknown (5 of 630 on
+/// 2026-10-15, two of them screens of a tablet's stream 1920 wide).
 #[test]
 fn every_field_reads_right_or_unknown() {
     const UNKNOWN: f32 = 0.01;
@@ -79,12 +79,12 @@ fn every_field_reads_right_or_unknown() {
 
 /// On a smaller screen (a Full HD window, a phone's, or a stream of one)
 /// every field of the student screen reads right or not at all, and at each
-/// width at least the share of `LEAST` right. Measured on 2026-10-15: 96% at
-/// 1920, 79% at 1600 and 71% at 1280, where the equipment's levels do not read.
+/// width at least the share of `LEAST` right. Measured on 2026-10-15: 98% at
+/// 1920, 94% at 1600 and 75% at 1280, where the equipment's levels do not read.
 #[test]
 fn a_smaller_screen_reads_fields_right_or_not_at_all() {
     use image::imageops::{FilterType, resize};
-    const LEAST: [(u32, f32); 3] = [(1920, 0.93), (1600, 0.75), (1280, 0.65)];
+    const LEAST: [(u32, f32); 3] = [(1920, 0.95), (1600, 0.9), (1280, 0.7)];
     let recognizer = recognizer();
     let mut wrong = Vec::new();
     for (width, least) in LEAST {

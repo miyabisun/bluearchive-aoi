@@ -14,7 +14,7 @@ use crate::{
     Item, catalog,
     credit::DARK_DIGITS,
     glyph::{
-        self, Fonts, Style,
+        self, Fonts, Ground, Style,
         bank::Bank,
         word::{self, Ink},
     },
@@ -113,11 +113,12 @@ pub const BAR_STYLE: Style = Style {
     ink: |c| luminance(c) > 190,
     tall: 0.5,
     framed: false,
-    clear_top: false,
+    ground: Ground::Free,
     widest: 1.3,
     width: 1.2,
     skew: 0.0,
     entire: false,
+    within: None,
 };
 /// The white digits of a card's price ("1,800") on the navy, apart from the
 /// light blue around; the comma is too short to count.
@@ -125,11 +126,12 @@ pub const PRICE_STYLE: Style = Style {
     ink: |c| c.iter().all(|&v| v > 200),
     tall: 0.6,
     framed: false,
-    clear_top: false,
+    ground: Ground::Free,
     widest: 1.3,
     width: 1.2,
     skew: 0.0,
     entire: false,
+    within: None,
 };
 
 type Span = (f32, f32);

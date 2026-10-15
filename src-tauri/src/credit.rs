@@ -4,7 +4,7 @@
 use image::RgbImage;
 
 use crate::{
-    glyph::{self, Fonts, Style},
+    glyph::{self, Fonts, Ground, Style},
     screen::Anchor,
     student::{Area, rect},
 };
@@ -15,11 +15,12 @@ pub const DARK_DIGITS: Style = Style {
     ink: |c| 0.299 * f32::from(c[0]) + 0.587 * f32::from(c[1]) + 0.114 * f32::from(c[2]) < 140.0,
     tall: 0.6,
     framed: false,
-    clear_top: false,
+    ground: Ground::Free,
     widest: 1.3,
     width: 1.2,
     skew: 0.0,
     entire: false,
+    within: None,
 };
 
 /// The credits, a number up to the bar's next field (units from the right

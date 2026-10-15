@@ -24,8 +24,8 @@ pub struct Style {
     pub tall: f32,
     /// The text sits in a thin ring of its ink (the tier badge), worn off first.
     pub framed: bool,
-    /// Blobs touching the top of the area are a card's edge, not characters.
-    pub clear_top: bool,
+    /// What of the area's edge is the ground around the text.
+    pub ground: Ground,
     /// No character is wider than this share of its height; wider blobs are
     /// the edge of a card or a piece of a picture.
     pub widest: f32,
@@ -40,13 +40,36 @@ pub struct Style {
     /// A piece left out from among the characters (shorter than `tall`) leaves
     /// the text unread: a character of a smaller screen's broken in pieces
     /// ("Lv70" losing its "7") would read short. A dot on the line (`DOT`, the
-    /// one of "Lv.") is no piece; a comma ("243,819") is, so not for such texts.
+    /// one of "Lv."), a speck (`SPECK`) or a hole within a character is no
+    /// piece; a comma ("243,819") is, so not for such texts.
     pub entire: bool,
+    /// The badge the text is drawn on, told by its colour (a video halves the
+    /// colour's resolution, which a thin stroke loses and a badge keeps): the
+    /// text is read within the extent of the badge's largest part alone.
+    pub within: Option<Ink>,
+}
+
+/// Where blobs touching the edge of a text's area are the ground around the
+/// text, no characters.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Ground {
+    /// Nowhere: characters may touch the edge.
+    Free,
+    /// At the top: a card's edge.
+    Top,
+    /// All around: the text is a fill its outline encloses, however bright
+    /// the ground (on a video the fill dims to the ground's brightness, and
+    /// only the outline keeps them apart).
+    Around,
 }
 
 /// A dot is at most this share of the tallest character high (the one of
 /// "Lv." 3 of 19 pixels, at 2222 wide).
 const DOT: f32 = 0.3;
+/// A speck is at most this share of the tallest character wide and high (a
+/// pixel or two of light among the outlines; the pieces of a "7" broken on a
+/// smaller screen measure 4 by 6 of 13).
+const SPECK: f32 = 0.15;
 
 /// Normalized character size; characters keep their width relative to their height.
 pub const GLYPH: (usize, usize) = (12, 16);
@@ -72,6 +95,30 @@ struct Blob {
     right: u32,
     top: u32,
     bottom: u32,
+}
+
+/// Whether a piece of the `short` ones lies among the characters `kept` (see
+/// `Style::entire`).
+fn piece_left_out(kept: &[Blob], short: &[Blob], tallest: u32) -> bool {
+    let first = kept.iter().map(|b| b.left).min().unwrap_or(0);
+    let last = kept.iter().map(|b| b.right).max().unwrap_or(0);
+    let line = kept.iter().map(|b| b.bottom).max().unwrap_or(0);
+    let dot =
+        |b: &Blob| b.bottom + 1 >= line && (b.bottom - b.top + 1) as f32 <= tallest as f32 * DOT;
+    // A speck of light (a pixel of the picture behind, enclosed by the
+    // outline) is no piece.
+    let speck = |b: &Blob| {
+        ((b.right - b.left + 1).max(b.bottom - b.top + 1)) as f32 <= tallest as f32 * SPECK
+    };
+    // The hole of a character (the inside of an enclosed "0") is no piece.
+    let hole = |b: &Blob| {
+        kept.iter().any(|k| {
+            k.left <= b.left && b.right <= k.right && k.top <= b.top && b.bottom <= k.bottom
+        })
+    };
+    short
+        .iter()
+        .any(|b| b.left > first && b.right < last && !dot(b) && !hole(b) && !speck(b))
 }
 
 /// `blobs` with the pieces of a character side by side joined: those sharing
@@ -109,6 +156,59 @@ fn mask(image: &RgbImage, rect: Rect, ink: Ink, skew: f32) -> (Vec<bool>, usize,
     }
     (on, width, height)
 }
+
+/// The extent of `badge`'s colour in `rect`: of its parts (4-connected) at
+/// least `BADGE_PART` of the largest one, which the text may cut the badge
+/// into where the area leaves out its edge; not a thin text of a like colour.
+fn badge_extent(image: &RgbImage, rect: Rect, badge: Ink) -> Option<Rect> {
+    let (x0, y0, x1, y1) = rect;
+    let (w, h) = ((x1 - x0) as usize, (y1 - y0) as usize);
+    let mut on: Vec<bool> = (0..w * h)
+        .map(|i| badge(image.get_pixel(x0 + (i % w) as u32, y0 + (i / w) as u32).0))
+        .collect();
+    let mut parts: Vec<(usize, Rect)> = Vec::new();
+    for start in 0..w * h {
+        if !on[start] {
+            continue;
+        }
+        on[start] = false;
+        let (mut stack, mut count) = (vec![start], 0);
+        let mut extent = (u32::MAX, u32::MAX, 0, 0);
+        while let Some(i) = stack.pop() {
+            let (x, y) = ((i % w) as u32, (i / w) as u32);
+            count += 1;
+            extent = (
+                extent.0.min(x),
+                extent.1.min(y),
+                extent.2.max(x + 1),
+                extent.3.max(y + 1),
+            );
+            let near = [
+                (x > 0).then(|| i - 1),
+                (x + 1 < w as u32).then(|| i + 1),
+                (y > 0).then(|| i - w),
+                (y + 1 < h as u32).then(|| i + w),
+            ];
+            for j in near.into_iter().flatten() {
+                if on[j] {
+                    on[j] = false;
+                    stack.push(j);
+                }
+            }
+        }
+        parts.push((count, extent));
+    }
+    let most = parts.iter().map(|p| p.0).max()?;
+    let (left, top, right, bottom) = parts
+        .iter()
+        .filter(|p| p.0 as f32 >= most as f32 * BADGE_PART)
+        .map(|p| p.1)
+        .reduce(|a, b| (a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3)))?;
+    Some((x0 + left, y0 + top, x0 + right, y0 + bottom))
+}
+
+/// A part of a badge is at least this share of its largest part.
+const BADGE_PART: f32 = 0.1;
 
 /// The blobs (8-connected) of the mask `on`, left to right, and the mask they
 /// were found in. With `thin_away`, lines a pixel or two thin (the ring of the
@@ -215,11 +315,21 @@ fn outside(ink: &[bool], width: usize, height: usize) -> Vec<bool> {
 /// The characters of `style` in `rect`, left to right, normalized.
 pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
     let framed = style.framed;
+    let rect = match style.within {
+        Some(badge) => match badge_extent(image, rect, badge) {
+            Some(extent) => extent,
+            None => return Vec::new(),
+        },
+        None => rect,
+    };
     let (raw, width, height) = mask(image, rect, style.ink, style.skew);
     let (mut blobs, on) = blobs(raw.clone(), width, height, framed);
-    if style.clear_top {
-        blobs.retain(|b| b.top > 0);
-    }
+    let (w, h) = (width as u32, height as u32);
+    blobs.retain(|b| match style.ground {
+        Ground::Free => true,
+        Ground::Top => b.top > 0,
+        Ground::Around => b.left > 0 && b.top > 0 && b.right + 1 < w && b.bottom + 1 < h,
+    });
     if framed {
         // Only what the ring encloses belongs to the badge: a picture beside
         // it, even touching the ring, lies where the outside reaches. The
@@ -246,16 +356,7 @@ pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
         .partition(|b| (b.bottom - b.top + 1) as f32 >= tallest as f32 * style.tall);
     if style.entire {
         kept = side_by_side(kept, tallest);
-        let first = kept.iter().map(|b| b.left).min().unwrap_or(0);
-        let last = kept.iter().map(|b| b.right).max().unwrap_or(0);
-        let line = kept.iter().map(|b| b.bottom).max().unwrap_or(0);
-        let dot = |b: &Blob| {
-            b.bottom + 1 >= line && (b.bottom - b.top + 1) as f32 <= tallest as f32 * DOT
-        };
-        if short
-            .iter()
-            .any(|b| b.left > first && b.right < last && !dot(b))
-        {
+        if piece_left_out(&kept, &short, tallest) {
             return Vec::new();
         }
     }
@@ -388,6 +489,39 @@ mod tests {
             top,
             bottom,
         }
+    }
+
+    /// A badge's extent is that of its colour's large parts, the text's
+    /// strokes cutting it apart, not of a thinner text of a like colour
+    /// beside it (a navy stat beside the ability's slate badge).
+    #[test]
+    fn a_badge_is_its_colours_largest_part() {
+        let slate = image::Rgb([66, 102, 146]);
+        let mut image = RgbImage::from_pixel(60, 20, image::Rgb([240, 240, 240]));
+        for y in 2..18 {
+            // A stroke of the text beside, taller than the badge is wide.
+            image.put_pixel(5, y, slate);
+        }
+        for x in 20..50 {
+            for y in 4..16 {
+                image.put_pixel(x, y, slate);
+            }
+        }
+        // A stroke of the badge's text cuts its right end apart.
+        for y in 4..16 {
+            image.put_pixel(44, y, image::Rgb([240, 240, 0]));
+        }
+        let is_slate: Ink = |c| c == [66, 102, 146];
+        assert_eq!(
+            badge_extent(&image, (0, 0, 60, 20), is_slate),
+            Some((20, 4, 50, 16))
+        );
+        assert_eq!(
+            badge_extent(&image, (0, 0, 10, 20), is_slate),
+            Some((5, 2, 6, 18))
+        );
+        let none: Ink = |_| false;
+        assert_eq!(badge_extent(&image, (0, 0, 60, 20), none), None);
     }
 
     /// The "Lv.70" of an equipment level at 1920 wide (characters 15 px

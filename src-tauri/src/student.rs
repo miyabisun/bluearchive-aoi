@@ -14,7 +14,7 @@ use image::RgbImage;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    glyph::{self, Fonts, Ink, Rect, Style},
+    glyph::{self, Fonts, Ground, Ink, Rect, Style},
     screen::{self, Anchor},
 };
 
@@ -139,6 +139,10 @@ const EQUIPMENT_TIER: [Area; 3] = [
 /// The favorite item's badge, "T1" or "T2"; its picture, blue in places,
 /// stands right of and above it.
 const GEAR_TIER: Area = on_panel((0.447, 0.402), (0.851, 0.883));
+/// An ability release's slate badge covers at least this share of its `ABILITY`
+/// area (measured on 2026-10-15 over the student fixtures, down to 1280 wide:
+/// none without one; 0.105 or more with one).
+const ABILITY_BADGE: f32 = 0.03;
 /// The badge's blue covers at least this share of `GEAR_TIER` where there is a
 /// favorite item (measured on 2026-10-14 over the student fixtures: none
 /// without one; 0.19 to 0.27 with one, 0.19 on a phone's H.264 video).
@@ -190,12 +194,27 @@ const LIGHT: Ink = |c| c.iter().all(|&v| v > 200);
 const DARK: Ink = |c| luminance(c) < 100.0;
 /// The navy skill levels ("Lv.7").
 const NAVY: Ink = |c| luminance(c) < 130.0 && c[2] >= c[0];
-/// The white fill of the italic levels of the equipment, whose outlines touch.
-const FILL: Ink = |c| c.iter().all(|&v| v >= 245);
-/// The blue tier ("T10").
+/// The white fill of the italic levels of the weapon and the equipment, whose
+/// outlines touch, by its brightness: enclosed by the outline
+/// (`Style::enclosed`), the light card around it is left out, which a video
+/// dims as far as the fill. Measured on 2026-10-15 over the student fixtures
+/// scaled to 1920 wide and a tablet's stream: 225 reads the most; at 200 the
+/// fill joins the card through the outline's light edge, at 235 the stream's
+/// dimmed fill is lost.
+const LIT: Ink = |c| luminance(c) >= 225.0;
+/// The blue of the tier badges, by which the favourite item's is told.
 const BLUE: Ink = |c| i32::from(c[2]) - i32::from(c[0]) > 90 && c[2] > 150;
-/// The yellow ability release ("Lv.25").
-const YELLOW: Ink = |c| c[0] > 200 && c[1] > 190 && c[2] < 110;
+/// The tier ("T10") and the ring around it, darker than the white badge: by
+/// its brightness, which a video keeps where it halves the colour (on a
+/// tablet's stream 1920 wide, 100 to 145 against 245 and more).
+const TIER: Ink = |c| luminance(c) < 190.0;
+/// The slate blue badge of an ability release; the navy of the stats beside
+/// it is darker and greyer.
+const SLATE: Ink =
+    |c| i32::from(c[2]) - i32::from(c[0]) > 60 && (80.0..120.0).contains(&luminance(c));
+/// The ability release's yellow text ("Lv.25") by its brightness on the badge
+/// (on a tablet's stream 1920 wide, 180 to 227 against the badge's 96).
+const ON_SLATE: Ink = |c| luminance(c) > 160.0;
 /// The gold "MAX" of a skill at its highest level.
 const GOLD: Ink = |c| c[0] > 200 && c[1] > 150 && c[2] < 120;
 /// The rarity stars.
@@ -208,18 +227,19 @@ const fn style(
     width: f32,
     widest: f32,
     framed: bool,
-    clear_top: bool,
+    ground: Ground,
     skew: f32,
 ) -> Style {
     Style {
         ink,
         tall,
         framed,
-        clear_top,
+        ground,
         widest,
         width,
         skew,
         entire: false,
+        within: None,
     }
 }
 
@@ -237,21 +257,40 @@ const WHOLE: f32 = 1.2;
 pub const STYLES: &[(&str, Style)] = &[
     (
         "level",
-        style(LIGHT, 0.5, 0.62, f32::INFINITY, false, false, 0.15),
+        style(LIGHT, 0.5, 0.62, f32::INFINITY, false, Ground::Free, 0.15),
     ),
-    ("bond", style(DARK, 0.5, WHOLE, 1.3, false, false, 0.0)),
-    ("skill", style(NAVY, 0.5, WHOLE, 1.3, false, false, 0.0)),
-    ("weapon", style(FILL, 0.5, WHOLE, 1.3, false, true, 0.0)),
+    (
+        "bond",
+        style(DARK, 0.5, WHOLE, 1.3, false, Ground::Free, 0.0),
+    ),
+    (
+        "skill",
+        style(NAVY, 0.5, WHOLE, 1.3, false, Ground::Free, 0.0),
+    ),
+    (
+        "weapon",
+        Style {
+            ..style(LIT, 0.5, WHOLE, 1.3, false, Ground::Around, 0.0)
+        },
+    ),
     // The equipment's levels break into pieces on a smaller screen.
     (
         "equipment",
         Style {
             entire: true,
-            ..style(FILL, 0.5, WHOLE, 1.3, false, true, 0.0)
+            ..style(LIT, 0.5, WHOLE, 1.3, false, Ground::Around, 0.0)
         },
     ),
-    ("tier", style(BLUE, 0.5, 0.62, 1.6, true, false, 0.0)),
-    ("ability", style(YELLOW, 0.5, WHOLE, 1.3, false, false, 0.0)),
+    ("tier", style(TIER, 0.5, 0.62, 1.6, true, Ground::Free, 0.0)),
+    // The ability's digits touch on a stream ("25" one part): kept, and cut
+    // by width.
+    (
+        "ability",
+        Style {
+            within: Some(SLATE),
+            ..style(ON_SLATE, 0.5, 0.62, 2.6, false, Ground::Around, 0.0)
+        },
+    ),
 ];
 
 fn style_of(name: &str) -> Style {
@@ -351,11 +390,18 @@ pub fn read(image: &RgbImage, fonts: &Fonts) -> Training {
         let level = number(image, fonts, "equipment", "Lv", EQUIPMENT_LEVEL[i])?;
         Some(Gear { tier, level })
     };
+    // Not released where the badge's slate is missing; a badge whose text
+    // does not read is unknown.
     let ability = |i: usize| -> Option<u8> {
-        match text(image, fonts, "ability", ABILITY[i])?.as_str() {
-            "" => Some(0),
-            t => t.strip_prefix("Lv")?.parse().ok(),
+        let (x0, y0, x1, y1) = rect(image, ABILITY[i])?;
+        let slate = count(image, ABILITY[i], SLATE)?;
+        if (slate as f32) < ABILITY_BADGE * ((x1 - x0) * (y1 - y0)) as f32 {
+            return Some(0);
         }
+        text(image, fonts, "ability", ABILITY[i])?
+            .strip_prefix("Lv")?
+            .parse()
+            .ok()
     };
     // No favorite item where its badge's blue is missing; a badge whose tier
     // does not read (a video's blur) is unknown, not missing.

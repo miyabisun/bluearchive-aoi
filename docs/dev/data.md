@@ -25,7 +25,10 @@ read off the card (1 to 5 fragments).
 Aoi reads text without an OCR engine, so it reads alike on any system. Short texts (a
 level, a tier, the credits, a card's times left and price) are read a character at a time
 against references cut from the labeled fixtures; the students' names and the shops'
-names are told among the names that can be there, whole.
+names are told among the names that can be there, whole. A video keeps the colour at half
+the resolution of the brightness (4:2:0), so the student screen's coloured texts (a tier, an
+ability release, a level's white fill) are cut out by their brightness; the colour only tells
+where a badge is and whether there is one, over its whole area.
 
 The references are one glyph bank: grey 16x16 tiles in `src-tauri/data/glyphs.png`, and
 what each tile stands for in `src-tauri/data/glyphs.json`. The students' names in it are
