@@ -38,8 +38,12 @@ fn fields(t: &Training) -> Vec<(String, Option<String>)> {
     out
 }
 
+/// Every field of the labeled screens reads right or not at all, and nearly
+/// every one right: at most `UNKNOWN` of them unknown (3 of 600 on
+/// 2026-10-15).
 #[test]
 fn every_field_reads_right_or_unknown() {
+    const UNKNOWN: f32 = 0.01;
     let recognizer = recognizer();
     let (mut wrong, mut unknown, mut total) = (Vec::new(), Vec::new(), 0);
     for label in labels() {
@@ -63,11 +67,13 @@ fn every_field_reads_right_or_unknown() {
             }
         }
     }
-    eprintln!(
-        "{} of {total} fields unknown:\n{}",
-        unknown.len(),
-        unknown.join("\n")
-    );
+    if unknown.len() as f32 > UNKNOWN * total as f32 {
+        wrong.push(format!(
+            "{} of {total} fields unknown:\n{}",
+            unknown.len(),
+            unknown.join("\n")
+        ));
+    }
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
 }
 

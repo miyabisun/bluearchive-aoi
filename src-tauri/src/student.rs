@@ -242,8 +242,7 @@ pub const STYLES: &[(&str, Style)] = &[
     ("bond", style(DARK, 0.5, WHOLE, 1.3, false, false, 0.0)),
     ("skill", style(NAVY, 0.5, WHOLE, 1.3, false, false, 0.0)),
     ("weapon", style(FILL, 0.5, WHOLE, 1.3, false, true, 0.0)),
-    // The equipment's levels break into pieces on a smaller screen (the
-    // weapon's "Lv." keeps its dot between).
+    // The equipment's levels break into pieces on a smaller screen.
     (
         "equipment",
         Style {

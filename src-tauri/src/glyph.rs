@@ -39,10 +39,14 @@ pub struct Style {
     pub skew: f32,
     /// A piece left out from among the characters (shorter than `tall`) leaves
     /// the text unread: a character of a smaller screen's broken in pieces
-    /// ("Lv70" losing its "7") would read short. Not where a text has short
-    /// marks between its characters ("Lv.", "243,819").
+    /// ("Lv70" losing its "7") would read short. A dot on the line (`DOT`, the
+    /// one of "Lv.") is no piece; a comma ("243,819") is, so not for such texts.
     pub entire: bool,
 }
+
+/// A dot is at most this share of the tallest character high (the one of
+/// "Lv." 3 of 19 pixels, at 2222 wide).
+const DOT: f32 = 0.3;
 
 /// Normalized character size; characters keep their width relative to their height.
 pub const GLYPH: (usize, usize) = (12, 16);
@@ -223,7 +227,14 @@ pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
     if style.entire {
         let first = kept.iter().map(|b| b.left).min().unwrap_or(0);
         let last = kept.iter().map(|b| b.right).max().unwrap_or(0);
-        if short.iter().any(|b| b.left > first && b.right < last) {
+        let line = kept.iter().map(|b| b.bottom).max().unwrap_or(0);
+        let dot = |b: &Blob| {
+            b.bottom + 1 >= line && (b.bottom - b.top + 1) as f32 <= tallest as f32 * DOT
+        };
+        if short
+            .iter()
+            .any(|b| b.left > first && b.right < last && !dot(b))
+        {
             return Vec::new();
         }
     }
