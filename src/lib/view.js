@@ -30,13 +30,10 @@ export const LISTS = [
 const listName = (id) => LISTS.find((l) => l.id === id)?.name ?? id;
 
 /** The watcher's status as a short label and a tone for its badge. */
-export function statusView(status) {
+function badge(status) {
   switch (status.state) {
     case "reading":
-      return {
-        label: `${listName(status.list)}を集計中 ${Math.round(status.fps)} fps`,
-        tone: "active",
-      };
+      return { label: `${listName(status.list)}を集計中`, tone: "active" };
     case "other_screen":
       return { label: "対象外の画面", tone: "idle" };
     case "failed":
@@ -50,6 +47,35 @@ export function statusView(status) {
     default:
       return { label: "ゲーム未検出", tone: "idle" };
   }
+}
+
+/**
+ * Where the frames read come from: a streaming app's stream or a phone's screen
+ * when one comes in, else the game's window (null where nothing can be
+ * captured), and its name.
+ */
+function source({ status, phone, cast }) {
+  if (cast?.state === "receiving") return ["cast", `配信アプリ（${cast.from}）`];
+  if (phone?.state === "streaming") {
+    return ["phone", `${phone.device}（${phone.via === "usb" ? "USB" : "Wi-Fi"}）`];
+  }
+  return status.state === "no_source" ? [null, null] : ["window", "ゲームのウィンドウ"];
+}
+
+/**
+ * The status badge of a snapshot: its label and tone, the `source` its icon
+ * shows, and the hover's lines: the source named, the frame rate while
+ * reading, and what pressing it does.
+ */
+export function statusView(snapshot) {
+  const { status } = snapshot;
+  const [kind, name] = source(snapshot);
+  const title = [
+    name && `取り込み元: ${name}`,
+    status.state === "reading" && `${Math.round(status.fps)} fps`,
+    status.state === "paused" ? "押すと読み取りを再開" : "押すと読み取りを一時中断",
+  ];
+  return { ...badge(status), source: kind, title: title.filter(Boolean).join("\n") };
 }
 
 const exact = new Intl.NumberFormat("ja-JP");

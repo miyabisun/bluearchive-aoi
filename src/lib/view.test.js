@@ -64,27 +64,63 @@ describe("filterRows", () => {
 });
 
 describe("statusView", () => {
+  const at = (status, links = {}) => statusView({ status, ...links });
+
   it("names each state and marks which are trouble", () => {
-    expect(statusView({ state: "no_game" })).toEqual({ label: "ゲーム未検出", tone: "idle" });
-    expect(statusView({ state: "no_source" })).toEqual({ label: "取り込み元なし", tone: "idle" });
-    expect(statusView({ state: "other_screen" })).toEqual({ label: "対象外の画面", tone: "idle" });
-    expect(statusView({ state: "reading", list: "items", fps: 27.5, dropped: 3 })).toEqual({
-      label: "アイテムを集計中 28 fps",
+    const badge = (status) => {
+      const { label, tone } = at(status);
+      return { label, tone };
+    };
+    expect(badge({ state: "no_game" })).toEqual({ label: "ゲーム未検出", tone: "idle" });
+    expect(badge({ state: "no_source" })).toEqual({ label: "取り込み元なし", tone: "idle" });
+    expect(badge({ state: "other_screen" })).toEqual({ label: "対象外の画面", tone: "idle" });
+    expect(badge({ state: "reading", list: "items", fps: 27.5, dropped: 3 })).toEqual({
+      label: "アイテムを集計中",
       tone: "active",
     });
-    expect(statusView({ state: "reading", list: "equipment", fps: 9.6, dropped: 0 })).toEqual({
-      label: "装備を集計中 10 fps",
+    expect(badge({ state: "reading", list: "equipment", fps: 9.6, dropped: 0 })).toEqual({
+      label: "装備を集計中",
       tone: "active",
     });
-    expect(statusView({ state: "failed", message: "denied" })).toEqual({
+    expect(badge({ state: "failed", message: "denied" })).toEqual({
       label: "キャプチャ失敗",
       tone: "danger",
     });
-    expect(statusView({ state: "paused" })).toEqual({ label: "一時中断", tone: "paused" });
-    expect(statusView({ state: "too_small" })).toEqual({
+    expect(badge({ state: "paused" })).toEqual({ label: "一時中断", tone: "paused" });
+    expect(badge({ state: "too_small" })).toEqual({
       label: "画面が小さすぎます",
       tone: "idle",
     });
+  });
+
+  it("shows where the frames come from by its icon, and says it and the frame rate on hover", () => {
+    const reading = { state: "reading", list: "shops", fps: 4.8, dropped: 0 };
+    const tap = "押すと読み取りを一時中断";
+    const lines = (...l) => l.join("\n");
+    expect(at(reading)).toMatchObject({
+      source: "window",
+      title: lines("取り込み元: ゲームのウィンドウ", "5 fps", tap),
+    });
+    const usb = { state: "streaming", device: "Pixel 9", via: "usb" };
+    expect(at(reading, { phone: usb })).toMatchObject({
+      source: "phone",
+      title: lines("取り込み元: Pixel 9（USB）", "5 fps", tap),
+    });
+    const wifi = { state: "streaming", device: "TB322FC", via: "wifi" };
+    expect(at({ state: "paused" }, { phone: wifi })).toMatchObject({
+      source: "phone",
+      title: lines("取り込み元: TB322FC（Wi-Fi）", "押すと読み取りを再開"),
+    });
+    // A phone linked but not sending leaves the window the source.
+    expect(at(reading, { phone: { state: "searching", device: "Pixel 9" } })).toMatchObject({
+      source: "window",
+    });
+    const cast = { state: "receiving", from: "192.168.1.5", sideways: false };
+    expect(at(reading, { cast })).toMatchObject({
+      source: "cast",
+      title: lines("取り込み元: 配信アプリ（192.168.1.5）", "5 fps", tap),
+    });
+    expect(at({ state: "no_source" })).toMatchObject({ source: null, title: tap });
   });
 });
 

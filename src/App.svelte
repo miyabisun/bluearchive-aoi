@@ -240,7 +240,7 @@
     else opened.add(key);
   }
 
-  const status = $derived(statusView(snapshot.status));
+  const status = $derived(statusView(snapshot));
   const paused = $derived(snapshot.status.state === "paused");
   /** The tabs with sections instead of a list of rows. */
   const SECTIONED = ["work"];
@@ -346,6 +346,36 @@
   >
 {/snippet}
 
+<!-- Where the frames read come from, the status's lamp: the game's window, a
+     phone's screen or a streaming app's stream; a dot where there is none. -->
+{#snippet sourceIcon(/** @type {string | null} */ source)}
+  {#if source}
+    <svg
+      class="lamp"
+      viewBox="0 0 16 16"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      stroke-linecap="round"
+      aria-hidden="true"
+    >
+      {#if source === "phone"}
+        <rect x="4.25" y="1.25" width="7.5" height="13.5" rx="1.5" /><path d="M7 12h2" />
+      {:else if source === "cast"}
+        <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />
+        <path d="M5.2 5.2a4 4 0 0 0 0 5.6M10.8 5.2a4 4 0 0 1 0 5.6" />
+        <path d="M3 3a7 7 0 0 0 0 10M13 3a7 7 0 0 1 0 10" />
+      {:else}
+        <rect x="1.25" y="2.25" width="13.5" height="9" rx="1" /><path d="M8 11.25v3M5 14.5h6" />
+      {/if}
+    </svg>
+  {:else}
+    <span class="lamp dot" aria-hidden="true"></span>
+  {/if}
+{/snippet}
+
 <!-- One row: the tabs, then the status and the menu at the right end. The window's
      title bar names the app. -->
 <header class="top">
@@ -372,10 +402,10 @@
         class="status"
         data-tone={status.tone}
         aria-pressed={paused}
-        title={paused ? "押すと読み取りを再開" : "押すと読み取りを一時中断"}
+        title={status.title}
         onclick={() => setPaused(!paused)}
       >
-        <span class="dot" aria-hidden="true"></span>{status.label}
+        {@render sourceIcon(status.source)}{status.label}
       </button>
     </div>
     <div class="menu">
@@ -1428,6 +1458,9 @@
     color: var(--c-muted)
     white-space: nowrap
 
+  // The lamp: the source's icon, or a dot, lit by the tone.
+  .lamp
+    flex: none
   .dot
     width: 8px
     height: 8px
@@ -1436,8 +1469,8 @@
 
   .status[data-tone="active"]
     color: var(--c-on-surface)
-    .dot
-      background: var(--c-accent)
+    .lamp
+      color: var(--c-accent)
 
   .status[data-tone="danger"]
     color: var(--c-danger)
@@ -1452,8 +1485,8 @@
       border-color: var(--c-muted)
   .status[data-tone="paused"]
     color: var(--c-on-surface)
-    .dot
-      background: var(--c-danger)
+    .lamp
+      color: var(--c-danger)
 
   .content
     flex: 1

@@ -66,7 +66,7 @@ const overflow = (page) =>
 
 test("lists the item tally in order and narrows it by name", async ({ page }) => {
   await open(page, { status: reading("items"), items, equipment });
-  await expect(page.getByRole("status")).toHaveText("アイテムを集計中 27 fps");
+  await expect(page.getByRole("status")).toHaveText("アイテムを集計中");
   await expect(page.getByRole("tab", { name: "アイテム" })).toHaveAttribute(
     "aria-selected",
     "true",
@@ -90,7 +90,7 @@ test("lists the item tally in order and narrows it by name", async ({ page }) =>
 
 test("shows the equipment by tile, each piece's tier at its corner", async ({ page }) => {
   await open(page, { status: reading("equipment"), items, equipment });
-  await expect(page.getByRole("status")).toHaveText("装備を集計中 27 fps");
+  await expect(page.getByRole("status")).toHaveText("装備を集計中");
   // The tab stays where it was: the game's screen does not choose it.
   await expect(page.getByRole("tab", { name: "アイテム" })).toHaveAttribute(
     "aria-selected",
@@ -120,6 +120,8 @@ test("the status pauses the reading when pressed, and resumes it", async ({ page
   await open(page, snapshot);
   const badge = page.getByRole("button", { name: /アイテムを集計中/ });
   await expect(badge).toHaveAttribute("aria-pressed", "false");
+  // Its lamp shows where the frames come from, its hover says so and the frame rate.
+  await expect(badge).toHaveAttribute("title", /^取り込み元: ゲームのウィンドウ\n27 fps\n/);
   await badge.click();
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ paused: true }]);
   // The app answers with the reading paused: the lamp red.
@@ -127,7 +129,7 @@ test("the status pauses the reading when pressed, and resumes it", async ({ page
   const paused = page.getByRole("button", { name: "一時中断" });
   await expect(paused).toHaveAttribute("aria-pressed", "true");
   const lamp = (selector) =>
-    page.locator(selector).evaluate((dot) => getComputedStyle(dot).backgroundColor);
+    page.locator(selector).evaluate((icon) => getComputedStyle(icon).color);
   const danger = await page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue("--c-danger").trim(),
   );
@@ -139,7 +141,7 @@ test("the status pauses the reading when pressed, and resumes it", async ({ page
     probe.remove();
     return rgb;
   }, danger);
-  expect(await lamp(".status .dot")).toBe(red);
+  expect(await lamp(".status .lamp")).toBe(red);
   await paused.press("Enter");
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([
     { paused: true },
@@ -265,7 +267,7 @@ const students = [
 
 test("shows the students read from the student screen", async ({ page }) => {
   await open(page, { status: reading("students"), items, equipment, students }, "生徒");
-  await expect(page.getByRole("status")).toHaveText("生徒を集計中 27 fps");
+  await expect(page.getByRole("status")).toHaveText("生徒を集計中");
   await expect(page.getByRole("tab", { name: "生徒" })).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("tbody tr").first().locator("td")).toHaveText([
     "",
@@ -478,7 +480,7 @@ const shops = [
 
 test("shows each shop's goods, shop by shop, when the game shows a shop", async ({ page }) => {
   await open(page, { status: reading("shops"), items, equipment, shops }, "ショップ");
-  await expect(page.getByRole("status")).toHaveText("ショップを集計中 27 fps");
+  await expect(page.getByRole("status")).toHaveText("ショップを集計中");
   await expect(page.getByRole("tab", { name: "ショップ" })).toHaveAttribute(
     "aria-selected",
     "true",
@@ -1084,7 +1086,7 @@ test("keeps the tab chosen when the game shows another list", async ({ page }) =
     (s) => window.__AOI_PUSH__({ ...s, status: { ...s.status, list: "equipment" } }),
     snapshot,
   );
-  await expect(page.getByRole("status")).toHaveText("装備を集計中 27 fps");
+  await expect(page.getByRole("status")).toHaveText("装備を集計中");
   await expect(page.getByRole("tab", { name: "生徒" })).toHaveAttribute("aria-selected", "true");
 });
 
