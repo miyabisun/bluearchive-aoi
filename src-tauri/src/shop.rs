@@ -590,9 +590,32 @@ pub fn bars(image: &RgbImage) -> Vec<Bar> {
             }
         }
     }
-    out.retain(|b| (b.bottom - b.top) as f32 >= 0.012 * u);
+    // A bar's rows of letters are navy for the most part: a bar found too
+    // short (a margin row a smaller screen blurred short) reaches through
+    // them.
+    let navy_share = |bar: &Bar, y: u32| {
+        let n = (bar.left..bar.right)
+            .filter(|&x| navy(image.get_pixel(x, y).0))
+            .count();
+        n as f32 / (bar.right - bar.left) as f32
+    };
+    let short = |b: &Bar| ((b.bottom - b.top) as f32) < 0.012 * u;
+    for bar in out.iter_mut().filter(|b| short(b)) {
+        while bar.top > 0 && navy_share(bar, bar.top - 1) >= BAR_ROW {
+            bar.top -= 1;
+        }
+        while bar.bottom + 1 < image.height() && navy_share(bar, bar.bottom + 1) >= BAR_ROW {
+            bar.bottom += 1;
+        }
+    }
+    out.retain(|b| !short(b));
     out
 }
+
+/// A row of a bar's letters is at least this share navy (measured on
+/// 2026-10-15 over the shop fixtures drawn 1760 wide and scaled down to 1600:
+/// 0.41 or more, the rows around the bar 0.05 or less).
+const BAR_ROW: f32 = 0.3;
 
 fn crop(image: &RgbImage, x0: f32, y0: f32, x1: f32, y1: f32) -> Option<RgbImage> {
     let (w, h) = (image.width() as f32, image.height() as f32);

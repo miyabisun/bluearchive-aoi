@@ -54,6 +54,17 @@ const JOIN: f32 = 10.0;
 /// (measured on 2026-10-14: the game's digits lie 12 to 30 from the font's,
 /// the letters around them 38 or farther).
 const LOOSE: (f32, f32) = (34.0, 0.85);
+/// Widths between those read that a bank also draws its references from: a
+/// window may be any width, scaled down to the width read (see
+/// `screen::normalize`), and drawn there its letters differ from the same
+/// drawn at the width read. (The tests read others between.)
+const BETWEEN: [(u32, &[u32]); 3] = [
+    (1920, &[2040, 2160]),
+    (1600, &[1680, 1840]),
+    (1500, &[1570]),
+];
+/// A bar's letter reference lies farther than this from every digit's.
+const APART: f32 = 20.0;
 /// A digit of a smaller screen's card lies at most this far from the
 /// window's digit at its place (see `take_scaled_card_digits`).
 const ALIKE: f32 = 30.0;
@@ -402,7 +413,9 @@ fn take_scaled_card_digits(
                 card.shapes[*at..*at + n].to_vec(),
                 value,
             );
-            // The bar's letters around the number, references of their own.
+            // The bar's letters, references of their own; but for the ones
+            // beside the number ("と", "回", a "回" near a "0"): a digit told
+            // as one of them would leave the number short.
             if card.style == "bar" {
                 let letters = cuts
                     .entry(card.style.to_owned())
@@ -410,7 +423,7 @@ fn take_scaled_card_digits(
                     .entry(shop::BAR_LETTER)
                     .or_default();
                 for (i, shape) in card.shapes.iter().enumerate() {
-                    if !(*at..*at + n).contains(&i) {
+                    if i + 1 < *at || i > *at + n {
                         join(letters, shape.clone());
                     }
                 }
@@ -579,25 +592,54 @@ fn main() {
     for width in screen::WIDTHS {
         let mut bank = Bank::default();
         names(&mut bank, &weights[0]);
-        // As a window drawn at the width shows them (smoothly, as the game
-        // draws them; a screen read is scaled down sharper, see
-        // `screen::normalize`).
-        let open = |path: &str| {
-            let image = image::open(dir.join(path)).unwrap().to_rgb8();
-            let scale = width as f32 / screen::drawn_width(&image);
-            let (w, h) = (image.width() as f32 * scale, image.height() as f32 * scale);
-            resize(
-                &image,
-                w.round() as u32,
-                h.round() as u32,
-                FilterType::Triangle,
-            )
+        // The fixtures as a window drawn at `at` wide shows them (smoothly,
+        // as the game draws them), scaled down as Aoi reads it.
+        let drawn = |at: u32| {
+            let dir = &dir;
+            move |path: &str| {
+                let image = image::open(dir.join(path)).unwrap().to_rgb8();
+                let scale = at as f32 / screen::drawn_width(&image);
+                let (w, h) = (image.width() as f32 * scale, image.height() as f32 * scale);
+                let image = resize(
+                    &image,
+                    w.round() as u32,
+                    h.round() as u32,
+                    FilterType::Triangle,
+                );
+                screen::normalize(&image).into_owned()
+            }
         };
+        let open = drawn(width);
         let mut cuts = Cuts::new();
-        student_styles(&mut cuts, &labels, &levels, &open);
-        dark_digits_and_shops(&mut cuts, &mut bank, &credits, &shops, &open);
+        let between = BETWEEN
+            .iter()
+            .find(|(w, _)| *w == width)
+            .map_or(&[][..], |b| b.1);
+        for &at in std::iter::once(&width).chain(between) {
+            let open = drawn(at);
+            student_styles(&mut cuts, &labels, &levels, &open);
+            // The shops' names once, as drawn at the width read.
+            let mut words = Bank::default();
+            let names_to = if at == width { &mut bank } else { &mut words };
+            dark_digits_and_shops(&mut cuts, names_to, &credits, &shops, &open);
+            take_scaled_card_digits(&mut cuts, &at_window, &cards(&shops, &open));
+        }
         font_card_digits(&mut cuts, &weights);
-        take_scaled_card_digits(&mut cuts, &at_window, &cards(&shops, &open));
+        // A letter as near a digit as `APART` is no reference: a digit told
+        // as it would leave the number short.
+        if let Some(bar) = cuts.get_mut("bar") {
+            let digits: Vec<Vec<f32>> = bar
+                .iter()
+                .filter(|(c, _)| **c != shop::BAR_LETTER)
+                .flat_map(|(_, gs)| gs.iter().map(Group::mean))
+                .collect();
+            if let Some(letters) = bar.get_mut(&shop::BAR_LETTER) {
+                letters.retain(|g| {
+                    let mean = g.mean();
+                    digits.iter().all(|d| glyph::distance(d, &mean) > APART)
+                });
+            }
+        }
         for (style, chars) in &cuts {
             let counts: Vec<String> = chars
                 .iter()

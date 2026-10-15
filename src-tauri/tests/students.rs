@@ -83,11 +83,11 @@ fn every_field_reads_right_or_unknown() {
 
 /// A screen of any width read, and any between them (a window as it was
 /// resized), reads every field of the student screen right or not at all,
-/// and at each width at least `LEAST` of them right. Measured on 2026-10-15
-/// over the fixtures at widths from 1500 to 2222: 87% to 98%.
+/// and at each width at least `LEAST` of them right. Measured on 2026-10-16
+/// over the fixtures at widths from 1500 to 2222: 88% to 98%.
 #[test]
 fn a_smaller_screen_reads_fields_right_or_not_at_all() {
-    const LEAST: f32 = 0.84;
+    const LEAST: f32 = 0.85;
     let recognizer = recognizer();
     let mut wrong = Vec::new();
     for width in [2222, 2100, 1920, 1760, 1600, 1550, 1500] {
