@@ -6,7 +6,9 @@
 //! With `level` after them it keeps the name plate's level alone, for a level
 //! sample taken on any tab (`tests/fixtures/levels.json`); with `credit`, the
 //! top bar's credits alone (`tests/fixtures/credits.json`); with `shop`, what
-//! the shop screen is read from (`tests/fixtures/shops.json`).
+//! the shop screen is read from (`tests/fixtures/shops.json`); with `list`, the
+//! item or equipment list's panel, read with the list the screen names
+//! (`tests/fixtures/tablet.json`).
 
 use std::path::Path;
 
@@ -15,6 +17,7 @@ use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use aoi::{
     Recognizer, credit,
     glyph::bank::Bank,
+    grid,
     screen::{self, Region},
     shop, student,
 };
@@ -29,6 +32,15 @@ const SCREEN_ROOM: f32 = 0.5;
 fn kept(image: &image::RgbImage, only: Option<&str>) -> Vec<(f32, f32, f32, f32)> {
     let w = image.width() as f32;
     let u = screen::unit(image.width(), image.height());
+    if only == Some("list") {
+        let panel = grid::find_panel(image).expect("no list panel");
+        return vec![(
+            panel.left as f32,
+            panel.top as f32,
+            panel.right as f32,
+            image.height() as f32,
+        )];
+    }
     let areas = match only {
         Some("level") => vec![student::LEVEL],
         Some("shop") => shop::areas(),
@@ -98,10 +110,10 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (from, to, only) = match &args[..] {
         [from, to] => (from, to, None),
-        [from, to, only] if ["level", "credit", "shop"].contains(&only.as_str()) => {
+        [from, to, only] if ["level", "credit", "shop", "list"].contains(&only.as_str()) => {
             (from, to, Some(only.as_str()))
         }
-        _ => panic!("usage: mask_fixture <screenshot.png> <fixture.png> [level|credit|shop]"),
+        _ => panic!("usage: mask_fixture <screenshot.png> <fixture.png> [level|credit|shop|list]"),
     };
     let image = image::open(from).unwrap().to_rgb8();
     let kept = kept(&image, only);
@@ -127,6 +139,15 @@ fn main() {
         return save(&masked, to);
     }
     let recognizer = Recognizer::load(&data).unwrap();
+    if only == Some("list") {
+        let (list, _, _) = recognizer.read_list(&image).expect("no list");
+        let (whole, part) = (
+            recognizer.read(&image, list),
+            recognizer.read(&masked, list),
+        );
+        assert_eq!(whole, part, "{from} reads otherwise once masked");
+        return save(&masked, to);
+    }
     if only == Some("shop") {
         let (whole, part) = (recognizer.read_shop(&image), recognizer.read_shop(&masked));
         assert!(whole.is_some(), "{from} is no shop screen");

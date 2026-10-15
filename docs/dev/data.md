@@ -41,6 +41,14 @@ cd src-tauri
 cargo run --release --example build_glyphs -- <folder of the fonts>
 ```
 
+The lists' counts have references of their own (`src-tauri/data/digits.json`), from the
+fixtures and from a collection of a tablet's screens as scrcpy streams them (each with the
+screen as screencap gives it, which labels them), kept outside the repository for its size:
+
+```powershell
+cargo run --release --example build_digits -- <collection>
+```
+
 ## What is counted
 
 - A list is read only in its default order (デフォルト, ascending). A count is taken once

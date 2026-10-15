@@ -1,0 +1,652 @@
+[
+  {
+    "image": "tablet/items-11-1920.png",
+    "list": "items",
+    "note": "2026-10-15 capture on a tablet (Android, 3040x1904) as scrcpy streams it, 1920 wide (H.264, 5 fps, 200 Mbps), the list panel kept (mask_fixture list). Labels by eye, helped by the reading of the screen as screencap gives it.",
+    "cells": [
+      {
+        "id": 4033,
+        "quantity": "12"
+      },
+      {
+        "id": 4040,
+        "quantity": "1008"
+      },
+      {
+        "id": 4041,
+        "quantity": "643"
+      },
+      {
+        "id": 4042,
+        "quantity": "394"
+      },
+      {
+        "id": 4043,
+        "quantity": "175"
+      },
+      {
+        "id": 4050,
+        "quantity": "879"
+      },
+      {
+        "id": 4051,
+        "quantity": "37"
+      },
+      {
+        "id": 4052,
+        "quantity": "37"
+      },
+      {
+        "id": 4053,
+        "quantity": "9"
+      },
+      {
+        "id": 4060,
+        "quantity": "1178"
+      },
+      {
+        "id": 4061,
+        "quantity": "393"
+      },
+      {
+        "id": 4062,
+        "quantity": "226"
+      },
+      {
+        "id": 4063,
+        "quantity": "111"
+      },
+      {
+        "id": 4070,
+        "quantity": "1047"
+      },
+      {
+        "id": 4071,
+        "quantity": "740"
+      },
+      {
+        "id": 4072,
+        "quantity": "398"
+      },
+      {
+        "id": 4073,
+        "quantity": "187"
+      },
+      {
+        "id": 4080,
+        "quantity": "1127"
+      },
+      {
+        "id": 4081,
+        "quantity": "637"
+      },
+      {
+        "id": 4082,
+        "quantity": "313"
+      },
+      {
+        "id": 4083,
+        "quantity": "66"
+      },
+      {
+        "id": 4090,
+        "quantity": "1090"
+      },
+      {
+        "id": 4091,
+        "quantity": "869"
+      },
+      {
+        "id": 4092,
+        "quantity": "414"
+      },
+      {
+        "id": 4093,
+        "quantity": "224"
+      }
+    ]
+  },
+  {
+    "image": "tablet/items-11-1600.png",
+    "list": "items",
+    "note": "2026-10-15 capture on a tablet (Android, 3040x1904) as scrcpy streams it, 1600 wide (H.264, 5 fps, 200 Mbps), the list panel kept (mask_fixture list). Labels by eye, helped by the reading of the screen as screencap gives it.",
+    "cells": [
+      {
+        "id": 4033,
+        "quantity": "12"
+      },
+      {
+        "id": 4040,
+        "quantity": "1008"
+      },
+      {
+        "id": 4041,
+        "quantity": "643"
+      },
+      {
+        "id": 4042,
+        "quantity": "394"
+      },
+      {
+        "id": 4043,
+        "quantity": "175"
+      },
+      {
+        "id": 4050,
+        "quantity": "879"
+      },
+      {
+        "id": 4051,
+        "quantity": "37"
+      },
+      {
+        "id": 4052,
+        "quantity": "37"
+      },
+      {
+        "id": 4053,
+        "quantity": "9"
+      },
+      {
+        "id": 4060,
+        "quantity": "1178"
+      },
+      {
+        "id": 4061,
+        "quantity": "393"
+      },
+      {
+        "id": 4062,
+        "quantity": "226"
+      },
+      {
+        "id": 4063,
+        "quantity": "111"
+      },
+      {
+        "id": 4070,
+        "quantity": "1047"
+      },
+      {
+        "id": 4071,
+        "quantity": "740"
+      },
+      {
+        "id": 4072,
+        "quantity": "398"
+      },
+      {
+        "id": 4073,
+        "quantity": "187"
+      },
+      {
+        "id": 4080,
+        "quantity": "1127"
+      },
+      {
+        "id": 4081,
+        "quantity": "637"
+      },
+      {
+        "id": 4082,
+        "quantity": "313"
+      },
+      {
+        "id": 4083,
+        "quantity": "66"
+      },
+      {
+        "id": 4090,
+        "quantity": "1090"
+      },
+      {
+        "id": 4091,
+        "quantity": "869"
+      },
+      {
+        "id": 4092,
+        "quantity": "414"
+      },
+      {
+        "id": 4093,
+        "quantity": "224"
+      }
+    ]
+  },
+  {
+    "image": "tablet/items-11-1280.png",
+    "list": "items",
+    "note": "2026-10-15 capture on a tablet (Android, 3040x1904) as scrcpy streams it, 1280 wide (H.264, 5 fps, 200 Mbps), the list panel kept (mask_fixture list). Labels by eye, helped by the reading of the screen as screencap gives it.",
+    "cells": [
+      {
+        "id": 4033,
+        "quantity": "12"
+      },
+      {
+        "id": 4040,
+        "quantity": "1008"
+      },
+      {
+        "id": 4041,
+        "quantity": "643"
+      },
+      {
+        "id": 4042,
+        "quantity": "394"
+      },
+      {
+        "id": 4043,
+        "quantity": "175"
+      },
+      {
+        "id": 4050,
+        "quantity": "879"
+      },
+      {
+        "id": 4051,
+        "quantity": "37"
+      },
+      {
+        "id": 4052,
+        "quantity": "37"
+      },
+      {
+        "id": 4053,
+        "quantity": "9"
+      },
+      {
+        "id": 4060,
+        "quantity": "1178"
+      },
+      {
+        "id": 4061,
+        "quantity": "393"
+      },
+      {
+        "id": 4062,
+        "quantity": "226"
+      },
+      {
+        "id": 4063,
+        "quantity": "111"
+      },
+      {
+        "id": 4070,
+        "quantity": "1047"
+      },
+      {
+        "id": 4071,
+        "quantity": "740"
+      },
+      {
+        "id": 4072,
+        "quantity": "398"
+      },
+      {
+        "id": 4073,
+        "quantity": "187"
+      },
+      {
+        "id": 4080,
+        "quantity": "1127"
+      },
+      {
+        "id": 4081,
+        "quantity": "637"
+      },
+      {
+        "id": 4082,
+        "quantity": "313"
+      },
+      {
+        "id": 4083,
+        "quantity": "66"
+      },
+      {
+        "id": 4090,
+        "quantity": "1090"
+      },
+      {
+        "id": 4091,
+        "quantity": "869"
+      },
+      {
+        "id": 4092,
+        "quantity": "414"
+      },
+      {
+        "id": 4093,
+        "quantity": "224"
+      }
+    ]
+  },
+  {
+    "image": "tablet/equip-07-1920.png",
+    "list": "equipment",
+    "note": "2026-10-15 capture on a tablet (Android, 3040x1904) as scrcpy streams it, 1920 wide (H.264, 5 fps, 200 Mbps), the list panel kept (mask_fixture list). Labels by eye, helped by the reading of the screen as screencap gives it.",
+    "cells": [
+      {
+        "id": 107004,
+        "quantity": "749"
+      },
+      {
+        "id": 107005,
+        "quantity": "476"
+      },
+      {
+        "id": 107006,
+        "quantity": "242"
+      },
+      {
+        "id": 107007,
+        "quantity": "737"
+      },
+      {
+        "id": 107009,
+        "quantity": "185"
+      },
+      {
+        "id": 108002,
+        "quantity": "2"
+      },
+      {
+        "id": 108005,
+        "quantity": "2"
+      },
+      {
+        "id": 108006,
+        "quantity": "6"
+      },
+      {
+        "id": 108007,
+        "quantity": "14"
+      },
+      {
+        "id": 108009,
+        "quantity": "127"
+      },
+      {
+        "id": 109001,
+        "quantity": "1444"
+      },
+      {
+        "id": 109002,
+        "quantity": "1285"
+      },
+      {
+        "id": 109003,
+        "quantity": "1269"
+      },
+      {
+        "id": 109005,
+        "quantity": "15"
+      },
+      {
+        "id": 109006,
+        "quantity": "6"
+      },
+      {
+        "id": 109007,
+        "quantity": "6"
+      },
+      {
+        "id": 109009,
+        "quantity": "91"
+      },
+      {
+        "id": 501000,
+        "quantity": "51K"
+      },
+      {
+        "id": 502000,
+        "quantity": "16K"
+      },
+      {
+        "id": 503000,
+        "quantity": "88K"
+      },
+      {
+        "id": 504000,
+        "quantity": "65K"
+      },
+      {
+        "id": 505000,
+        "quantity": "30K"
+      },
+      {
+        "id": 506000,
+        "quantity": "21K"
+      },
+      {
+        "id": 507000,
+        "quantity": "29K"
+      },
+      {
+        "id": 508000,
+        "quantity": "24K"
+      }
+    ]
+  },
+  {
+    "image": "tablet/equip-07-1600.png",
+    "list": "equipment",
+    "note": "2026-10-15 capture on a tablet (Android, 3040x1904) as scrcpy streams it, 1600 wide (H.264, 5 fps, 200 Mbps), the list panel kept (mask_fixture list). Labels by eye, helped by the reading of the screen as screencap gives it.",
+    "cells": [
+      {
+        "id": 107004,
+        "quantity": "749"
+      },
+      {
+        "id": 107005,
+        "quantity": "476"
+      },
+      {
+        "id": 107006,
+        "quantity": "242"
+      },
+      {
+        "id": 107007,
+        "quantity": "737"
+      },
+      {
+        "id": 107009,
+        "quantity": "185"
+      },
+      {
+        "id": 108002,
+        "quantity": "2"
+      },
+      {
+        "id": 108005,
+        "quantity": "2"
+      },
+      {
+        "id": 108006,
+        "quantity": "6"
+      },
+      {
+        "id": 108007,
+        "quantity": "14"
+      },
+      {
+        "id": 108009,
+        "quantity": "127"
+      },
+      {
+        "id": 109001,
+        "quantity": "1444"
+      },
+      {
+        "id": 109002,
+        "quantity": "1285"
+      },
+      {
+        "id": 109003,
+        "quantity": "1269"
+      },
+      {
+        "id": 109005,
+        "quantity": "15"
+      },
+      {
+        "id": 109006,
+        "quantity": "6"
+      },
+      {
+        "id": 109007,
+        "quantity": "6"
+      },
+      {
+        "id": 109009,
+        "quantity": "91"
+      },
+      {
+        "id": 501000,
+        "quantity": "51K"
+      },
+      {
+        "id": 502000,
+        "quantity": "16K"
+      },
+      {
+        "id": 503000,
+        "quantity": "88K"
+      },
+      {
+        "id": 504000,
+        "quantity": "65K"
+      },
+      {
+        "id": 505000,
+        "quantity": "30K"
+      },
+      {
+        "id": 506000,
+        "quantity": "21K"
+      },
+      {
+        "id": 507000,
+        "quantity": "29K"
+      },
+      {
+        "id": 508000,
+        "quantity": "24K"
+      },
+      {
+        "id": 509000,
+        "quantity": "19K"
+      }
+    ]
+  },
+  {
+    "image": "tablet/equip-07-1280.png",
+    "list": "equipment",
+    "note": "2026-10-15 capture on a tablet (Android, 3040x1904) as scrcpy streams it, 1280 wide (H.264, 5 fps, 200 Mbps), the list panel kept (mask_fixture list). Labels by eye, helped by the reading of the screen as screencap gives it.",
+    "cells": [
+      {
+        "id": 107004,
+        "quantity": "749"
+      },
+      {
+        "id": 107005,
+        "quantity": "476"
+      },
+      {
+        "id": 107006,
+        "quantity": "242"
+      },
+      {
+        "id": 107007,
+        "quantity": "737"
+      },
+      {
+        "id": 107009,
+        "quantity": "185"
+      },
+      {
+        "id": 108002,
+        "quantity": "2"
+      },
+      {
+        "id": 108005,
+        "quantity": "2"
+      },
+      {
+        "id": 108006,
+        "quantity": "6"
+      },
+      {
+        "id": 108007,
+        "quantity": "14"
+      },
+      {
+        "id": 108009,
+        "quantity": "127"
+      },
+      {
+        "id": 109001,
+        "quantity": "1444"
+      },
+      {
+        "id": 109002,
+        "quantity": "1285"
+      },
+      {
+        "id": 109003,
+        "quantity": "1269"
+      },
+      {
+        "id": 109005,
+        "quantity": "15"
+      },
+      {
+        "id": 109006,
+        "quantity": "6"
+      },
+      {
+        "id": 109007,
+        "quantity": "6"
+      },
+      {
+        "id": 109009,
+        "quantity": "91"
+      },
+      {
+        "id": 501000,
+        "quantity": "51K"
+      },
+      {
+        "id": 502000,
+        "quantity": "16K"
+      },
+      {
+        "id": 503000,
+        "quantity": "88K"
+      },
+      {
+        "id": 504000,
+        "quantity": "65K"
+      },
+      {
+        "id": 505000,
+        "quantity": "30K"
+      },
+      {
+        "id": 506000,
+        "quantity": "21K"
+      },
+      {
+        "id": 507000,
+        "quantity": "29K"
+      },
+      {
+        "id": 508000,
+        "quantity": "24K"
+      },
+      {
+        "id": 509000,
+        "quantity": "19K"
+      }
+    ]
+  }
+]

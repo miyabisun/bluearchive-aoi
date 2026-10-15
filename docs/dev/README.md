@@ -24,7 +24,9 @@ references were drawn from, 1600 and 1280); the readers measure in a 16:9 window
 (`screen::Anchor`). Each width has references of its own, drawn from the tuning fixtures
 scaled to it (`data/glyphs*.png`, `data/digits.json`; `examples/build_glyphs.rs`,
 `examples/build_digits.rs`), and the tests read the evaluation fixtures scaled down too:
-right or not at all. A screen drawn smaller than about 1240 wide is not read
+right or not at all. A stream blurs the counts beyond any scaling, so their references also
+come from a tablet's own stream at 1920, 1600 and 1280 wide, and the tests read a few of its
+frames (`tests/fixtures/tablet.json`). A screen drawn smaller than about 1240 wide is not read
 (`screen::too_small`).
 
 Any phone can also send its screen from a streaming app over RTMP (`src-tauri/src/broadcast.rs`,
@@ -58,7 +60,7 @@ student screenshot is added there with only the areas Aoi reads kept, a tenth of
 size: `cargo run --release --example mask_fixture -- <screenshot.png> <fixture.png>`.
 Level samples (`levels.json`), taken on any tab of the student screen, keep the level
 alone: add `level` after the two paths; `credit` keeps the top bar's credits, `shop` what
-a shop screen is read from.
+a shop screen is read from, `list` the item or equipment list's panel.
 
 To measure against the running game, run `cargo run --release --example watch -- 60` in
 `src-tauri`. It watches for 60 seconds and prints the frame rate and dropped frames.

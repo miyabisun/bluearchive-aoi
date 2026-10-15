@@ -254,9 +254,10 @@ const CARD_GAP: f32 = 4.0 / 165.0;
 /// How far a run of cards may be from a whole number of them, of a card's width.
 const RUN_SLACK: f32 = 0.1;
 
-/// The cards `(left, width)` of a row's `spans`: one card each, or several
-/// whose gaps did not show (too narrow in a small frame), cut where they
-/// would be. A span no whole number of cards wide is no card.
+/// The cards `(left, width)` of a row's `spans`: one card each, as wide as the
+/// row's middle one at least, or several whose gaps did not show (too narrow
+/// in a small frame), cut where they would be. A span no whole number of cards
+/// wide is no card.
 fn split_spans(spans: &[(f32, f32)], height: f32) -> Vec<(f32, f32)> {
     let single = |w: f32| w <= height * WIDEST_CARD;
     let mut widths: Vec<f32> = spans.iter().map(|s| s.1).filter(|&w| single(w)).collect();
@@ -268,6 +269,11 @@ fn split_spans(spans: &[(f32, f32)], height: f32) -> Vec<(f32, f32)> {
     let gap = height * CARD_GAP;
     let mut cards = Vec::new();
     for &(left, width) in spans {
+        // The selected card's blinking frame can hide its edges.
+        if width < card {
+            cards.push((left - (card - width) / 2.0, card));
+            continue;
+        }
         if single(width) {
             cards.push((left, width));
             continue;
@@ -305,6 +311,23 @@ mod tests {
                 assert!((step - pitch).abs() <= 3.0, "{name}: column pitch {step}");
             }
         }
+    }
+
+    /// The selected card's blinking frame hides its edges: on the tablet's
+    /// 1920 stream it showed 147 of its 156 px. It is as wide as the others,
+    /// about its middle.
+    #[test]
+    fn a_card_showing_narrower_is_as_wide_as_the_others() {
+        let spans = [
+            (1045.0, 156.0),
+            (1204.0, 156.0),
+            (1367.0, 147.0),
+            (1521.0, 157.0),
+            (1679.0, 157.0),
+        ];
+        let cards = split_spans(&spans, 143.0);
+        assert_eq!(cards[2], (1362.5, 156.0));
+        assert_eq!(cards[3], (1521.0, 157.0));
     }
 
     #[test]
