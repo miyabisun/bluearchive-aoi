@@ -159,13 +159,17 @@ pub struct Seen {
 /// the coins over the cards with their counts. A fixture keeps these alone.
 pub fn areas() -> Vec<Area> {
     let coins = COIN_SIZE / 2.0;
+    // The menu's end keeps to the bottom (see `rows`): on a screen taller
+    // than 16:9 it lies below where its start's edge puts it.
+    let menu = |anchor| Area {
+        from_right: false,
+        x: (0.0, MENU_ENDS[1]),
+        y: MENU_ROWS,
+        anchor,
+    };
     vec![
-        Area {
-            from_right: false,
-            x: (0.0, MENU_ENDS[1]),
-            y: MENU_ROWS,
-            anchor: Anchor::Top,
-        },
+        menu(Anchor::Top),
+        menu(Anchor::Bottom),
         Area {
             from_right: true,
             x: (COINS[0] + coins, COINS[1] - HELD.1),
@@ -319,10 +323,9 @@ impl Goods {
         } else {
             Vec::new()
         };
-        let read_price = prices.reads_price(shop);
         let offers = bars
             .iter()
-            .filter_map(|bar| self.offer(image, fonts, bar, &coins, read_price))
+            .filter_map(|bar| self.offer(image, fonts, bar, &coins, (shop, prices)))
             .collect();
         // A shop with one coin shows it where a shop with two shows the right one.
         let held = coins_at(prices.coins(shop).len())
@@ -332,38 +335,44 @@ impl Goods {
         Some(Seen { shop, offers, held })
     }
 
-    /// The offer of the card over `bar`, when the card is shown whole, the item
-    /// is told and the times it can still be bought read; with `read_price`,
-    /// the price on the card too.
+    /// The offer of the card over `bar` in `shop`, when the card is shown
+    /// whole, the item is told and the times it can still be bought read; where
+    /// the shop's terms leave the price to the card, the price on it too.
     fn offer(
         &self,
         image: &RgbImage,
         fonts: &Fonts,
         bar: &Bar,
         coins: &[[f32; 3]],
-        read_price: bool,
+        (shop, prices): (&str, &Prices),
     ) -> Option<Offer> {
         let u = unit(image);
         let (left, _, _, _) = card_area(image, bar)?;
         let bottom = bar.bottom as f32;
         let times = times_left(fonts, &bar_shapes(image, bar), LETTER)?;
-        let price = if read_price {
-            Some(u32::try_from(number(&fonts.read("price", &price_shapes(image, bar)?)?)?).ok()?)
+        let shown =
+            || u32::try_from(number(&fonts.read("price", &price_shapes(image, bar)?)?)?).ok();
+        let price = if prices.reads_price(shop) {
+            Some(shown()?)
         } else {
             None
         };
-        let id = decide(self.icon(image, bar), &self.drawn)?;
         let coin_at = (
             left + f32::midpoint(COIN.0, COIN.1) * u,
             bottom + f32::midpoint(PRICE.0, PRICE.1) * u,
         );
+        let coin = if coins.is_empty() {
+            0
+        } else {
+            nearest(&mean(image, coin_at.0, coin_at.1, COIN.1 - COIN.0)?, coins)?
+        };
+        let shown = price.or_else(shown);
+        let sold_at =
+            |id| shown.is_some() && prices.find(shop, id, coin, None).map(|p| p.price) == shown;
+        let id = decide(self.icon(image, bar), &self.drawn, sold_at)?;
         Some(Offer {
             id,
-            coin: if coins.is_empty() {
-                0
-            } else {
-                nearest(&mean(image, coin_at.0, coin_at.1, COIN.1 - COIN.0)?, coins)?
-            },
+            coin,
             left: times,
             price,
         })
@@ -470,8 +479,7 @@ pub fn times_left(fonts: &Fonts, shapes: &[Vec<f32>], letter: f32) -> Option<u32
             .flatten()
             .filter(|(c, _)| **c != BAR_LETTER)
             .flat_map(|(_, refs)| refs)
-            .map(|r| glyph::distance(r, shape))
-            .any(|d| d <= letter)
+            .any(|r| glyph::distance_within(r, shape, letter) <= letter)
     };
     let mut digits = String::new();
     let mut ended = false;
@@ -898,10 +906,30 @@ fn month(at: &str) -> &str {
 /// The item a card shows, from its icon (`Ok` the icon, `Err` the icons it
 /// could be); icons index `drawn`, the items each draws. Measured on
 /// 2026-10-14 over the shop fixtures, the icon alone tells every offer that
-/// the names, read by Windows' OCR then, told.
-pub fn decide(icon: Result<usize, Vec<usize>>, drawn: &[Vec<i64>]) -> Option<i64> {
-    match drawn[icon.ok()?].as_slice() {
-        [only] => Some(*only),
+/// the names, read by Windows' OCR then, told. An icon not told from others
+/// alike (the tiers' blueprint boxes, measured on 2026-10-16) tells the one
+/// item among theirs that the shop sells at the card's price (`sold_at`).
+pub fn decide(
+    icon: Result<usize, Vec<usize>>,
+    drawn: &[Vec<i64>],
+    sold_at: impl Fn(i64) -> bool,
+) -> Option<i64> {
+    let could: Vec<i64> = match icon {
+        Ok(icon) => match drawn[icon].as_slice() {
+            [only] => return Some(*only),
+            items => items.to_vec(),
+        },
+        Err(icons) => icons
+            .iter()
+            .flat_map(|&i| drawn[i].iter().copied())
+            .collect(),
+    };
+    match could
+        .into_iter()
+        .filter(|&id| sold_at(id))
+        .collect::<Vec<_>>()[..]
+    {
+        [only] => Some(only),
         _ => None,
     }
 }
@@ -1077,8 +1105,26 @@ mod tests {
     fn the_icon_tells_the_item_when_it_draws_one() {
         // Icon 0 draws item 1, icon 2 both items 3 and 4.
         let drawn = [vec![1], vec![2], vec![3, 4]];
-        assert_eq!(decide(Ok(0), &drawn), Some(1));
-        assert_eq!(decide(Ok(2), &drawn), None);
-        assert_eq!(decide(Err(vec![0, 1]), &drawn), None);
+        let none = |_: i64| false;
+        assert_eq!(decide(Ok(0), &drawn, none), Some(1));
+        assert_eq!(decide(Ok(2), &drawn, none), None);
+        assert_eq!(decide(Err(vec![0, 1]), &drawn, none), None);
+    }
+
+    /// An icon not told from others alike (the tiers' blueprint boxes) tells
+    /// the one item among theirs the shop sells at the price the card shows;
+    /// none or two such leave it untold.
+    #[test]
+    fn an_icon_like_others_tells_the_item_sold_at_the_card_price() {
+        // Icon 0 draws item 1, icon 1 item 2, icon 2 both items 3 and 4.
+        let drawn = [vec![1], vec![2], vec![3, 4]];
+        let terms = [(1, 300), (2, 480), (3, 840), (4, 840)];
+        let at = |price: u32| move |id: i64| terms.contains(&(id, price));
+        assert_eq!(decide(Err(vec![0, 1]), &drawn, at(480)), Some(2));
+        assert_eq!(decide(Err(vec![0, 1]), &drawn, at(999)), None);
+        assert_eq!(decide(Err(vec![0, 2]), &drawn, at(840)), None);
+        assert_eq!(decide(Ok(2), &drawn, at(840)), None);
+        // An item of that price the icon cannot be.
+        assert_eq!(decide(Err(vec![1, 2]), &drawn, at(300)), None);
     }
 }

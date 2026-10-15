@@ -129,11 +129,16 @@ fn main() {
         }
     });
     let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
+    // Both read as Aoi reads them, scaled down to a width read at.
+    let (image, read) = (
+        screen::normalize(&image).into_owned(),
+        screen::normalize(&masked).into_owned(),
+    );
     if only == Some("level") {
         let fonts = Bank::load(&data).unwrap().fonts();
         let (whole, part) = (
             student::level(&image, &fonts),
-            student::level(&masked, &fonts),
+            student::level(&read, &fonts),
         );
         assert_eq!(whole, part, "{from} reads otherwise once masked");
         return save(&masked, to);
@@ -141,15 +146,12 @@ fn main() {
     let recognizer = Recognizer::load(&data).unwrap();
     if only == Some("list") {
         let (list, _, _) = recognizer.read_list(&image).expect("no list");
-        let (whole, part) = (
-            recognizer.read(&image, list),
-            recognizer.read(&masked, list),
-        );
+        let (whole, part) = (recognizer.read(&image, list), recognizer.read(&read, list));
         assert_eq!(whole, part, "{from} reads otherwise once masked");
         return save(&masked, to);
     }
     if only == Some("shop") {
-        let (whole, part) = (recognizer.read_shop(&image), recognizer.read_shop(&masked));
+        let (whole, part) = (recognizer.read_shop(&image), recognizer.read_shop(&read));
         assert!(whole.is_some(), "{from} is no shop screen");
         assert_eq!(whole, part, "{from} reads otherwise once masked");
         return save(&masked, to);
@@ -157,14 +159,14 @@ fn main() {
     if only == Some("credit") {
         let (whole, part) = (
             recognizer.read_credits(&image),
-            recognizer.read_credits(&masked),
+            recognizer.read_credits(&read),
         );
         assert_eq!(whole, part, "{from} reads otherwise once masked");
         return save(&masked, to);
     }
     let (whole, part) = (
         recognizer.read_student(&image),
-        recognizer.read_student(&masked),
+        recognizer.read_student(&read),
     );
     assert!(whole.is_some(), "{from} is no student screen");
     assert_eq!(whole, part, "{from} reads otherwise once masked");

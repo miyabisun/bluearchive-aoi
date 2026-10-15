@@ -67,7 +67,8 @@ cargo run --release --example build_digits -- <collection>
 - Event items, from the event points to the Valentine chocolates, are never listed.
 - A student's training is taken once three frames in a row read alike; a field read later
   keeps its known value when a frame cannot read it.
-- A shop's goods are told by their icon. How many more times one can be
+- A shop's goods are told by their icon; icons too alike to tell apart (the tiers'
+  blueprint boxes) by the price the shop sells each at. How many more times one can be
   bought is taken once three frames in a row read alike. A shop frame whose cards are the
   same to the pixel as the last one's reads as it did. All shops but カケラ(文字) reset as
   the month changes.

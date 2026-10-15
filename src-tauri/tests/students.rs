@@ -84,7 +84,7 @@ fn every_field_reads_right_or_unknown() {
 /// A screen of any width read, and any between them (a window as it was
 /// resized), reads every field of the student screen right or not at all,
 /// and at each width at least `LEAST` of them right. Measured on 2026-10-16
-/// over the fixtures at widths from 1500 to 2222: 88% to 98%.
+/// over the fixtures at widths from 1500 to 2222: 89% to 99%.
 #[test]
 fn a_smaller_screen_reads_fields_right_or_not_at_all() {
     const LEAST: f32 = 0.85;

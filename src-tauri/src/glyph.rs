@@ -434,6 +434,13 @@ pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
 /// pixel either way to meet the first: a character cut a pixel off from its
 /// references (a thin "3" one column right) still meets them.
 pub fn distance(a: &[f32], b: &[f32]) -> f32 {
+    distance_within(a, b, f32::INFINITY)
+}
+
+/// `distance`, measured only as far as `bound`: a pair farther apart comes
+/// out as some distance past it, sooner (a reference farther than the nearest
+/// ones found needs no more measuring).
+pub fn distance_within(a: &[f32], b: &[f32], bound: f32) -> f32 {
     let (w, h) = (GLYPH.0 as i32, GLYPH.1 as i32);
     let at = |x: i32, y: i32| {
         if (0..w).contains(&x) && (0..h).contains(&y) {
@@ -442,15 +449,21 @@ pub fn distance(a: &[f32], b: &[f32]) -> f32 {
             0.0
         }
     };
-    (-1..=1)
-        .flat_map(|dy| (-1..=1).map(move |dx| (dx, dy)))
-        .map(|(dx, dy)| {
-            (0..h)
-                .flat_map(|y| (0..w).map(move |x| (x, y)))
-                .map(|(x, y)| (a[(y * w + x) as usize] - at(x + dx, y + dy)).powi(2))
-                .sum::<f32>()
-        })
-        .fold(f32::INFINITY, f32::min)
+    let mut nearest = f32::INFINITY;
+    for (dx, dy) in (-1..=1).flat_map(|dy| (-1..=1).map(move |dx| (dx, dy))) {
+        let limit = nearest.min(bound);
+        let mut sum = 0.0;
+        for y in 0..h {
+            for x in 0..w {
+                sum += (a[(y * w + x) as usize] - at(x + dx, y + dy)).powi(2);
+            }
+            if sum > limit {
+                break;
+            }
+        }
+        nearest = nearest.min(sum);
+    }
+    nearest
 }
 
 /// Reference characters of each text style; a character drawn in more than
@@ -469,18 +482,22 @@ impl Fonts {
     /// The character `shape` is in `style`, if it is close to a reference and
     /// clearly nearer to it than to any other character.
     pub fn character(&self, style: &str, shape: &[f32]) -> Option<char> {
-        let mut nearest: Vec<(char, f32)> = self
-            .0
-            .get(style)?
-            .iter()
-            .map(|(c, refs)| {
-                let d = refs.iter().map(|r| distance(r, shape));
-                (*c, d.fold(f32::INFINITY, f32::min))
-            })
-            .collect();
-        nearest.sort_by(|a, b| a.1.total_cmp(&b.1));
-        let (c, d) = *nearest.first()?;
-        let next = nearest.get(1).map_or(f32::INFINITY, |n| n.1);
+        // The nearest character and the next nearest one's distance: a
+        // reference no nearer than both is measured no further.
+        let (mut nearest, mut next) = (None, f32::INFINITY);
+        for (c, refs) in self.0.get(style)? {
+            let d = refs.iter().fold(f32::INFINITY, |d, r| {
+                d.min(distance_within(r, shape, d.min(next)))
+            });
+            match nearest {
+                Some((_, best)) if d >= best => next = next.min(d),
+                _ => {
+                    next = nearest.map_or(next, |(_, best)| best);
+                    nearest = Some((*c, d));
+                }
+            }
+        }
+        let (c, d) = nearest?;
         (d <= MAX_DISTANCE && d <= LEAD * next).then_some(c)
     }
 }
@@ -552,5 +569,19 @@ mod tests {
             side_by_side(pieces, 15),
             vec![l, v, seven, blob(54, 64, 9, 23)]
         );
+    }
+
+    /// A pair as near as the bound measures as `distance` measures it; a
+    /// farther one only as farther than the bound.
+    #[test]
+    fn a_distance_within_its_bound_is_the_distance() {
+        let n = GLYPH.0 * GLYPH.1;
+        let a: Vec<f32> = (0..n).map(|i| (i % 7) as f32 / 7.0).collect();
+        let b: Vec<f32> = (0..n).map(|i| (i % 5) as f32 / 5.0).collect();
+        let d = distance(&a, &b);
+        // The very same sum, to the bit.
+        assert_eq!(distance_within(&a, &b, d).to_bits(), d.to_bits());
+        assert_eq!(distance_within(&a, &b, d + 1.0).to_bits(), d.to_bits());
+        assert!(distance_within(&a, &b, d / 4.0) > d / 4.0);
     }
 }

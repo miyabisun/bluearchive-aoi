@@ -218,5 +218,55 @@
       { "name": "上級戦術教育BD（トリニティ）", "coin": 1, "left": 25, "price": 50 },
       { "name": "最上級戦術教育BD（トリニティ）", "coin": 1, "left": 6, "price": 100 }
     ]
+  },
+  {
+    "image": "android/tablet-kakera.png",
+    "role": "tune",
+    "shop": "カケラ(文字)",
+    "held": [1211],
+    "note": "2026-10-15 capture on a Lenovo Legion Tab Y700 (TB322FC, Android, 3040x1904, 16:10) over USB with adb's screencap. Rates of 1 and 2, times left of three digits. ツムギの神名文字 is left unlabeled: the student is newer than the data. Labels by eye.",
+    "offers": [
+      { "name": "エリの神名文字", "coin": 0, "left": 376, "price": 1 },
+      { "name": "コユキ（パジャマ）の神名文字", "coin": 0, "left": 720, "price": 1 },
+      { "name": "アンナの神名文字", "coin": 0, "left": 378, "price": 1 },
+      { "name": "エリナの神名文字", "coin": 0, "left": 380, "price": 1 },
+      { "name": "カスミ（水着）の神名文字", "coin": 0, "left": 380, "price": 1 },
+      { "name": "コタマ（キャンプ）の神名文字", "coin": 0, "left": 500, "price": 2 },
+      { "name": "ココロの神名文字", "coin": 0, "left": 379, "price": 1 }
+    ]
+  },
+  {
+    "image": "android/tablet-goudou.png",
+    "role": "tune",
+    "shop": "合同火力演習",
+    "held": [953],
+    "note": "2026-10-15 capture on a Lenovo Legion Tab Y700 (TB322FC, Android, 3040x1904, 16:10) over USB with adb's screencap. One coin. Labels by eye.",
+    "offers": [
+      { "name": "最上級レポート", "coin": 0, "left": 20, "price": 82 },
+      { "name": "中級テイラーストーン", "coin": 0, "left": 75, "price": 3 },
+      { "name": "上級テイラーストーン", "coin": 0, "left": 50, "price": 8 },
+      { "name": "トーテムポールの破片", "coin": 0, "left": 20, "price": 2 },
+      { "name": "破損したトーテムポール", "coin": 0, "left": 15, "price": 9 },
+      { "name": "修復済みのトーテムポール", "coin": 0, "left": 20, "price": 12 },
+      { "name": "完全なトーテムポール", "coin": 0, "left": 10, "price": 25 },
+      { "name": "古代の電池の破片", "coin": 0, "left": 20, "price": 2 }
+    ]
+  },
+  {
+    "image": "android/tablet-jukutatsu.png",
+    "role": "tune",
+    "shop": "熟達証書",
+    "held": [10559],
+    "note": "2026-10-15 capture on a Lenovo Legion Tab Y700 (TB322FC, Android, 3040x1904, 16:10) over USB with adb's screencap. The top of the list, the certificates held over the cards. Labels by eye.",
+    "offers": [
+      { "name": "キリノ（水着）の神名文字", "coin": 0, "left": 6, "price": 1800 },
+      { "name": "イブキ（水着）の神名文字", "coin": 0, "left": 2, "price": 2400 },
+      { "name": "ヒマリ（臨戦）の神名文字", "coin": 0, "left": 2, "price": 1800 },
+      { "name": "リオ（臨戦）の神名文字", "coin": 0, "left": 2, "price": 1800 },
+      { "name": "アツコ（水着）の神名文字", "coin": 0, "left": 6, "price": 1800 },
+      { "name": "イブキの神名文字", "coin": 0, "left": 6, "price": 1800 },
+      { "name": "アイリ（バンド）の神名文字", "coin": 0, "left": 6, "price": 1800 },
+      { "name": "オトギの神名文字", "coin": 0, "left": 6, "price": 1800 }
+    ]
   }
 ]

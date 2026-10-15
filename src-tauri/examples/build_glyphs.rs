@@ -48,7 +48,10 @@ use image::{
 use serde::Deserialize;
 
 /// A cut farther than this from every group of its character starts a group.
-const JOIN: f32 = 10.0;
+/// A group's mean drifts from its cuts as more join it: at 10 a tablet's "3"
+/// took a window's credits' "3" nearer to "8" (measured on 2026-10-16), and
+/// the cards' small digits read fewer.
+const JOIN: f32 = 5.0;
 /// How loosely the digits drawn with the font read the game's: the nearest
 /// digit within this distance, and within this share of the next nearest one
 /// (measured on 2026-10-14: the game's digits lie 12 to 30 from the font's,
@@ -57,9 +60,11 @@ const LOOSE: (f32, f32) = (34.0, 0.85);
 /// Widths between those read that a bank also draws its references from: a
 /// window may be any width, scaled down to the width read (see
 /// `screen::normalize`), and drawn there its letters differ from the same
-/// drawn at the width read. (The tests read others between.)
+/// drawn at the width read; most so a card's small digits, whose counts read
+/// 94 of the 105 offers at 1920 with 2040 and 2160 alone, 102 with 1980 and
+/// 2100 too (measured on 2026-10-16). (The tests read others between.)
 const BETWEEN: [(u32, &[u32]); 3] = [
-    (1920, &[2040, 2160]),
+    (1920, &[1980, 2040, 2100, 2160]),
     (1600, &[1680, 1840]),
     (1500, &[1570]),
 ];
