@@ -10,6 +10,12 @@ on:
 permissions:
   contents: write
 
+# Fetching crates.io's index over HTTP/2 failed the releases of v0.2.20 and
+# v0.2.21 ("Error in the HTTP2 framing layer"): one request at a time, retried.
+env:
+  CARGO_HTTP_MULTIPLEXING: false
+  CARGO_NET_RETRY: 10
+
 jobs:
   publish:
     if: "startsWith(github.event.head_commit.message, 'release: v')"
