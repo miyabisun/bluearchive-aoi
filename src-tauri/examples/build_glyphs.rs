@@ -124,6 +124,14 @@ fn add(cuts: &mut Cuts, path: &str, style: &str, shapes: Vec<Vec<f32>>, text: &s
     }
 }
 
+/// A name plate labeled with its student (`tests/fixtures/names.json`).
+#[derive(Deserialize)]
+struct NameLabel {
+    image: String,
+    role: String,
+    id: i64,
+}
+
 #[derive(Deserialize)]
 struct CreditsLabel {
     image: String,
@@ -483,15 +491,31 @@ fn names(bank: &mut Bank, font: &FontVec) {
     }
 }
 
-/// Adds the letters of the students' names the tuning screens draw.
-fn letters(bank: &mut Bank, labels: &[Label], open: &dyn Fn(&str) -> RgbImage) {
+/// Adds the letters of the students' names the tuning screens and name plates
+/// draw.
+fn letters(
+    bank: &mut Bank,
+    labels: &[Label],
+    plates: &[NameLabel],
+    open: &dyn Fn(&str) -> RgbImage,
+) {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let students = aoi::student_names(&root.join("data")).unwrap();
-    for label in labels.iter().filter(|l| l.role == "tune") {
-        let name = &students.iter().find(|s| s.0 == label.id).unwrap().1;
+    let tuned = labels
+        .iter()
+        .filter(|l| l.role == "tune")
+        .map(|l| (&l.image, l.id))
+        .chain(
+            plates
+                .iter()
+                .filter(|p| p.role == "tune")
+                .map(|p| (&p.image, p.id)),
+        );
+    for (image, id) in tuned {
+        let name = &students.iter().find(|s| s.0 == id).unwrap().1;
         let words = &bank.index.names;
         let word = words.iter().find(|w| w.text == *name).cloned().unwrap();
-        let Some(ink) = student::name::plate(&open(&label.image)) else {
+        let Some(ink) = student::name::plate(&open(image)) else {
             continue;
         };
         for (c, tile) in word.text.chars().zip(ink.letters(&word)) {
@@ -578,6 +602,7 @@ fn main() {
     let labels: Vec<Label> = read_json(&dir.join("students.json"));
     let levels: Vec<LevelLabel> = read_json(&dir.join("levels.json"));
     let credits: Vec<CreditsLabel> = read_json(&dir.join("credits.json"));
+    let plates: Vec<NameLabel> = read_json(&dir.join("names.json"));
     let shops: Vec<ShopLabel> = read_json(&dir.join("shops.json"));
     let weights = ["Regular", "Medium", "Bold"].map(weight);
     // The fixtures' cards at their own size, and where their values were
@@ -658,7 +683,7 @@ fn main() {
                 font.entry(*c).or_default().extend(tiles);
             }
         }
-        letters(&mut bank, &labels, &open);
+        letters(&mut bank, &labels, &plates, &open);
         let (png, index) = bank.encode().unwrap();
         let (picture, index_file) = glyph::bank::files(width);
         std::fs::write(root.join("data").join(picture), png).unwrap();

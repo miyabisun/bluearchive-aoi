@@ -28,8 +28,10 @@ const SPECK: f32 = 6.0 / (1250.0 * 1250.0);
 /// the nearest other name has a letter 26.1 or farther ("ハルカ" for "ハルナ").
 /// Measured again on 2026-10-15 over them scaled down: from 1280 to 1920 wide
 /// another name comes as near as 22.9 (for "ツムギ" at 1600), while some right
-/// ones lie up to 29. A name not told is safer than one told wrong.
-const WORST: f32 = 22.0;
+/// ones lie up to 29. A name not told is safer than one told wrong. Measured
+/// on 2026-10-16 with a tablet's plates as well (`tests/fixtures/names.json`):
+/// left out, ノゾミ's ゾ comes 21.1 near ノノミ's ノ.
+const WORST: f32 = 20.0;
 
 /// The white letters of the name.
 fn white(c: [u8; 3]) -> bool {

@@ -147,13 +147,55 @@ fn each_student_screen_names_its_student() {
     assert!(named * 10 >= screens * 9, "{named} of {screens} named");
 }
 
+/// The name plates labeled: the student screens' and the plates alone
+/// (`tests/fixtures/names.json`, from a tablet), each image with its student.
+fn plates() -> Vec<(String, i64)> {
+    #[derive(serde::Deserialize)]
+    struct Plate {
+        image: String,
+        id: i64,
+    }
+    let alone: Vec<Plate> = serde_json::from_str(
+        &std::fs::read_to_string(root().join("tests/fixtures/names.json")).unwrap(),
+    )
+    .unwrap();
+    labels()
+        .into_iter()
+        .map(|l| (l.image, l.id))
+        .chain(alone.into_iter().map(|p| (p.image, p.id)))
+        .collect()
+}
+
+/// Every name plate names its student, as Aoi reads it and drawn at Full HD.
+#[test]
+fn every_name_plate_names_its_student() {
+    let recognizer = recognizer();
+    let mut wrong = Vec::new();
+    for (path, id) in plates() {
+        let image = image::open(root().join("tests/fixtures").join(&path))
+            .unwrap()
+            .to_rgb8();
+        for image in [
+            aoi::screen::normalize(&image).into_owned(),
+            common::drawn_at(&image, 1920),
+        ] {
+            let glyphs = recognizer.references(&image).0;
+            let named = student::name::read(&image, glyphs, &glyphs.index.names);
+            if named != Some(id) {
+                wrong.push(format!("{path} {}: {named:?}", image.width()));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
+}
+
 /// A student missing from the snapshot (a new release) is never named as
 /// another: each labeled student is left out in turn.
 #[test]
 fn a_student_missing_from_the_snapshot_is_never_named_as_another() {
     let recognizer = recognizer();
-    for label in labels() {
-        let image = image::open(root().join("tests/fixtures").join(&label.image))
+    for (path, id) in plates() {
+        let image = image::open(root().join("tests/fixtures").join(&path))
             .unwrap()
             .to_rgb8();
         // As Aoi reads it, scaled down to a width read at.
@@ -162,16 +204,11 @@ fn a_student_missing_from_the_snapshot_is_never_named_as_another() {
         let name = &recognizer
             .students()
             .iter()
-            .find(|(id, _)| *id == label.id)
+            .find(|(student, _)| *student == id)
             .unwrap()
             .1;
         let others = glyphs.index.names.iter().filter(|w| w.text != *name);
-        assert_eq!(
-            student::name::read(&image, glyphs, others),
-            None,
-            "{}",
-            label.image
-        );
+        assert_eq!(student::name::read(&image, glyphs, others), None, "{path}");
     }
 }
 

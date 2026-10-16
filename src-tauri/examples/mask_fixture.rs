@@ -8,7 +8,8 @@
 //! top bar's credits alone (`tests/fixtures/credits.json`); with `shop`, what
 //! the shop screen is read from (`tests/fixtures/shops.json`); with `list`, the
 //! item or equipment list's panel, read with the list the screen names
-//! (`tests/fixtures/tablet.json`).
+//! (`tests/fixtures/tablet.json`); with `name`, the name plate's name alone
+//! (`tests/fixtures/names.json`).
 
 use std::path::Path;
 
@@ -43,6 +44,7 @@ fn kept(image: &image::RgbImage, only: Option<&str>) -> Vec<(f32, f32, f32, f32)
     }
     let areas = match only {
         Some("level") => vec![student::LEVEL],
+        Some("name") => vec![student::NAME],
         Some("shop") => shop::areas(),
         Some(_) => vec![credit::NUMBER, credit::ICON],
         None => student::areas(),
@@ -110,10 +112,14 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (from, to, only) = match &args[..] {
         [from, to] => (from, to, None),
-        [from, to, only] if ["level", "credit", "shop", "list"].contains(&only.as_str()) => {
+        [from, to, only]
+            if ["level", "credit", "shop", "list", "name"].contains(&only.as_str()) =>
+        {
             (from, to, Some(only.as_str()))
         }
-        _ => panic!("usage: mask_fixture <screenshot.png> <fixture.png> [level|credit|shop|list]"),
+        _ => panic!(
+            "usage: mask_fixture <screenshot.png> <fixture.png> [level|credit|shop|list|name]"
+        ),
     };
     let image = image::open(from).unwrap().to_rgb8();
     let kept = kept(&image, only);
@@ -140,6 +146,12 @@ fn main() {
             student::level(&image, &fonts),
             student::level(&read, &fonts),
         );
+        assert_eq!(whole, part, "{from} reads otherwise once masked");
+        return save(&masked, to);
+    }
+    if only == Some("name") {
+        let (whole, part) = (student::name::plate(&image), student::name::plate(&read));
+        assert!(whole.is_some(), "{from} shows no name plate");
         assert_eq!(whole, part, "{from} reads otherwise once masked");
         return save(&masked, to);
     }
