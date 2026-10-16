@@ -270,7 +270,10 @@ const WHOLE: f32 = 1.2;
 pub const STYLES: &[(&str, Style)] = &[
     (
         "level",
-        style(LIGHT, 0.5, 0.62, f32::INFINITY, false, Ground::Free, 0.15),
+        Style {
+            entire: true,
+            ..style(LIGHT, 0.5, 0.62, f32::INFINITY, false, Ground::Free, 0.15)
+        },
     ),
     (
         "bond",
@@ -342,8 +345,16 @@ fn number(image: &RgbImage, fonts: &Fonts, style: &str, prefix: &str, area: Area
     } else {
         after_prefix(fonts, style, &shapes, prefix, f32::INFINITY)
     };
-    text?.parse().ok()
+    let most = if style == "bond" { MOST_BOND } else { MOST };
+    text?.parse().ok().filter(|&n| n <= most)
 }
+
+/// The most a number of the student screen comes to: two digits (a level of
+/// 90, a weapon's 60, an equipment's 70), a bond's 100. A "0" come apart in
+/// two halves reads as two "1"s (an equipment's "Lv.20" read "211" at 1680
+/// wide, 2026-10-16).
+const MOST: u8 = 99;
+const MOST_BOND: u8 = 100;
 
 /// The text after `prefix` that `shapes` spell in `style`: the prefix's last
 /// letter nearest to what it is, at its place, anchoring the rest, which is

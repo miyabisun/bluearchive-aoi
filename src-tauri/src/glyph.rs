@@ -112,9 +112,11 @@ fn merged_among(kept: &[Blob], wide: &[Blob], tallest: u32, tall: f32) -> bool {
     })
 }
 
-/// Whether a piece of the `short` ones lies among the characters `kept` (see
+/// Whether a piece of the `short` ones lies among the characters `kept`, or
+/// one of them or of the `flat` ones (wider than a character for their height)
+/// just past the last of them, within a character's height (see
 /// `Style::entire`).
-fn piece_left_out(kept: &[Blob], short: &[Blob], tallest: u32) -> bool {
+fn piece_left_out(kept: &[Blob], short: &[Blob], flat: &[Blob], tallest: u32) -> bool {
     let first = kept.iter().map(|b| b.left).min().unwrap_or(0);
     let last = kept.iter().map(|b| b.right).max().unwrap_or(0);
     let line = kept.iter().map(|b| b.bottom).max().unwrap_or(0);
@@ -131,9 +133,12 @@ fn piece_left_out(kept: &[Blob], short: &[Blob], tallest: u32) -> bool {
             k.left <= b.left && b.right <= k.right && k.top <= b.top && b.bottom <= k.bottom
         })
     };
+    let piece = |b: &Blob| !dot(b) && !hole(b) && !speck(b);
+    let past = |b: &Blob| b.left > last && b.left <= last + tallest;
     short
         .iter()
-        .any(|b| b.left > first && b.right < last && !dot(b) && !hole(b) && !speck(b))
+        .any(|b| b.left > first && b.right < last && piece(b))
+        || short.iter().chain(flat).any(|b| past(b) && piece(b))
 }
 
 /// `blobs` with the pieces of a character side by side joined: those sharing
@@ -422,7 +427,10 @@ pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
     }
     if style.entire {
         kept = side_by_side(kept, tallest);
-        if piece_left_out(&kept, &short, tallest) {
+        // A "5" came apart in flat strokes past the "6" of "65" at 1520 wide.
+        let low = |b: &&Blob| ((b.bottom - b.top + 1) as f32) < tallest as f32 * style.tall;
+        let flat: Vec<Blob> = wide.iter().filter(low).cloned().collect();
+        if piece_left_out(&kept, &short, &flat, tallest) {
             return Vec::new();
         }
     }
@@ -654,6 +662,28 @@ mod tests {
             side_by_side(pieces, 15),
             vec![l, v, seven, blob(54, 64, 9, 23)]
         );
+    }
+
+    /// The "Lv.65" of an equipment level drawn 1520 wide (characters 12 px
+    /// high), its "5" come apart in short, flat pieces after the "6": a piece
+    /// just past the last character leaves the text unread, or it would read
+    /// "6"; a speck there, or a piece farther than a character's height, does
+    /// not, nor a flat piece among the characters.
+    #[test]
+    fn a_piece_past_the_last_character_is_left_out() {
+        let kept = [
+            blob(8, 11, 7, 17),
+            blob(20, 26, 11, 18),
+            blob(33, 40, 7, 18),
+        ];
+        let piece = [blob(44, 49, 11, 14)];
+        assert!(piece_left_out(&kept, &[], &piece, 12));
+        assert!(piece_left_out(&kept, &piece, &[], 12));
+        assert!(!piece_left_out(&kept, &[blob(44, 44, 11, 11)], &[], 12));
+        assert!(!piece_left_out(&kept, &[], &[blob(60, 65, 11, 14)], 12));
+        // A flat piece among the characters is none (the "." of "Lv." run
+        // flat on a window 1920 wide).
+        assert!(!piece_left_out(&kept, &[], &[blob(27, 30, 16, 18)], 12));
     }
 
     /// What a badge's ring encloses spans the badge alone: not a dark picture

@@ -84,15 +84,18 @@ fn every_field_reads_right_or_unknown() {
 /// A screen of any width read, and any between them (a window as it was
 /// resized), reads every field of the student screen right or not at all,
 /// and at each width at least `LEAST` of them right. Measured on 2026-10-16
-/// over the fixtures at widths from 1500 to 2220, every 20: 92% to 99.8%.
+/// over the fixtures at widths from 1500 to 2220, every 20: 91% to 99.8%.
 /// (At 1800 a "Lv.20" whose "2" came apart read "Lv.0", at 1830 a stream's
-/// "Lv.70" read "Lv.1".)
+/// "Lv.70" read "Lv.1", at 1520 a tablet's "Lv.65" "Lv.6", at 1680 its
+/// "Lv.20" "Lv.211".)
 #[test]
 fn a_smaller_screen_reads_fields_right_or_not_at_all() {
     const LEAST: f32 = 0.85;
     let recognizer = recognizer();
     let mut wrong = Vec::new();
-    for width in [2222, 2100, 1920, 1830, 1800, 1760, 1600, 1550, 1500] {
+    for width in [
+        2222, 2100, 1920, 1830, 1800, 1760, 1680, 1600, 1550, 1520, 1500,
+    ] {
         let (mut right, mut total) = (0, 0);
         for label in labels() {
             let image = image::open(root().join("tests/fixtures").join(&label.image))
