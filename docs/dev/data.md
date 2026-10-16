@@ -27,11 +27,13 @@ level, a tier, the credits, a card's times left and price) are read a character 
 against references cut from the labeled fixtures; the students' names and the shops'
 names are told among the names that can be there, whole. A video keeps the colour at half
 the resolution of the brightness (4:2:0), so the student screen's coloured texts (a tier, an
-ability release, a level's white fill) are cut out by their brightness; the colour only tells
-where a badge is and whether there is one, over its whole area.
+ability release, the weapon level's white fill) are cut out by their brightness; the colour only
+tells where a badge is and whether there is one, over its whole area. An equipment slot's level
+is not read: the slot is taken at its tier's top level.
 
-The references are one glyph bank: grey 16x16 tiles in `src-tauri/data/glyphs.png`, and
-what each tile stands for in `src-tauri/data/glyphs.json`. The students' names in it are
+The references are a glyph bank for each width the texts are read at (`screen::WIDTHS`): grey
+16x16 tiles in `src-tauri/data/glyphs-<width>.png`, and what each tile stands for in
+`src-tauri/data/glyphs-<width>.json`. The students' names in it are
 drawn with Noto Sans JP, the free font nearest the game's, with the game's own letters
 from the fixtures standing in where there are some. Rebuild the bank after the fixtures or
 SchaleDB's students change, with Noto Sans JP's Regular, Medium and Bold

@@ -29,7 +29,8 @@ scaled to it (`data/glyphs-*.png`, `data/digits.json`; `examples/build_glyphs.rs
 them too: right or not at all. A stream blurs the counts and the student screen's texts beyond any
 scaling, so their references also come from a tablet's own stream at 1920 (and 1600) wide, and
 the tests read a few of its frames (`tests/fixtures/tablet.json`, the `android/tablet-stu-*`
-student screens). A screen drawn narrower than 1500 is not read
+student screens). A tablet's lossless student screens of a whole roster give references too
+(`android/tablet-roster-*`, and the name plates `names/roster-*`). A screen drawn narrower than 1500 is not read
 (`screen::too_small`).
 
 Any phone can also send its screen from a streaming app over RTMP (`src-tauri/src/broadcast.rs`,
@@ -63,15 +64,18 @@ student screenshot is added there with only the areas Aoi reads kept, a tenth of
 size: `cargo run --release --example mask_fixture -- <screenshot.png> <fixture.png>`.
 Level samples (`levels.json`), taken on any tab of the student screen, keep the level
 alone: add `level` after the two paths; `credit` keeps the top bar's credits, `shop` what
-a shop screen is read from, `list` the item or equipment list's panel.
+a shop screen is read from, `list` the item or equipment list's panel, `name` the name plate's
+name alone (`names.json`).
 
 To measure against the running game, run `cargo run --release --example watch -- 60` in
 `src-tauri`. It watches for 60 seconds and prints the frame rate and dropped frames.
 
 ## Releases
 
-Pushing a `v*` tag builds the exe on GitHub Actions and publishes it with its SHA-256
-(`bluearchive-aoi-x86_64-pc-windows-msvc.exe` and `.exe.sha256`). The app's
+A release is its commit "release: vX.Y.Z" on main, pushed with its `vX.Y.Z` tag: GitHub
+Actions builds the exe from that commit (not from the tag, so the Rust cache main keeps serves
+every release) and publishes it with its SHA-256 (`bluearchive-aoi-x86_64-pc-windows-msvc.exe`
+and `.exe.sha256`). Other pushes to main build nothing. The app's
 アップデートを確認 asks the GitHub API for the latest release; 更新して再起動 downloads its
 exe, checks it against the SHA-256, puts it in place of the running one (the old one kept
 as `.old` until the next start) and starts it.

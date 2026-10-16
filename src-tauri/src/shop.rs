@@ -807,7 +807,8 @@ impl Shelves {
 
 /// A shop's shelf as the window and the export show it: its coins in id
 /// order (the plain coin before the rare, which the screen shows left),
-/// whether its offers reset as the month changes, and its goods in id order.
+/// whether its offers reset as the month changes, and its goods, what is worth
+/// buying first (see `Recognizer::shop_rows`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ShopRow {
     pub name: String,
