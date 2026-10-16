@@ -606,8 +606,28 @@ export function planCard(card) {
   const price = card.price == null ? "?" : exact.format(card.price);
   return {
     amount: card.amount ? `×${exact.format(card.amount)}` : "",
-    text: card.barred ? "固有4" : card.sold ? "売切れ" : `${exact.format(card.left)}回@${price}`,
+    text: card.barred
+      ? "固有4"
+      : card.left === 0
+        ? "売切れ"
+        : `${exact.format(card.left)}回@${price}`,
   };
+}
+
+/**
+ * A month-end card's hover: its good's name, for an eleph its student's star
+ * as the students tab names it ("未読み取り" for a student never read), and
+ * how many of the good are held ("?" where its list was never read).
+ */
+export function planTitle(card, students) {
+  const lines = [card.name];
+  if (card.eleph) {
+    const student = students.find((s) => s.id === card.id);
+    const star = student ? starOf(student.training) : null;
+    lines.push(`星: ${student == null ? "未読み取り" : star == null ? "?" : starName(star)}`);
+  }
+  lines.push(`所持: ${card.held == null ? "?" : formatCount(card.held)}`);
+  return lines.join("\n");
 }
 
 /**

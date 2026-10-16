@@ -43,8 +43,9 @@ pub struct PlanCoin {
 }
 
 /// A card: a good and the coin (by its place in `PlanShop::coins`) paying for
-/// it, the times left and the price; whether it is reserved, bought up, or
-/// barred (an eleph its student can take no more of).
+/// it, the times left (none: bought up) and the price; whether it is reserved
+/// or barred (an eleph its student can take no more of); how many of the good
+/// are held (none: not read) and whether it is an eleph.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PlanCard {
     pub id: i64,
@@ -55,18 +56,29 @@ pub struct PlanCard {
     pub price: Option<u32>,
     pub amount: Option<u32>,
     pub reserved: bool,
-    pub sold: bool,
     pub barred: bool,
+    pub held: Option<Count>,
+    pub eleph: bool,
+}
+
+/// What the plan knows of a good a shop lists: its `group` (0 the goods to
+/// stock up on, those after them later), its `worth` (the least first),
+/// whether it is `barred`, how many are `held` and whether it is an eleph.
+pub struct Listing<K> {
+    pub group: u8,
+    pub worth: K,
+    pub barred: bool,
+    pub held: Option<Count>,
+    pub eleph: bool,
 }
 
 /// The month-end shops of `rows` (the shops' shelves as read), each with the
-/// goods `listed` for it, the cards by their goods' `worth` (the least first),
-/// bought up or not, but those `barred` last; flagged as `reserved` has them.
-pub fn shops<K: Ord>(
+/// goods it lists (`listing`, none for a good it does not), the cards by group
+/// and worth, bought up or not, but those barred last; flagged as `reserved`
+/// has them.
+pub fn shops<K: Ord + Clone>(
     rows: &[ShopRow],
-    listed: impl Fn(&str, i64) -> bool,
-    worth: impl Fn(i64) -> K,
-    barred: impl Fn(i64) -> bool,
+    listing: impl Fn(&str, i64) -> Option<Listing<K>>,
     reserved: &BTreeSet<Reserve>,
 ) -> Vec<PlanShop> {
     SHOPS
@@ -80,33 +92,38 @@ pub fn shops<K: Ord>(
                     cards: Vec::new(),
                 };
             };
-            let mut cards: Vec<PlanCard> = row
-                .goods
-                .iter()
-                .filter(|g| listed(name, g.id))
-                .flat_map(|g| {
-                    g.offers.iter().enumerate().filter_map(|(coin, offer)| {
-                        let offer = offer.as_ref()?;
-                        Some(PlanCard {
-                            id: g.id,
-                            name: g.name.clone(),
-                            icon: g.icon.clone(),
-                            coin,
-                            left: offer.left,
-                            price: offer.price.map(|p| p.price),
-                            amount: offer.price.map(|p| p.amount),
-                            reserved: reserved.contains(&Reserve {
-                                shop: name.to_owned(),
-                                id: g.id,
-                                coin: row.coins[coin].name.clone(),
-                            }),
-                            sold: offer.left == 0,
-                            barred: barred(g.id),
-                        })
-                    })
-                })
-                .collect();
-            cards.sort_by_key(|c| (c.barred, worth(c.id), c.coin));
+            // Each card with its good's group and worth, to sort by.
+            let mut cards: Vec<(PlanCard, (u8, K))> = Vec::new();
+            for good in &row.goods {
+                let Some(listed) = listing(name, good.id) else {
+                    continue;
+                };
+                for (coin, offer) in good.offers.iter().enumerate() {
+                    let Some(offer) = offer else {
+                        continue;
+                    };
+                    let card = PlanCard {
+                        id: good.id,
+                        name: good.name.clone(),
+                        icon: good.icon.clone(),
+                        coin,
+                        left: offer.left,
+                        price: offer.price.map(|p| p.price),
+                        amount: offer.price.map(|p| p.amount),
+                        reserved: reserved.contains(&Reserve {
+                            shop: name.to_owned(),
+                            id: good.id,
+                            coin: row.coins[coin].name.clone(),
+                        }),
+                        barred: listed.barred,
+                        held: listed.held,
+                        eleph: listed.eleph,
+                    };
+                    cards.push((card, (listed.group, listed.worth.clone())));
+                }
+            }
+            cards.sort_by(|(a, x), (b, y)| (a.barred, x, a.coin).cmp(&(b.barred, y, b.coin)));
+            let cards: Vec<PlanCard> = cards.into_iter().map(|(card, _)| card).collect();
             let coins = row
                 .coins
                 .iter()
@@ -193,6 +210,7 @@ mod tests {
                 good(10_002, vec![Some(offer(4, 50)), None]),
                 good(5, vec![Some(offer(3, 500)), None]),
                 good(90, vec![Some(offer(20, 10)), None]),
+                good(91, vec![Some(offer(20, 10)), None]),
                 good(10_003, vec![Some(offer(0, 50)), None]),
             ],
         }
@@ -206,17 +224,31 @@ mod tests {
         }
     }
 
+    /// A good listed in the first group, worth by its id, not barred.
+    fn plain(id: i64) -> Listing<i64> {
+        Listing {
+            group: 0,
+            worth: id,
+            barred: false,
+            held: None,
+            eleph: false,
+        }
+    }
+
     #[test]
     fn a_shop_lists_a_card_for_each_coin_of_each_good_listed_and_those_barred_last() {
-        // The note is worth more than the elephs; what is bought up stays in place.
-        let worth = |id: i64| (id != 5, id);
-        let plan = shops(
-            &[assault()],
-            |_, id| id != 90,
-            worth,
-            |id| id == 10_002,
-            &BTreeSet::new(),
-        );
+        // The note is worth more than the elephs; what is bought up stays in
+        // place; good 90 is listed after the others, 91 not at all.
+        let listing = |_: &str, id: i64| {
+            (id != 91).then(|| Listing {
+                group: u8::from(id == 90),
+                worth: (id != 5, id),
+                barred: id == 10_002,
+                held: Some(Count::Exact(u32::try_from(id % 100).unwrap())),
+                eleph: id >= 10_000,
+            })
+        };
+        let plan = shops(&[assault()], listing, &BTreeSet::new());
         assert_eq!(
             plan.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
             SHOPS
@@ -224,7 +256,7 @@ mod tests {
         let cards: Vec<(i64, usize, bool, bool)> = plan[0]
             .cards
             .iter()
-            .map(|c| (c.id, c.coin, c.sold, c.barred))
+            .map(|c| (c.id, c.coin, c.left == 0, c.barred))
             .collect();
         assert_eq!(
             cards,
@@ -233,7 +265,22 @@ mod tests {
                 (10_001, 0, false, false),
                 (10_001, 1, false, false),
                 (10_003, 0, true, false),
+                (90, 0, false, false),
                 (10_002, 0, false, true),
+            ]
+        );
+        // Each card tells how many of its good are held and whether it is an eleph.
+        let told: Vec<(Option<Count>, bool)> = plan[0]
+            .cards
+            .iter()
+            .take(2)
+            .map(|c| (c.held, c.eleph))
+            .collect();
+        assert_eq!(
+            told,
+            [
+                (Some(Count::Exact(5)), false),
+                (Some(Count::Exact(1)), true)
             ]
         );
         // A shop never read lists nothing.
@@ -249,7 +296,7 @@ mod tests {
             // Bought up: still reserved, taking nothing.
             reserve(10_003, "総力戦コイン"),
         ]);
-        let plan = shops(&[assault()], |_, _| true, |id| id, |_| false, &reserved);
+        let plan = shops(&[assault()], |_, id| Some(plain(id)), &reserved);
         let coins: Vec<(u64, bool)> = plan[0].coins.iter().map(|c| (c.need, c.short)).collect();
         // 4 × 50 + 3 × 500 = 1,700 of the 600 plain coins; 2 × 50 of the 40 rare.
         assert_eq!(coins, [(1_700, true), (100, true)]);
@@ -262,9 +309,7 @@ mod tests {
         assert_eq!(flagged, [(5, 0), (10_001, 0), (10_001, 1), (10_003, 0)]);
         let fewer = shops(
             &[assault()],
-            |_, _| true,
-            |id| id,
-            |_| false,
+            |_, id| Some(plain(id)),
             &BTreeSet::from([reserve(10_002, "総力戦コイン")]),
         );
         assert_eq!(

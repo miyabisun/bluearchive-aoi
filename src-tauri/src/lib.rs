@@ -383,13 +383,15 @@ impl Recognizer {
     }
 
     /// The month-end shops' purchase plan (see `strategy::shops`) of the
-    /// `shops` read: the goods the plan lists, an eleph barred once its
-    /// student's unique weapon has its 4th star (the user's of 2026-10-16:
-    /// 「固有4に達した後は購入できなくなる」).
+    /// `shops` read, each good `held` so many: the goods the plan lists (see
+    /// `Prices::planned`) by worth, an eleph barred once its student's unique
+    /// weapon has its 4th star (the user's of 2026-10-16: 「固有4に達した後は
+    /// 購入できなくなる」).
     pub fn month_end(
         &self,
         shops: &[shop::ShopRow],
         students: &[watch::StudentRow],
+        held: impl Fn(i64) -> Option<Count>,
         reserved: &std::collections::BTreeSet<strategy::Reserve>,
     ) -> Vec<strategy::PlanShop> {
         let done = |id: i64| {
@@ -399,9 +401,16 @@ impl Recognizer {
         };
         strategy::shops(
             shops,
-            |shop, id| self.prices.planned(shop, id),
-            |id| (self.prices.rank(id), id),
-            |id| self.prices.is_kind(id, "神名文字") && done(id),
+            |shop, id| {
+                let eleph = self.prices.is_kind(id, "神名文字");
+                Some(strategy::Listing {
+                    group: self.prices.planned(shop, id)?,
+                    worth: (self.prices.rank(id), id),
+                    barred: eleph && done(id),
+                    held: held(id),
+                    eleph,
+                })
+            },
             reserved,
         )
     }
@@ -859,6 +868,29 @@ impl Recognizer {
     }
 }
 
+/// How many of the shops' good `id` are held, as its list counts it: an item
+/// in the item list, an equipment entry (`shop::EQUIPMENT_GOODS`) in the
+/// equipment list, the credits (`shop::CURRENCY_GOODS`) as read; none held
+/// where its list was read, `None` where it never was.
+pub fn good_held(id: i64, items: &[Row], equipment: &[Row], credits: Option<u64>) -> Option<Count> {
+    let counted = |rows: &[Row], id: i64| {
+        (!rows.is_empty()).then(|| {
+            rows.iter()
+                .find(|r| r.id == id)
+                .map_or(Count::Exact(0), |r| r.count)
+        })
+    };
+    if id >= shop::CURRENCY_GOODS {
+        credits
+            .and_then(|c| u32::try_from(c).ok())
+            .map(Count::Exact)
+    } else if id >= shop::EQUIPMENT_GOODS {
+        counted(equipment, id - shop::EQUIPMENT_GOODS)
+    } else {
+        counted(items, id)
+    }
+}
+
 /// A count as a number, about as many where it is in thousands; none 0.
 fn amount(count: Option<Count>) -> u64 {
     match count {
@@ -885,6 +917,34 @@ fn kakera_offer(shops: &[shop::ShopRow], id: i64) -> Option<shop::OfferRow> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A shop's good is held as its list counts it: an item in the item list,
+    /// an equipment entry (チタン撃針) in the equipment list, the credits as
+    /// read; none held where its list was read, unknown where it was not.
+    #[test]
+    fn a_good_is_held_as_its_list_counts_it() {
+        let row = |id, n| Row {
+            id,
+            name: String::new(),
+            icon: String::new(),
+            tier: None,
+            count: Count::Exact(n),
+        };
+        let (items, equipment) = ([row(9999, 3)], [row(43, 12)]);
+        let held = |id| good_held(id, &items, &equipment, Some(132_577_090));
+        assert_eq!(held(9999), Some(Count::Exact(3)));
+        assert_eq!(held(10_019), Some(Count::Exact(0)));
+        assert_eq!(held(shop::EQUIPMENT_GOODS + 43), Some(Count::Exact(12)));
+        assert_eq!(
+            held(shop::CURRENCY_GOODS + 1),
+            Some(Count::Exact(132_577_090))
+        );
+        assert_eq!(good_held(9999, &[], &equipment, None), None);
+        assert_eq!(
+            good_held(shop::CURRENCY_GOODS + 1, &items, &equipment, None),
+            None
+        );
+    }
 
     #[derive(Deserialize)]
     struct Fixture {

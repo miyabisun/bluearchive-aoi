@@ -35,6 +35,7 @@
     phoneLine,
     planCard,
     planCoin,
+    planTitle,
     placeName,
     procureCells,
     qrPath,
@@ -1001,10 +1002,10 @@
                   {#each shop.cards as card (`${card.id}:${card.coin}`)}
                     {@const coin = shop.coins[card.coin]}
                     {@const tile = planCard(card)}
-                    <li class:sold={card.sold || card.barred} class:reserved={card.reserved}>
+                    <li class:sold={card.left === 0 || card.barred} class:reserved={card.reserved}>
                       <button
                         type="button"
-                        title={card.name}
+                        title={planTitle(card, snapshot.students)}
                         aria-pressed={card.reserved}
                         onclick={() =>
                           setReserved(

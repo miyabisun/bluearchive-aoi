@@ -122,23 +122,23 @@ impl Prices {
         Some((id - i64::from(tier) + 1, tier))
     }
 
-    /// Whether the month-end purchase plan lists the good `id` in `shop` (the
-    /// user's of 2026-10-16): in 総力戦 and 大決戦 秘伝ノート, the elephs and the
-    /// three great schools' upper notes and BDs; in 合同火力演習 秘伝ノート, the
-    /// elephs, the tailor stones and the ooparts; in 指名手配 the elephs and
+    /// Where the month-end purchase plan lists the good `id` in `shop`, if at
+    /// all (the user's of 2026-10-16): `Some(0)` with the goods to stock up
+    /// on, `Some(1)` after them. In 総力戦 and 大決戦 秘伝ノート, the elephs and
+    /// the three great schools' upper notes and BDs; in 合同火力演習 秘伝ノート,
+    /// the elephs, the tailor stones and the ooparts; in 指名手配 the elephs and
     /// the top ooparts (its coins come too slowly for more); in 熟達証書 神名の
     /// カケラ and the fest and limited students' elephs (the event students'
-    /// come cheaper from 指名手配).
-    pub fn planned(&self, shop: &str, id: i64) -> bool {
-        let Some(good) = self.goods.get(&id) else {
-            return false;
-        };
+    /// come cheaper from 指名手配), after them what other teachers buy there:
+    /// the reports, the firing pins and credits.
+    pub fn planned(&self, shop: &str, id: i64) -> Option<u8> {
+        let good = self.goods.get(&id)?;
         let kind = |k| is(good, k);
         let tier = tier(&good.rarity).unwrap_or(0);
         let great = ["ゲヘナ", "トリニティ", "ミレニアム"]
             .iter()
             .any(|school| good.name.contains(&format!("（{school}）")));
-        match shop {
+        let stocked = match shop {
             "総力戦" | "大決戦" => {
                 kind("秘伝ノート")
                     || kind("神名文字")
@@ -156,7 +156,10 @@ impl Prices {
                     || (kind("神名文字") && matches!(self.elephs.get(&id), Some(1 | 3)))
             }
             _ => false,
-        }
+        };
+        let also = shop == "熟達証書"
+            && (kind("レポート") || kind("チタン撃針") || kind("クレジットポイント"));
+        if stocked { Some(0) } else { also.then_some(1) }
     }
 
     /// The coins of `shop`, left first (none for a shop without terms).
@@ -453,6 +456,9 @@ mod tests {
             ),
             good(7, "中級テイラーストーン", "Material", None, "R"),
             good(8, "最上級レポート", "CharacterExpGrowth", None, "SSR"),
+            good(1_000_000_043, "チタン撃針", "WeaponExpGrowthZ", None, "SSR"),
+            good(2_000_000_001, "クレジットポイント", "Currency", None, ""),
+            good(150_028, "T2装備設計図選択ボックス", "Material", None, "R"),
         ];
         let students = [
             ("アズサ", 0),
@@ -464,17 +470,19 @@ mod tests {
             name: name.into(),
             limited,
         });
+        let all: Vec<i64> = goods.iter().map(|g| g.id).collect();
         let p = Prices::new(BTreeMap::new(), goods, &students);
-        let planned = |shop: &str| -> Vec<i64> {
-            let mut ids: Vec<i64> = [
-                9999, 10019, 10032, 10077, 10033, 2, 3000, 3002, 4003, 5013, 201, 203, 7, 8,
-            ]
-            .into_iter()
-            .filter(|&id| p.planned(shop, id))
-            .collect();
+        // The goods planned in `group` (0 those to stock up on, 1 those listed last).
+        let in_group = |shop: &str, group: u8| -> Vec<i64> {
+            let mut ids: Vec<i64> = all
+                .iter()
+                .copied()
+                .filter(|&id| p.planned(shop, id) == Some(group))
+                .collect();
             ids.sort_unstable();
             ids
         };
+        let planned = |shop: &str| in_group(shop, 0);
         // 秘伝ノート, every eleph, the three great schools' upper notes and BDs.
         let raid = [3002, 5013, 9999, 10019, 10032, 10033, 10077];
         assert_eq!(planned("総力戦"), raid);
@@ -486,8 +494,11 @@ mod tests {
         );
         // Every eleph and the top ooparts.
         assert_eq!(planned("指名手配"), [203, 10019, 10032, 10033, 10077]);
-        // 神名のカケラ and the fest and limited students' elephs.
+        // 神名のカケラ and the fest and limited students' elephs; last, what
+        // other teachers buy there: the reports, the firing pins and credits.
         assert_eq!(planned("熟達証書"), [2, 10032, 10033]);
+        assert_eq!(in_group("熟達証書", 1), [8, 1_000_000_043, 2_000_000_001]);
+        assert_eq!(in_group("総力戦", 1), Vec::<i64>::new());
         assert_eq!(planned("カケラ(文字)"), Vec::<i64>::new());
     }
 }

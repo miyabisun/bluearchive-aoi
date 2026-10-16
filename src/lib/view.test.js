@@ -17,6 +17,7 @@ import {
   orbCells,
   planCard,
   planCoin,
+  planTitle,
   farmCells,
   goodTile,
   heldTone,
@@ -836,17 +837,35 @@ describe("month-end and daily shops", () => {
   });
 
   it("tells a card's times left at its price, bought up, or its student done", () => {
-    const card = { left: 16, price: 50, amount: 5, sold: false, barred: false };
+    const card = { left: 16, price: 50, amount: 5, barred: false };
     expect(planCard(card)).toEqual({ amount: "×5", text: "16回@50" });
     expect(planCard({ ...card, price: null, amount: null })).toEqual({
       amount: "",
       text: "16回@?",
     });
-    expect(planCard({ ...card, left: 0, sold: true })).toEqual({ amount: "×5", text: "売切れ" });
-    expect(planCard({ ...card, left: 0, sold: true, barred: true })).toEqual({
+    expect(planCard({ ...card, left: 0 })).toEqual({ amount: "×5", text: "売切れ" });
+    expect(planCard({ ...card, left: 0, barred: true })).toEqual({
       amount: "×5",
       text: "固有4",
     });
+  });
+
+  it("tells on hover how many of a card's good are held, and an eleph's student's star", () => {
+    const azusa = { id: 10019, name: "アズサの神名文字", held: { exact: 120 }, eleph: true };
+    const students = [
+      { id: 10019, name: "アズサ", training: { rarity: 5, weapon: { stars: 2, level: 40 } } },
+      { id: 10020, name: "ハナコ", training: { rarity: 3, weapon: null } },
+    ];
+    const lines = (...l) => l.join("\n");
+    expect(planTitle(azusa, students)).toBe(lines("アズサの神名文字", "星: 固有2", "所持: 120"));
+    expect(planTitle({ ...azusa, id: 10020, name: "ハナコの神名文字" }, students)).toBe(
+      lines("ハナコの神名文字", "星: ★3", "所持: 120"),
+    );
+    expect(planTitle({ ...azusa, id: 10099, held: null }, students)).toBe(
+      lines("アズサの神名文字", "星: 未読み取り", "所持: ?"),
+    );
+    const note = { id: 9999, name: "秘伝ノート", held: { thousands: 2 }, eleph: false };
+    expect(planTitle(note, students)).toBe(lines("秘伝ノート", "所持: 2K"));
   });
 
   it("tells the coins left once the cards reserved are paid, short below none", () => {

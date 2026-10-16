@@ -1118,8 +1118,9 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
     price: 50,
     amount: 5,
     reserved: false,
-    sold: false,
     barred: false,
+    held: null,
+    eleph: true,
     ...more,
   });
   const plan = (reserved) => [
@@ -1128,15 +1129,23 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
       read_at: "2026-10-16 07:00:00",
       coins: reserved ? coins(800, true) : coins(0, false),
       cards: [
-        card(10019, "アズサの神名文字", { reserved }),
-        card(10020, "ハナコの神名文字", { left: 0, sold: true }),
-        card(10021, "マキの神名文字", { left: 0, sold: true, barred: true }),
+        card(10019, "アズサの神名文字", { reserved, held: { exact: 120 } }),
+        card(10020, "ハナコの神名文字", { left: 0 }),
+        card(10021, "マキの神名文字", { left: 0, barred: true }),
       ],
     },
     { name: "大決戦", read_at: null, coins: [], cards: [] },
     { name: "指名手配", read_at: null, coins: [], cards: [] },
   ];
-  const snapshot = { status: reading("shops"), items, equipment, work, month_end: plan(false) };
+  const trained = { rarity: 5, weapon: { stars: 2, level: 40 } };
+  const snapshot = {
+    status: reading("shops"),
+    items,
+    equipment,
+    students: [{ id: 10019, name: "アズサ", training: trained }],
+    work,
+    month_end: plan(false),
+  };
   await open(page, snapshot, "お仕事");
   await page.locator(".work summary", { hasText: "ショップ: 総力戦" }).click();
   // A card a good and a coin: the times left at the price, bought up, or its student done.
@@ -1153,6 +1162,11 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
     .locator(".held > span");
   await expect(coinsLeft).toHaveText(["600", "40"]);
   await expect(azusa).toHaveAttribute("aria-pressed", "false");
+  // Its hover tells the student's star and how many of the eleph are held.
+  await expect(azusa).toHaveAttribute(
+    "title",
+    ["アズサの神名文字", "星: 固有2", "所持: 120"].join("\n"),
+  );
   await azusa.click();
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([
     { card: { shop: "総力戦", id: 10019, coin: "総力戦コイン" }, reserved: true },

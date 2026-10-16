@@ -188,7 +188,8 @@ impl Snapshot {
     /// Counts the daily plays and the month-end plan again from what was read.
     fn rework(&mut self, recognizer: &Recognizer) {
         self.work = recognizer.work_rows(&self.items, &self.equipment, self.credits);
-        self.month_end = recognizer.month_end(&self.shops, &self.students, &self.reserved);
+        let held = |id| crate::good_held(id, &self.items, &self.equipment, self.credits);
+        self.month_end = recognizer.month_end(&self.shops, &self.students, held, &self.reserved);
     }
 
     /// What is kept of the window.
