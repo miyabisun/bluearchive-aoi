@@ -1,17 +1,23 @@
 name: Release
 
+# A release is built from its commit on main ("release: vX.Y.Z", pushed with
+# its tag), not from the tag: the Rust cache a tag's run saves serves that tag
+# alone, so every release built cold, while main's serves every later release.
 on:
   push:
-    tags: ["v*.*.*"]
+    branches: [main]
 
 permissions:
   contents: write
 
 jobs:
   publish:
+    if: "startsWith(github.event.head_commit.message, 'release: v')"
     runs-on: windows-latest
     env:
       ASSET: bluearchive-aoi-x86_64-pc-windows-msvc.exe
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -30,13 +36,17 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Check that the tag matches package.json
+      - name: Check that the commit releases package.json's version
+        id: tag
         shell: pwsh
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          if ("v$version" -ne $env:GITHUB_REF_NAME) {
-            throw "tag $env:GITHUB_REF_NAME does not match package.json version $version"
+          if (($env:MESSAGE -split "`n")[0] -ne "release: v$version") {
+            throw "commit '$env:MESSAGE' does not release package.json version $version"
           }
+          "tag=v$version" >> $env:GITHUB_OUTPUT
 
       - name: Build the app
         run: |
@@ -52,11 +62,18 @@ jobs:
           [IO.File]::WriteAllText("$PWD\dist-release\$env:ASSET.sha256", "$hash  $env:ASSET`n")
           Get-Content "dist-release\$env:ASSET.sha256"
 
+      # The tag is pushed right after the commit; it must point at it.
       - name: Publish the GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME "dist-release\$env:ASSET" "dist-release\$env:ASSET.sha256" --title $env:GITHUB_REF_NAME --generate-notes --verify-tag
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          $tagged = git ls-remote origin "refs/tags/$env:TAG"
+          if (-not ($tagged -and $tagged.StartsWith($env:GITHUB_SHA))) {
+            throw "tag $env:TAG does not point at $env:GITHUB_SHA"
+          }
+          gh release create $env:TAG "dist-release\$env:ASSET" "dist-release\$env:ASSET.sha256" --title $env:TAG --generate-notes --verify-tag
 
   # The universal macOS app joins the release the Windows job published.
   macos:
@@ -101,4 +118,5 @@ jobs:
       - name: Add them to the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" "dist-release/$ASSET" "dist-release/$ASSET.sha256"
+          TAG: ${{ needs.publish.outputs.tag }}
+        run: gh release upload "$TAG" "dist-release/$ASSET" "dist-release/$ASSET.sha256"
