@@ -42,7 +42,7 @@ fn fields(t: &Training) -> Vec<(String, Option<String>)> {
 
 /// Every field of the labeled screens reads right or not at all, and nearly
 /// every one right: at most `UNKNOWN` of them unknown (measured on
-/// 2026-10-15, read as Aoi reads them, scaled down to Full HD: 22 of 630).
+/// 2026-10-16, read as Aoi reads them, scaled down to Full HD: 3 of 945).
 #[test]
 fn every_field_reads_right_or_unknown() {
     const UNKNOWN: f32 = 0.05;
@@ -84,13 +84,15 @@ fn every_field_reads_right_or_unknown() {
 /// A screen of any width read, and any between them (a window as it was
 /// resized), reads every field of the student screen right or not at all,
 /// and at each width at least `LEAST` of them right. Measured on 2026-10-16
-/// over the fixtures at widths from 1500 to 2222: 89% to 99%.
+/// over the fixtures at widths from 1500 to 2220, every 20: 92% to 99.8%.
+/// (At 1800 a "Lv.20" whose "2" came apart read "Lv.0", at 1830 a stream's
+/// "Lv.70" read "Lv.1".)
 #[test]
 fn a_smaller_screen_reads_fields_right_or_not_at_all() {
     const LEAST: f32 = 0.85;
     let recognizer = recognizer();
     let mut wrong = Vec::new();
-    for width in [2222, 2100, 1920, 1760, 1600, 1550, 1500] {
+    for width in [2222, 2100, 1920, 1830, 1800, 1760, 1600, 1550, 1500] {
         let (mut right, mut total) = (0, 0);
         for label in labels() {
             let image = image::open(root().join("tests/fixtures").join(&label.image))

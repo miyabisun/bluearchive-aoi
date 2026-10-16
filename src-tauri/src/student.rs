@@ -204,6 +204,16 @@ const NAVY: Ink = |c| luminance(c) < 130.0 && c[2] >= c[0];
 /// fill joins the card through the outline's light edge, at 235 the stream's
 /// dimmed fill is lost.
 const LIT: Ink = |c| luminance(c) >= 225.0;
+/// The equipment level's fill alone, where `LIT` joins it to the card
+/// through gaps in a stream's outline and cuts out nothing: brighter than the
+/// card (240 and more against 225 to 240 on a tablet's stream 1920 wide,
+/// 2026-10-16). It cuts the fill thinner, which breaks apart: its characters
+/// are read only within `CRISP` of their references.
+const BRIGHT: Ink = |c| luminance(c) >= 240.0;
+/// How near the characters `BRIGHT` cuts lie to their references, at most:
+/// within 4.9 where the level is whole, while a piece of a "70" whose "0" was
+/// lost came 17.0 near "1" (a stream at 1830 wide, 2026-10-16).
+const CRISP: f32 = 8.0;
 /// The blue of the tier badges, by which the favourite item's is told.
 const BLUE: Ink = |c| i32::from(c[2]) - i32::from(c[0]) > 90 && c[2] > 150;
 /// The tier ("T10") and the ring around it, darker than the white badge: by
@@ -242,6 +252,7 @@ const fn style(
         skew,
         entire: false,
         within: None,
+        line: true,
     }
 }
 
@@ -314,10 +325,47 @@ fn text(image: &RgbImage, fonts: &Fonts, name: &str, area: Area) -> Option<Strin
 
 /// The number after `prefix` in the text of `style` in `area`.
 fn number(image: &RgbImage, fonts: &Fonts, style: &str, prefix: &str, area: Area) -> Option<u8> {
-    text(image, fonts, style, area)?
-        .strip_prefix(prefix)?
-        .parse()
-        .ok()
+    let rect = rect(image, area)?;
+    let shapes = glyph::shapes(image, rect, style_of(style));
+    let text = if shapes.is_empty() && style == "equipment" {
+        let bright = Style {
+            ink: BRIGHT,
+            ..style_of(style)
+        };
+        after_prefix(
+            fonts,
+            style,
+            &glyph::shapes(image, rect, bright),
+            prefix,
+            CRISP,
+        )
+    } else {
+        after_prefix(fonts, style, &shapes, prefix, f32::INFINITY)
+    };
+    text?.parse().ok()
+}
+
+/// The text after `prefix` that `shapes` spell in `style`: the prefix's last
+/// letter nearest to what it is, at its place, anchoring the rest, which is
+/// told strictly (see `Fonts::read`); the letters before it need only be
+/// there. A stream blurs a level's "L" past what a digit may lie from its
+/// references (23 in the middle equipment slot on a tablet's stream 1920
+/// wide), or breaks its foot off, while the digits keep to theirs. The last
+/// letter is not looked for farther on (a piece of a digit may lie nearest
+/// it). The characters lie within `farthest` of their references as well.
+fn after_prefix(
+    fonts: &Fonts,
+    style: &str,
+    shapes: &[Vec<f32>],
+    prefix: &str,
+    farthest: f32,
+) -> Option<String> {
+    let (head, rest) = shapes.split_at_checked(prefix.chars().count())?;
+    let anchored = match (head.last(), prefix.chars().last()) {
+        (Some(shape), Some(c)) => fonts.nearest(style, shape) == Some(c),
+        _ => true,
+    };
+    anchored.then(|| fonts.read_within(style, rest, farthest))?
 }
 
 /// How many pixels of `ink` `area` holds.
@@ -533,4 +581,59 @@ impl Label {
 /// The characters of `style` in `area`, normalized, for building references.
 pub fn shapes(image: &RgbImage, name: &str, area: Area) -> Option<Vec<Vec<f32>>> {
     Some(glyph::shapes(image, rect(image, area)?, style_of(name)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A shape inked in rows `from..to` of the glyph, at `ink`.
+    fn rows(from: usize, to: usize, ink: f32) -> Vec<f32> {
+        let (w, h) = glyph::GLYPH;
+        (0..w * h)
+            .map(|i| {
+                if (from * w..to * w).contains(&i) {
+                    ink
+                } else {
+                    0.0
+                }
+            })
+            .collect()
+    }
+
+    /// A number's prefix needs only its last letter nearest to what it is,
+    /// the letters before it there at all: a stream blurs the "L" of "Lv70"
+    /// past what a digit may lie from its references, or breaks its foot off,
+    /// while the digits keep to theirs. A prefix letter lost, something else
+    /// where its last one stands (a speck, a piece of a digit), or a digit
+    /// blurred leaves the number unread.
+    #[test]
+    fn a_prefix_is_told_by_its_nearest_letters_and_the_digits_strictly() {
+        let refs = [('L', 0), ('v', 4), ('7', 8), ('0', 12)]
+            .map(|(c, from)| (c, vec![rows(from, from + 4, 1.0)]));
+        let fonts = Fonts([("equipment".to_owned(), refs.into_iter().collect())].into());
+        let [l, v, seven, zero] = [0, 4, 8, 12].map(|from| rows(from, from + 4, 1.0));
+        let blurred = |from| rows(from, from + 4, 0.4);
+        let read =
+            |shapes: &[Vec<f32>]| after_prefix(&fonts, "equipment", shapes, "Lv", f32::INFINITY);
+        let lv70 = [blurred(0), v.clone(), seven.clone(), zero.clone()];
+        assert_eq!(fonts.read("equipment", &lv70), None);
+        assert_eq!(read(&lv70), Some("70".to_owned()));
+        let footless = [seven.clone(), v.clone(), seven.clone(), zero.clone()];
+        assert_eq!(read(&footless), Some("70".to_owned()));
+        let speckled = [
+            l.clone(),
+            blurred(12),
+            v.clone(),
+            seven.clone(),
+            zero.clone(),
+        ];
+        assert_eq!(read(&speckled), None);
+        assert_eq!(
+            read(&[l.clone(), seven.clone(), v.clone(), zero.clone()]),
+            None
+        );
+        assert_eq!(read(&[v.clone(), seven.clone(), zero.clone()]), None);
+        assert_eq!(read(&[l, v, blurred(8), zero]), None);
+    }
 }

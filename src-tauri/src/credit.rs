@@ -21,6 +21,7 @@ pub const DARK_DIGITS: Style = Style {
     skew: 0.0,
     entire: false,
     within: None,
+    line: false,
 };
 
 /// The credits, a number up to the bar's next field (units from the right

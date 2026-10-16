@@ -117,6 +117,7 @@ pub const BAR_STYLE: Style = Style {
     skew: 0.0,
     entire: false,
     within: None,
+    line: false,
 };
 /// The white digits of a card's price ("1,800") on the navy, apart from the
 /// light blue around; the comma is too short to count.
@@ -130,6 +131,7 @@ pub const PRICE_STYLE: Style = Style {
     skew: 0.0,
     entire: false,
     within: None,
+    line: false,
 };
 
 type Span = (f32, f32);

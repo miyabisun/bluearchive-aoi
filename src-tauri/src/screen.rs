@@ -284,10 +284,12 @@ pub fn trim(image: &RgbImage) -> Cow<'_, RgbImage> {
 }
 
 /// The widths the texts are read at, with references of their own drawn from
-/// the fixtures scaled to each: a Full HD screen, a window on one (about 1600
-/// wide), and a little narrower. A wider screen is scaled down to Full HD
-/// (see `normalize`); a narrower one is not read (`too_small`).
-pub const WIDTHS: [u32; 3] = [1920, 1600, 1500];
+/// the fixtures scaled to each: a Full HD screen, a window on one (about 1800
+/// wide filling it, about 1600 by default), and a little narrower. A wider
+/// screen is scaled down to Full HD (see `normalize`); a narrower one is not
+/// read (`too_small`). Measured on 2026-10-16 over the student fixtures drawn
+/// from 1780 to 1900 wide: scaled down to 1600, 1 field in 6 to 9 unread.
+pub const WIDTHS: [u32; 4] = [1920, 1760, 1600, 1500];
 
 /// The width of a 16:9 window drawing the game's parts as large as `image`.
 pub fn drawn_width(image: &RgbImage) -> f32 {

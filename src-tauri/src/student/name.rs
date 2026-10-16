@@ -30,8 +30,10 @@ const SPECK: f32 = 6.0 / (1250.0 * 1250.0);
 /// another name comes as near as 22.9 (for "ツムギ" at 1600), while some right
 /// ones lie up to 29. A name not told is safer than one told wrong. Measured
 /// on 2026-10-16 with a tablet's plates as well (`tests/fixtures/names.json`):
-/// left out, ノゾミ's ゾ comes 21.1 near ノノミ's ノ.
-const WORST: f32 = 20.0;
+/// left out, ノゾミ's ゾ comes 21.1 near ノノミ's ノ; and with its stream's
+/// plates, at 1500 to 2222 wide: 18.7, while every right name of the fixtures
+/// but the long ones drawn small lies within 17.1.
+const WORST: f32 = 18.0;
 
 /// The white letters of the name.
 fn white(c: [u8; 3]) -> bool {

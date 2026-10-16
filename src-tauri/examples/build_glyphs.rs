@@ -63,10 +63,11 @@ const LOOSE: (f32, f32) = (34.0, 0.85);
 /// drawn at the width read; most so a card's small digits, whose counts read
 /// 94 of the 105 offers at 1920 with 2040 and 2160 alone, 102 with 1980 and
 /// 2100 too (measured on 2026-10-16). (The tests read others between.)
-const BETWEEN: [(u32, &[u32]); 3] = [
+const BETWEEN: [(u32, &[u32]); 4] = [
     (1920, &[1980, 2040, 2100, 2160]),
-    (1600, &[1680, 1840]),
-    (1500, &[1570]),
+    (1760, &[1780, 1800, 1820, 1840, 1860, 1880, 1900]),
+    (1600, &[1620, 1640, 1660, 1680, 1700, 1720, 1740]),
+    (1500, &[1520, 1540, 1560, 1580]),
 ];
 /// A bar's letter reference lies farther than this from every digit's.
 const APART: f32 = 20.0;

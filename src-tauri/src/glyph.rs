@@ -47,6 +47,10 @@ pub struct Style {
     /// colour's resolution, which a thin stroke loses and a badge keeps): the
     /// text is read within the extent of the badge's largest part alone.
     pub within: Option<Ink>,
+    /// The characters stand on one line (`BASELINE`): what stands off it is a
+    /// speck of the picture around (an equipment's beside its level). Not for
+    /// a text whose letters keep feet of their own (a shop's bar).
+    pub line: bool,
 }
 
 /// Where blobs touching the edge of a text's area are the ground around the
@@ -150,6 +154,33 @@ fn side_by_side(mut blobs: Vec<Blob>, tallest: u32) -> Vec<Blob> {
         }
     }
     out
+}
+
+/// How far a character's foot may lie off the line's, as a share of the
+/// tallest character: the feet of a line's characters lie within a pixel of
+/// each other (an equipment level at 1920 wide, characters 15 px high), a
+/// speck of the picture beside the text 4 below (2026-10-16).
+const BASELINE: f32 = 0.15;
+
+/// `blobs` standing on the line most of them stand on (see `BASELINE`), what
+/// stands off it beyond the text's ends left out; `None` where something off
+/// it stands among the characters (a piece of one).
+fn on_baseline(blobs: Vec<Blob>, tallest: u32) -> Option<Vec<Blob>> {
+    let mut feet: Vec<u32> = blobs.iter().map(|b| b.bottom).collect();
+    feet.sort_unstable();
+    let Some(&line) = feet.get(feet.len().saturating_sub(1) / 2) else {
+        return Some(blobs);
+    };
+    let on = |b: &Blob| b.bottom.abs_diff(line) as f32 <= tallest as f32 * BASELINE;
+    let first = blobs.iter().filter(|b| on(b)).map(|b| b.left).min()?;
+    let last = blobs.iter().filter(|b| on(b)).map(|b| b.right).max()?;
+    if blobs
+        .iter()
+        .any(|b| !on(b) && b.right > first && b.left < last)
+    {
+        return None;
+    }
+    Some(blobs.into_iter().filter(on).collect())
 }
 
 /// Which pixels of `rect` are of the ink, each row moved right by `skew`
@@ -288,9 +319,10 @@ fn blobs(
 }
 
 /// The pixels off the ink that the edge of the area reaches (4-connected)
-/// without crossing the ink. The ink is widened by a pixel first, closing the
-/// gaps a pale ring has.
-fn outside(ink: &[bool], width: usize, height: usize) -> Vec<bool> {
+/// without crossing the ink, and the extent of those it does not reach: what
+/// a ring encloses. The ink is widened by a pixel first, closing the gaps a
+/// pale ring has.
+fn outside(ink: &[bool], width: usize, height: usize) -> (Vec<bool>, Option<Rect>) {
     let on: Vec<bool> = (0..ink.len())
         .map(|i| {
             let (x, y) = (i % width, i / width);
@@ -320,7 +352,37 @@ fn outside(ink: &[bool], width: usize, height: usize) -> Vec<bool> {
             }
         }
     }
-    reached
+    let enclosed = (0..on.len()).filter(|&i| !on[i] && !reached[i]);
+    let inside = enclosed.fold(None, |extent: Option<Rect>, i| {
+        let (x, y) = ((i % width) as u32, (i / width) as u32);
+        Some(extent.map_or((x, y, x + 1, y + 1), |(l, t, r, b)| {
+            (l.min(x), t.min(y), r.max(x + 1), b.max(y + 1))
+        }))
+    });
+    (reached, inside)
+}
+
+/// The `blobs` a badge's ring around them encloses, of the area `ink` covers
+/// (`width` by `height`). A picture beside the badge, even touching the ring,
+/// lies where the outside reaches: it is looked for two pixels around each
+/// character (the gap to the ring is wider). A dark picture is ink itself,
+/// which the outside does not reach around: a character's middle lies inside
+/// the ring.
+fn in_ring(mut blobs: Vec<Blob>, ink: &[bool], width: usize, height: usize) -> Vec<Blob> {
+    let (outside, Some((left, top, right, bottom))) = outside(ink, width, height) else {
+        return Vec::new();
+    };
+    let reached = |x: u32, y: u32| outside[y as usize * width + x as usize];
+    blobs.retain(|blob| {
+        let (x0, y0) = (blob.left.saturating_sub(2), blob.top.saturating_sub(2));
+        let x1 = (blob.right + 2).min(width as u32 - 1);
+        let y1 = (blob.bottom + 2).min(height as u32 - 1);
+        (left..right).contains(&blob.left.midpoint(blob.right))
+            && (top..bottom).contains(&blob.top.midpoint(blob.bottom))
+            && (x0..=x1).all(|x| !reached(x, y0) && !reached(x, y1))
+            && (y0..=y1).all(|y| !reached(x0, y) && !reached(x1, y))
+    });
+    blobs
 }
 
 /// The characters of `style` in `rect`, left to right, normalized.
@@ -342,19 +404,7 @@ pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
         Ground::Around => b.left > 0 && b.top > 0 && b.right + 1 < w && b.bottom + 1 < h,
     });
     if framed {
-        // Only what the ring encloses belongs to the badge: a picture beside
-        // it, even touching the ring, lies where the outside reaches. The
-        // outside is looked for two pixels around each character (the gap to
-        // the ring is wider).
-        let outside = outside(&raw, width, height);
-        let reached = |x: u32, y: u32| outside[y as usize * width + x as usize];
-        blobs.retain(|b| {
-            let (left, top) = (b.left.saturating_sub(2), b.top.saturating_sub(2));
-            let right = (b.right + 2).min(width as u32 - 1);
-            let bottom = (b.bottom + 2).min(height as u32 - 1);
-            (left..=right).all(|x| !reached(x, top) && !reached(x, bottom))
-                && (top..=bottom).all(|y| !reached(left, y) && !reached(right, y))
-        });
+        blobs = in_ring(blobs, &raw, width, height);
     }
     let (blobs, wide): (Vec<Blob>, Vec<Blob>) = blobs.into_iter().partition(|b| {
         (b.right - b.left + 1) as f32 <= (b.bottom - b.top + 1) as f32 * style.widest
@@ -376,6 +426,14 @@ pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
             return Vec::new();
         }
     }
+    let kept = if style.line {
+        match on_baseline(kept, tallest) {
+            Some(kept) => kept,
+            None => return Vec::new(),
+        }
+    } else {
+        kept
+    };
     let blobs: Vec<Blob> = kept
         .into_iter()
         .flat_map(|b| {
@@ -476,12 +534,39 @@ impl Fonts {
     /// The text the `shapes` spell in `style`, if every one is close to a
     /// reference and clearly nearer to it than to any other character.
     pub fn read(&self, style: &str, shapes: &[Vec<f32>]) -> Option<String> {
-        shapes.iter().map(|s| self.character(style, s)).collect()
+        self.read_within(style, shapes, MAX_DISTANCE)
+    }
+
+    /// As `read`, every character within `farthest` of its reference.
+    pub fn read_within(&self, style: &str, shapes: &[Vec<f32>], farthest: f32) -> Option<String> {
+        shapes
+            .iter()
+            .map(|s| self.character_within(style, s, farthest))
+            .collect()
+    }
+
+    /// The character whose references lie nearest `shape` in `style`, however
+    /// far.
+    pub fn nearest(&self, style: &str, shape: &[f32]) -> Option<char> {
+        self.0
+            .get(style)?
+            .iter()
+            .map(|(c, refs)| {
+                let d = refs.iter().map(|r| distance(r, shape));
+                (*c, d.fold(f32::INFINITY, f32::min))
+            })
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|(c, _)| c)
     }
 
     /// The character `shape` is in `style`, if it is close to a reference and
     /// clearly nearer to it than to any other character.
     pub fn character(&self, style: &str, shape: &[f32]) -> Option<char> {
+        self.character_within(style, shape, MAX_DISTANCE)
+    }
+
+    /// As `character`, within `farthest` of its reference.
+    fn character_within(&self, style: &str, shape: &[f32], farthest: f32) -> Option<char> {
         // The nearest character and the next nearest one's distance: a
         // reference no nearer than both is measured no further.
         let (mut nearest, mut next) = (None, f32::INFINITY);
@@ -498,7 +583,7 @@ impl Fonts {
             }
         }
         let (c, d) = nearest?;
-        (d <= MAX_DISTANCE && d <= LEAD * next).then_some(c)
+        (d <= farthest.min(MAX_DISTANCE) && d <= LEAD * next).then_some(c)
     }
 }
 
@@ -569,6 +654,59 @@ mod tests {
             side_by_side(pieces, 15),
             vec![l, v, seven, blob(54, 64, 9, 23)]
         );
+    }
+
+    /// What a badge's ring encloses spans the badge alone: not a dark picture
+    /// beside it, though the picture touches the ring and the outside cannot
+    /// reach around it (a tier badge at 1600 wide, 2026-10-16).
+    #[test]
+    fn a_ring_encloses_the_badge_alone() {
+        let (width, height) = (40, 20);
+        let mut ink = vec![false; width * height];
+        let mut put = |x: usize, y: usize| ink[y * width + x] = true;
+        for i in 2..=20 {
+            put(i, 2);
+            put(i, 17);
+        }
+        for i in 2..=17 {
+            put(2, i);
+            put(20, i);
+        }
+        // A stroke of the text in the badge.
+        for y in 6..14 {
+            put(10, y);
+        }
+        // The picture, from the ring to the area's edge.
+        for x in 21..40 {
+            for y in 0..12 {
+                put(x, y);
+            }
+        }
+        let (reached, inside) = outside(&ink, width, height);
+        assert_eq!(inside, Some((4, 4, 19, 16)));
+        assert!(reached[19 * width + 30]);
+    }
+
+    /// The "Lv.65" of an equipment level at 1920 wide (characters 15 px
+    /// high) with a light speck of the equipment's picture below the line to
+    /// its right: the speck stands on no line of the text. Off the line
+    /// among the characters stands a piece of one (the upper half of a "2"
+    /// whose fill came apart at 1800 wide): the text is not read, or "Lv.20"
+    /// would read "Lv.0".
+    #[test]
+    fn a_speck_off_the_line_is_no_character() {
+        let line = vec![
+            blob(8, 16, 9, 23),
+            blob(22, 31, 13, 23),
+            blob(39, 50, 9, 23),
+            blob(51, 62, 9, 22),
+        ];
+        let mut speckled = line.clone();
+        speckled.push(blob(77, 87, 19, 27));
+        assert_eq!(on_baseline(speckled, 15), Some(line.clone()));
+        let mut broken = line;
+        broken.insert(2, blob(33, 38, 9, 17));
+        assert_eq!(on_baseline(broken, 15), None);
     }
 
     /// A pair as near as the bound measures as `distance` measures it; a

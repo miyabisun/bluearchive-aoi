@@ -19,5 +19,7 @@
   {"image": "names/tablet-stu-17.png", "role": "tune", "id": 10033, "note": "ワカモ"},
   {"image": "names/tablet-stu-18.png", "role": "tune", "id": 20027, "note": "シロコ（水着）"},
   {"image": "names/tablet-stu-19.png", "role": "tune", "id": 10045, "note": "ホシノ（水着）"},
-  {"image": "names/tablet-stu-20.png", "role": "tune", "id": 20041, "note": "リオ"}
+  {"image": "names/tablet-stu-20.png", "role": "tune", "id": 20041, "note": "リオ"},
+  {"image": "names/pc-haruna-track.png", "role": "tune", "id": 20030, "note": "ハルナ（体操服）"},
+  {"image": "names/pc-koyuki-pajama.png", "role": "tune", "id": 20056, "note": "コユキ（パジャマ）"}
 ]

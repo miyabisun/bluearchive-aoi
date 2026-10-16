@@ -26,7 +26,7 @@ use serde::Deserialize;
 
 const CHARACTERS: &str = "x0123456789K";
 /// The widths the list is read at (`screen::WIDTHS`).
-const WIDTHS: [u32; 3] = aoi::screen::WIDTHS;
+const WIDTHS: [u32; 4] = aoi::screen::WIDTHS;
 /// The sizes the tablet's screens were streamed at that are read.
 const STREAMED: [&str; 2] = ["1920", "1600"];
 
