@@ -1014,6 +1014,9 @@ const work = {
     report_students: 5.0,
   },
   orbs: { exp: 5700780, about: false, exp_each: 741690, students: 7.686 },
+  schools: [
+    { exp: 220280, about: false, rate: 1.5, exp_each: 49605, students: 6.661, first: true },
+  ],
 };
 
 test("tells what the daily plays give against what is held", async ({ page }) => {
@@ -1070,6 +1073,20 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
     "その後に黄金比を整える周回",
   ]);
   await expect(page.locator(".work .tiers td.tier-1")).toHaveText(["51", "—"]);
+  // A school: the weapons its parts raise on its right, the sum under it; the
+  // one to play first red.
+  const red = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--c-danger)";
+    document.body.append(probe);
+    const rgb = getComputedStyle(probe).color;
+    probe.remove();
+    return rgb;
+  });
+  const school = page.locator(".work .school");
+  await expect(school).toHaveText("トリニティ 6.7人前220,280 EXP × 1.5 ÷ 49,605 EXP");
+  await expect(school.locator("strong")).toHaveCSS("color", red);
+  await expect(school.locator("h4")).toHaveCSS("color", red);
   // Short of one student red, of two blue, enough for two green.
   await expect(page.locator(".work .tiers .short")).toHaveText(["51"]);
   await expect(page.locator(".work .tiers .fair")).toHaveText(["100"]);
@@ -1093,14 +1110,6 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
     "強化珠7.7人分5.7M EXP ÷ 0.74M EXP",
   ]);
   await expect(page.locator(".raises tr.fewer")).toContainText("クレジット");
-  const red = await page.evaluate(() => {
-    const probe = document.createElement("span");
-    probe.style.color = "var(--c-danger)";
-    document.body.append(probe);
-    const rgb = getComputedStyle(probe).color;
-    probe.remove();
-    return rgb;
-  });
   await expect(page.locator(".raises tr.fewer strong")).toHaveCSS("color", red);
 });
 

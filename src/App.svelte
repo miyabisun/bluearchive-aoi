@@ -37,6 +37,7 @@
     planCoin,
     planTitle,
     placeName,
+    schoolCells,
     procureCells,
     qrPath,
     settle,
@@ -835,14 +836,27 @@
               </tbody>
             </table>
           </details>
-          {#each [{ title: "指名手配", places: work.bounties }, { title: "学園交流会", places: work.scrimmages }] as group (group.title)}
+          {#each [{ title: "指名手配", places: work.bounties, schools: [] }, { title: "学園交流会", places: work.scrimmages, schools: work.schools ?? [] }] as group (group.title)}
             <details class="fold" open={opened.has(`work:${group.title}`)}>
               <summary onclick={(event) => toggle(event, `work:${group.title}`)}
                 >{@render chevron()}
                 <h3>{group.title}</h3></summary
               >
-              {#each group.places as place (place.name)}
-                <h4>{placeName(place.name)}</h4>
+              {#each group.places as place, p (place.name)}
+                {@const school = group.schools[p]}
+                {#if school}
+                  {@const cells = schoolCells(school)}
+                  <!-- A school: how many unique weapons its parts held raise, and how; the one to play first red. -->
+                  <div class="school" class:first={cells.first}>
+                    <h4>{placeName(place.name)}</h4>
+                    <span class="raised"
+                      ><strong>{cells.students}</strong><span class="detail">{cells.detail}</span
+                      ></span
+                    >
+                  </div>
+                {:else}
+                  <h4>{placeName(place.name)}</h4>
+                {/if}
                 <table class="tiers">
                   <tbody>
                     {#each place.kinds as tiers, k (k)}
@@ -2034,6 +2048,21 @@
       color: var(--c-ok)
     .fewer strong
       color: var(--c-warn)
+    // A school: its name left, the weapons its parts raise right, the one to
+    // play first red.
+    .school
+      display: flex
+      justify-content: space-between
+      align-items: baseline
+      gap: var(--sp-2)
+      margin: var(--sp-3) 0 var(--sp-1)
+      h4
+        margin: 0
+      .raised
+        text-align: right
+    .school.first
+      h4, strong
+        color: var(--c-danger)
     // The normal items shop's fewer red (the user's 「赤字と緑字」).
     .raises .fewer strong
       color: var(--c-danger)

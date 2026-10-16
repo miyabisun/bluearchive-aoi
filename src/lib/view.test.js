@@ -18,6 +18,7 @@ import {
   planCard,
   planCoin,
   planTitle,
+  schoolCells,
   farmCells,
   goodTile,
   heldTone,
@@ -886,6 +887,28 @@ describe("month-end and daily shops", () => {
       left: "?",
       short: false,
       title: "総力戦コイン: 所持 ? − 予約 200",
+    });
+  });
+});
+
+describe("schoolCells", () => {
+  it("counts the weapons a school's parts raise and how, the first to run out marked", () => {
+    const row = {
+      exp: 220280,
+      about: false,
+      rate: 1.5,
+      exp_each: 49605,
+      students: 6.661,
+      first: true,
+    };
+    expect(schoolCells(row)).toEqual({
+      students: "6.7人前",
+      detail: "220,280 EXP × 1.5 ÷ 49,605 EXP",
+      first: true,
+    });
+    expect(schoolCells({ ...row, about: true, first: false })).toMatchObject({
+      detail: "約220,280 EXP × 1.5 ÷ 49,605 EXP",
+      first: false,
     });
   });
 });

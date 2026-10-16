@@ -120,6 +120,8 @@ Update-List 'students' $null $null {
 ]+', '')
     equipment = @($student.Equipment)
     school = $student.School
+    # The weapon type (SG, SMG, AR, ...), which the unique weapon's parts suit.
+    weapon = $student.WeaponType
     # How the student is had in JP: 0 always, 1 limited, 2 an event's, 3 fest.
     limited = [int]$student.IsLimited[0]
     ex = Pairs $student.SkillExMaterial $student.SkillExMaterialAmount
@@ -137,6 +139,7 @@ $gearLevels = (Get-Json "$gameData/EquipmentLevelExcelTable.json").DataList
 $const = (Get-Json "$gameData/ConstCommonExcelTable.json").DataList[0]
 $config = Get-Json 'https://schaledb.com/data/config.min.json'
 $weaponLevels = (Get-Json "$gameData/CharacterWeaponLevelExcelTable.json").DataList
+$weaponBonus = (Get-Json "$gameData/CharacterWeaponExpBonusExcelTable.json").DataList
 # The exp from Lv1 to each level: 0 for Lv1, then the totals the table gives.
 $toLevel = @(0) + @($levels | Sort-Object { $_.Level } | Select-Object -First ($levels.Count - 1) | ForEach-Object { [int64]$_.TotalExp })
 $weaponToLevel = @(0) + @($weaponLevels | Sort-Object { $_.Level } | Select-Object -First ($weaponLevels.Count - 1) | ForEach-Object { [int64]$_.TotalExp })
@@ -165,6 +168,14 @@ $growth = [ordered]@{
   # The unique weapon's exp from Lv1 to each level and the credits each exp costs.
   weapon_exp = $weaponToLevel
   weapon_credits = [int]$const.WeaponLvUpCoefficient
+  # The unique weapon's parts (springs, hammers, barrels, firing pins): the exp each gives.
+  weapon_parts = @($equipment | Where-Object { $_.Category -like 'WeaponExpGrowth*' } | ForEach-Object { , @([int64]$_.Id, [int64]$_.LevelUpFeedExp) })
+  # Each weapon type and the parts' kind (but the firing pins, which suit all)
+  # giving it more exp, and how much more (per 10,000).
+  weapon_bonus = @(foreach ($row in $weaponBonus) {
+    $kind = @('WeaponExpGrowthA', 'WeaponExpGrowthB', 'WeaponExpGrowthC') | Sort-Object { -[int]$row.$_ } | Select-Object -First 1
+    , @($row.WeaponType, $kind, [int]$row.$kind)
+  })
   # Each level of a potential (HP, attack or healing, 1 to 25): the tier of its
   # ooparts (0 the first) and how many.
   potential = @($config.PotentialMaterial | ForEach-Object { , @([int]$_.ArtifactGrade, [int]$_.ArtifactAmount) })

@@ -648,6 +648,19 @@ export function planCoin(coin) {
   };
 }
 
+/**
+ * A school's scrimmage parts held: how many unique weapons they raise from
+ * Lv1 to their cap ("6.7人前"), the exp held times the rate the weapons they
+ * suit take it at, over a weapon's; and whether it runs out first.
+ */
+export function schoolCells(row) {
+  return {
+    students: `${tenths.format(row.students)}人前`,
+    detail: `${row.about ? "約" : ""}${exact.format(row.exp)} EXP × ${row.rate} ÷ ${exact.format(row.exp_each)} EXP`,
+    first: row.first,
+  };
+}
+
 /** Where checking for an update and taking it stands, as the window tells it. */
 export function updateText(update) {
   switch (update.state) {

@@ -59,6 +59,9 @@ pub struct Grower {
     /// The ooparts (their first tier) the student's potential takes.
     #[serde(default)]
     pub potential: Option<i64>,
+    /// The weapon type (SG, SMG, AR, ...), which the unique weapon's parts suit.
+    #[serde(default)]
+    pub weapon: Option<String>,
 }
 
 /// A piece of equipment of the snapshot: what it is made from (blueprints and
@@ -98,6 +101,13 @@ pub struct Growth {
     /// exp costs.
     pub weapon_exp: Vec<u64>,
     pub weapon_credits: u64,
+    /// The unique weapon's parts and the exp each gives.
+    #[serde(default)]
+    pub weapon_parts: Vec<(i64, u64)>,
+    /// Each weapon type, the kind of parts (an equipment category) giving it
+    /// more exp, and how much (per 10,000).
+    #[serde(default)]
+    pub weapon_bonus: Vec<(String, String, u32)>,
     /// Each level of a potential (HP, attack or healing, Lv1 to 25): the tier
     /// of its ooparts (0 the first) and how many.
     #[serde(default)]
@@ -478,6 +488,8 @@ pub(crate) mod tests {
             weapon_up: vec![(120, 1500), (180, 2000), (200, 2500)],
             weapon_exp: Vec::new(),
             weapon_credits: 0,
+            weapon_parts: Vec::new(),
+            weapon_bonus: Vec::new(),
             potential: Vec::new(),
         }
     }
@@ -494,6 +506,7 @@ pub(crate) mod tests {
             ],
             skills: (2..=9).map(|lv| vec![(4030, lv)]).collect(),
             potential: None,
+            weapon: None,
         }
     }
 

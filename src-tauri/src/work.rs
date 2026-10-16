@@ -61,6 +61,8 @@ pub struct WorkRows {
     pub scrimmages: Vec<PlaceRow>,
     pub commissions: CommissionRow,
     pub orbs: OrbRow,
+    /// The scrimmages' schools, as `scrimmages` lists them.
+    pub schools: Vec<SchoolRow>,
 }
 
 /// How much a count holds, and whether only about (a count in thousands).
@@ -606,6 +608,73 @@ fn per(held: u64, each: u64) -> f64 {
     }
 }
 
+/// A school's scrimmage: the unique weapon parts it drops, how much more exp
+/// they give the weapons they suit (1.5 for 15,000 per 10,000), and the share
+/// of students whose weapons they suit.
+pub struct School {
+    pub drops: Vec<i64>,
+    pub rate: f64,
+    pub share: f64,
+}
+
+/// A school's parts held against the unique weapons they raise: their exp
+/// (whether only about), the rate the weapons they suit take it at, the exp a
+/// weapon takes from Lv1 to its cap and how many weapons the parts raise; and
+/// whether the school's parts run out first.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SchoolRow {
+    pub exp: u64,
+    pub about: bool,
+    pub rate: f64,
+    pub exp_each: u64,
+    pub students: f64,
+    pub first: bool,
+}
+
+/// The `schools`' parts (`parts`, `(id, exp of one)`) as `SchoolRow` tells, a
+/// weapon taking `each`; first the school with the fewest weapons for its
+/// share of students (the user's of 2026-10-16: 「一番優先順位の高い学園を赤字で
+/// 知らせる」).
+pub fn school_rows<S: BuildHasher>(
+    schools: &[School],
+    parts: &[(i64, u64)],
+    each: u64,
+    held: &HashMap<i64, Count, S>,
+) -> Vec<SchoolRow> {
+    let mut rows: Vec<SchoolRow> = schools
+        .iter()
+        .map(|school| {
+            let dropped: Vec<(i64, u64)> = parts
+                .iter()
+                .copied()
+                .filter(|(id, _)| school.drops.contains(id))
+                .collect();
+            let (exp, about) = exp_held(&dropped, held);
+            SchoolRow {
+                exp,
+                about,
+                rate: school.rate,
+                exp_each: each,
+                students: per(exp, each) * school.rate,
+                first: false,
+            }
+        })
+        .collect();
+    let first = rows
+        .iter()
+        .zip(schools)
+        .enumerate()
+        .filter(|(_, (_, school))| school.share > 0.0)
+        .min_by(|(_, (a, x)), (_, (b, y))| {
+            (a.students / x.share).total_cmp(&(b.students / y.share))
+        })
+        .map(|(i, _)| i);
+    if let Some(i) = first {
+        rows[i].first = true;
+    }
+    rows
+}
+
 /// The enhancement orbs held against what one student's equipment takes:
 /// their exp, whether only about, the exp a student takes and how many
 /// students the orbs raise.
@@ -866,6 +935,7 @@ mod tests {
             ex: vec![ex],
             skills: vec![skills],
             potential,
+            weapon: None,
         };
         let growth = Growth {
             potential: vec![(0, 10), (1, 6)],
@@ -948,6 +1018,47 @@ mod tests {
             commissions(&names, None, (1, 1), &[], &held).credit_students,
             None
         );
+    }
+
+    /// A school's scrimmage parts raise so many unique weapons from Lv1 to
+    /// their cap, `rate` times over for the weapons they suit; the school whose
+    /// parts run out first, for the share of students they suit, comes first.
+    #[test]
+    fn the_schools_count_the_weapons_their_parts_raise_the_first_to_run_out_marked() {
+        let parts = [(10, 10), (11, 50), (20, 10), (21, 50), (30, 10)];
+        let school = |drops: Vec<i64>, share: f64| School {
+            drops,
+            rate: 1.5,
+            share,
+        };
+        let schools = [
+            school(vec![10, 11], 0.5),
+            school(vec![20, 21], 0.25),
+            school(vec![30], 0.25),
+        ];
+        let held = HashMap::from([
+            (10, Count::Exact(100)),
+            (11, Count::Exact(20)),
+            (20, Count::Exact(100)),
+            (21, Count::Thousands(1)),
+            (30, Count::Exact(150)),
+        ]);
+        let rows = school_rows(&schools, &parts, 1000, &held);
+        let told: Vec<(u64, bool, f64, bool)> = rows
+            .iter()
+            .map(|r| (r.exp, r.about, r.students, r.first))
+            .collect();
+        // 2,000 exp × 1.5 makes 3 weapons for half the students: 6 a share;
+        // the others 306 and 9 a share.
+        assert_eq!(
+            told,
+            [
+                (2_000, false, 3.0, true),
+                (51_000, true, 76.5, false),
+                (1_500, false, 2.25, false),
+            ]
+        );
+        assert_eq!((rows[0].rate, rows[0].exp_each), (1.5, 1000));
     }
 
     /// A student's three slots each level every tier from Lv1 to its top, fed

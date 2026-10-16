@@ -379,7 +379,68 @@ impl Recognizer {
                 &items_held,
             ),
             orbs: work::orbs(&self.planner.growth.orbs, self.orbs_each(), &equipment_held),
+            schools: work::school_rows(
+                &self.schools(),
+                &self.planner.growth.weapon_parts,
+                self.planner
+                    .growth
+                    .weapon_exp
+                    .get(WEAPON_TOP - 1)
+                    .copied()
+                    .unwrap_or(0),
+                &equipment_held,
+            ),
         }
+    }
+
+    /// The scrimmages' schools (see `work::School`): the parts each drops, of
+    /// the kind its first drop is, and the rate and share of students of the
+    /// weapon types that kind suits (the game's `CharacterWeaponExpBonus`).
+    fn schools(&self) -> Vec<work::School> {
+        let growth = &self.planner.growth;
+        let kind_of = |id: i64| {
+            self.equipment
+                .entries()
+                .iter()
+                .find(|e| e.id == id)
+                .map(|e| e.category.clone())
+        };
+        let suits = |weapon: &str| {
+            growth
+                .weapon_bonus
+                .iter()
+                .find(|(w, _, _)| w == weapon)
+                .map(|(_, kind, rate)| (kind.as_str(), *rate))
+        };
+        let typed: Vec<&str> = self
+            .planner
+            .growers
+            .iter()
+            .filter_map(|g| g.weapon.as_deref())
+            .collect();
+        self.stages
+            .scrimmages
+            .iter()
+            .map(|place| {
+                let kind = place.drops.first().copied().and_then(kind_of);
+                let suited = |weapon: &str| suits(weapon).map(|(k, _)| k) == kind.as_deref();
+                let rate = growth
+                    .weapon_bonus
+                    .iter()
+                    .find(|(_, k, _)| Some(k) == kind.as_ref())
+                    .map_or(1.0, |(_, _, rate)| f64::from(*rate) / 10_000.0);
+                let share = if typed.is_empty() {
+                    0.0
+                } else {
+                    typed.iter().filter(|w| suited(w)).count() as f64 / typed.len() as f64
+                };
+                work::School {
+                    drops: place.drops.clone(),
+                    rate,
+                    share,
+                }
+            })
+            .collect()
     }
 
     /// The month-end shops' purchase plan (see `strategy::shops`) of the
@@ -438,8 +499,6 @@ impl Recognizer {
     /// (the user's measure, 2026-10-13: level, skills, equipment, stars and the
     /// weapon, their credits); the first student SchaleDB lists stands for all.
     fn raise_cost(&self) -> (u64, u64) {
-        /// The unique weapon's level cap at its 4th star.
-        const WEAPON_TOP: usize = 60;
         let Some(grower) = self.planner.growers.first() else {
             return (0, 0);
         };
@@ -867,6 +926,9 @@ impl Recognizer {
         Some((list, cells, panel.shows_start))
     }
 }
+
+/// The unique weapon's level cap at its 4th star.
+const WEAPON_TOP: usize = 60;
 
 /// How many of the shops' good `id` are held, as its list counts it: an item
 /// in the item list, an equipment entry (`shop::EQUIPMENT_GOODS`) in the
