@@ -33,16 +33,18 @@ impl Ink {
     }
 
     /// The parts of `ink` in `rect` (8-connected), but those touching its
-    /// edges (what lies around, as the light end of a chosen menu entry) and
-    /// those of fewer than `least` pixels (specks).
+    /// edges (what lies around, as the light end of a chosen menu entry),
+    /// those of fewer than `least` pixels (specks), and those beside no letter
+    /// (apart from the rows of the tallest part: a light speck of the ground).
     pub fn parts(image: &RgbImage, rect: Rect, ink: fn([u8; 3]) -> bool, least: usize) -> Self {
         let (x0, y0, x1, y1) = rect;
         let (width, height) = (x1 - x0, y1 - y0);
         let raw: Vec<bool> = (0..width * height)
             .map(|i| ink(image.get_pixel(x0 + i % width, y0 + i / width).0))
             .collect();
-        let mut on = vec![false; raw.len()];
         let mut seen = vec![false; raw.len()];
+        // Each part kept, with the rows it spans.
+        let mut parts: Vec<(Vec<usize>, u32, u32)> = Vec::new();
         for start in 0..raw.len() {
             if !raw[start] || seen[start] {
                 continue;
@@ -68,9 +70,19 @@ impl Ink {
                 x == 0 || y == 0 || x + 1 == width || y + 1 == height
             });
             if !edge && part.len() >= least {
-                for i in part {
-                    on[i] = true;
-                }
+                let rows = part.iter().map(|&i| i as u32 / width);
+                let (top, bottom) = rows.fold((u32::MAX, 0), |(t, b), y| (t.min(y), b.max(y)));
+                parts.push((part, top, bottom));
+            }
+        }
+        // A part beside no letter, apart from the rows of the tallest one, is
+        // a speck of the ground.
+        let tallest = parts.iter().max_by_key(|(_, top, bottom)| bottom - top);
+        let (top, bottom) = tallest.map_or((0, 0), |&(_, top, bottom)| (top, bottom));
+        let mut on = vec![false; raw.len()];
+        for (part, _, _) in parts.iter().filter(|(_, t, b)| *b >= top && *t <= bottom) {
+            for &i in part {
+                on[i] = true;
             }
         }
         Self { width, height, on }
@@ -286,6 +298,28 @@ mod tests {
         let parts = Ink::parts(&image, (0, 0, 8, 6), |c| c[0] > 200, 2);
         assert_eq!(parts.bounds(), Some((3, 5, 2, 4)));
         assert_eq!(parts.on.iter().filter(|&&on| on).count(), 4);
+    }
+
+    /// A light speck of the ground above the text, apart from every letter's
+    /// rows, is no part of it (the top of a name plate on a tablet, 4 pixels
+    /// 23 rows above the name, made it too tall to be the name); a voiced
+    /// mark beside a letter's top is.
+    #[test]
+    fn a_part_beside_no_letter_is_left_out() {
+        let mut image = RgbImage::new(12, 12);
+        let white = image::Rgb([255, 255, 255]);
+        for (x, y) in [(5, 1), (6, 1)] {
+            image.put_pixel(x, y, white);
+        }
+        for y in 5..10 {
+            image.put_pixel(3, y, white);
+            image.put_pixel(4, y, white);
+        }
+        for (x, y) in [(6, 5), (6, 6)] {
+            image.put_pixel(x, y, white);
+        }
+        let parts = Ink::parts(&image, (0, 0, 12, 12), |c| c[0] > 200, 2);
+        assert_eq!(parts.bounds(), Some((3, 7, 5, 10)));
     }
 
     #[test]
