@@ -610,7 +610,10 @@ export function planCard(card) {
   };
 }
 
-/** A month-end shop's coin: how many are held, and how many short of the cards reserved. */
+/**
+ * A month-end shop's coin: how many are left once the cards reserved are
+ * paid (the held less what they take), below none short; and how that comes.
+ */
 export function planCoin(coin) {
   const held =
     coin.held == null
@@ -619,8 +622,9 @@ export function planCoin(coin) {
         ? coin.held.thousands * 1000
         : coin.held.exact;
   return {
-    held: coin.held == null ? "?" : formatCount(coin.held),
-    short: coin.short ? `${exact.format(coin.need - held)}不足` : null,
+    left: held == null ? "?" : exact.format(held - coin.need),
+    short: coin.short,
+    title: `${coin.name}: 所持 ${coin.held == null ? "?" : formatCount(coin.held)} − 予約 ${exact.format(coin.need)}`,
   };
 }
 

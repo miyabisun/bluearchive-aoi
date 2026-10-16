@@ -981,18 +981,14 @@
                     >{#if shopStale({ ...shop, resets: true })}<span class="stale">前の月の値</span
                       >{/if}{/if}
                 </h3>
-                <!-- The coins held, and how many short of the cards reserved. -->
+                <!-- The coins left once the cards reserved are paid, short red. -->
                 <span class="held">
                   {#each shop.coins as coin (coin.name)}
-                    {@const held = planCoin(coin)}
-                    <span title={coin.name}
-                      ><img
-                        src={iconUrl(coin.icon)}
-                        alt={coin.name}
-                        width="20"
-                        height="20"
-                      />{held.held}{#if held.short}<span class="short">（{held.short}）</span
-                        >{/if}</span
+                    {@const left = planCoin(coin)}
+                    <span title={left.title}
+                      ><img src={iconUrl(coin.icon)} alt={coin.name} width="20" height="20" /><span
+                        class:short={left.short}>{left.left}</span
+                      ></span
                     >
                   {/each}
                 </span>
@@ -1779,11 +1775,13 @@
         width: 18px
         height: 18px
 
-  // A month-end card: pressed, reserved, ringed in the accent and so marked.
+  // A month-end card: pressed, reserved, ringed in the accent and marked on its
+  // top right corner, the card no taller for it (the user's of 2026-10-16).
   .tiles.plan
     li
       padding: 0
     button
+      position: relative
       display: flex
       flex-direction: column
       align-items: center
@@ -1798,8 +1796,15 @@
       cursor: pointer
     li.reserved button
       border-color: var(--c-accent)
+    // On the border's corner; the surface's colour on the accent reads in both themes.
     .booked
-      color: var(--c-accent)
+      position: absolute
+      top: -2px
+      right: -2px
+      padding: 0 var(--sp-1)
+      border-radius: 0 var(--radius-sm) 0 var(--radius-sm)
+      background: var(--c-accent)
+      color: var(--c-surface)
       font-size: var(--fs-caption)
       font-weight: 600
 

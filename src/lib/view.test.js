@@ -849,11 +849,25 @@ describe("month-end and daily shops", () => {
     });
   });
 
-  it("tells the coins held and, where the cards reserved take more, how many short", () => {
-    const coin = { name: "総力戦コイン", icon: "", held: { exact: 600 }, need: 1700, short: true };
-    expect(planCoin(coin)).toEqual({ held: "600", short: "1,100不足" });
-    expect(planCoin({ ...coin, need: 200, short: false })).toEqual({ held: "600", short: null });
-    expect(planCoin({ ...coin, held: null, short: false })).toEqual({ held: "?", short: null });
+  it("tells the coins left once the cards reserved are paid, short below none", () => {
+    const coin = { name: "総力戦コイン", icon: "", held: { exact: 600 }, need: 200, short: false };
+    expect(planCoin(coin)).toEqual({
+      left: "400",
+      short: false,
+      title: "総力戦コイン: 所持 600 − 予約 200",
+    });
+    expect(planCoin({ ...coin, need: 1700, short: true })).toMatchObject({
+      left: "-1,100",
+      short: true,
+    });
+    expect(planCoin({ ...coin, held: { thousands: 3 }, need: 500 })).toMatchObject({
+      left: "2,500",
+    });
+    expect(planCoin({ ...coin, held: null })).toEqual({
+      left: "?",
+      short: false,
+      title: "総力戦コイン: 所持 ? − 予約 200",
+    });
   });
 });
 

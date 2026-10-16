@@ -1148,6 +1148,10 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
     );
   }
   const azusa = page.getByRole("button", { name: /アズサの神名文字/ });
+  const coinsLeft = page
+    .locator(".work details", { hasText: "ショップ: 総力戦" })
+    .locator(".held > span");
+  await expect(coinsLeft).toHaveText(["600", "40"]);
   await expect(azusa).toHaveAttribute("aria-pressed", "false");
   await azusa.click();
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([
@@ -1160,6 +1164,13 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
   }
   await expect(azusa).toHaveAttribute("aria-pressed", "true");
   await expect(azusa).toContainText("予約中");
+  // The mark sits over the card's top right corner, the card no taller than the others.
+  const box = await azusa.boundingBox();
+  const other = await page.getByRole("button", { name: /ハナコの神名文字/ }).boundingBox();
+  expect(box.height).toBe(other.height);
+  const mark = await azusa.getByText("予約中").boundingBox();
+  expect(Math.abs(mark.y - box.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(mark.x + mark.width - (box.x + box.width))).toBeLessThanOrEqual(1);
   const accent = await page.evaluate(() => {
     const probe = document.createElement("span");
     probe.style.color = "var(--c-accent)";
@@ -1169,7 +1180,10 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
     return rgb;
   });
   await expect(azusa).toHaveCSS("border-top-color", accent);
-  await expect(page.locator(".work .held .short")).toHaveText(["（200不足）"]);
+  // The coins left once the cards reserved are paid: 600 less 16 × 50, short red.
+  await expect(coinsLeft).toHaveText(["-200", "40"]);
+  await expect(page.locator(".work .held .short")).toHaveText(["-200"]);
+  await expect(coinsLeft.first()).toHaveAttribute("title", "総力戦コイン: 所持 600 − 予約 800");
   // A shop never read says so.
   await page.locator(".work summary", { hasText: "ショップ: 大決戦" }).click();
   await expect(
