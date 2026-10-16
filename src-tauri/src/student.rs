@@ -59,10 +59,11 @@ pub struct Weapon {
     pub stars: u8,
 }
 
+/// An equipment slot's piece: its tier. Its level is not read (the user's
+/// call, 2026-10-16: "装備欄の既存レベルは読まずに捨てるようにしてください").
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Gear {
     pub tier: u8,
-    pub level: u8,
 }
 
 /// A part of the screen in units (window heights at 16:9, see `screen::unit`):
@@ -121,14 +122,6 @@ const SKILL_MAX: [u8; 4] = [5, 10, 10, 10];
 const WEAPON_LEVEL: Area = on_panel((0.698, 0.614), (0.629, 0.659));
 /// Room for four stars, which stand right-aligned.
 const WEAPON_STARS: Area = on_panel((0.400, 0.258), (0.706, 0.740));
-/// Up to the "E" badge of the equipped piece, and down past the digits' foot
-/// with a few pixels to spare: cut at it (0.797), a smaller screen's "0" lost
-/// its foot to the edge, taken for the ground, and "Lv70" read "Lv7".
-const EQUIPMENT_LEVEL: [Area; 3] = [
-    on_panel((0.822, 0.738), (0.774, 0.802)),
-    on_panel((0.690, 0.606), (0.774, 0.802)),
-    on_panel((0.558, 0.474), (0.774, 0.802)),
-];
 /// The tier badges at the bottom left of the pieces, whole with a few pixels
 /// to spare (measured on 2026-10-12: the gear's badge spans 0.444 to 0.406
 /// from the right, 0.854 to 0.879 down); a badge cut at its edge reads no
@@ -163,7 +156,6 @@ pub fn areas() -> Vec<Area> {
     ];
     all.extend(ABILITY);
     all.extend(SKILLS);
-    all.extend(EQUIPMENT_LEVEL);
     all.extend(EQUIPMENT_TIER);
     all
 }
@@ -196,24 +188,14 @@ const LIGHT: Ink = |c| c.iter().all(|&v| v > 200);
 const DARK: Ink = |c| luminance(c) < 100.0;
 /// The navy skill levels ("Lv.7").
 const NAVY: Ink = |c| luminance(c) < 130.0 && c[2] >= c[0];
-/// The white fill of the italic levels of the weapon and the equipment, whose
-/// outlines touch, by its brightness: enclosed by the outline
+/// The white fill of the weapon's italic level, whose outlines touch, by its
+/// brightness: enclosed by the outline
 /// (`Style::enclosed`), the light card around it is left out, which a video
 /// dims as far as the fill. Measured on 2026-10-15 over the student fixtures
 /// scaled to 1920 wide and a tablet's stream: 225 reads the most; at 200 the
 /// fill joins the card through the outline's light edge, at 235 the stream's
 /// dimmed fill is lost.
 const LIT: Ink = |c| luminance(c) >= 225.0;
-/// The equipment level's fill alone, where `LIT` joins it to the card
-/// through gaps in a stream's outline and cuts out nothing: brighter than the
-/// card (240 and more against 225 to 240 on a tablet's stream 1920 wide,
-/// 2026-10-16). It cuts the fill thinner, which breaks apart: its characters
-/// are read only within `CRISP` of their references.
-const BRIGHT: Ink = |c| luminance(c) >= 240.0;
-/// How near the characters `BRIGHT` cuts lie to their references, at most:
-/// within 4.9 where the level is whole, while a piece of a "70" whose "0" was
-/// lost came 17.0 near "1" (a stream at 1830 wide, 2026-10-16).
-const CRISP: f32 = 8.0;
 /// The blue of the tier badges, by which the favourite item's is told.
 const BLUE: Ink = |c| i32::from(c[2]) - i32::from(c[0]) > 90 && c[2] > 150;
 /// The tier ("T10") and the ring around it, darker than the white badge: by
@@ -265,8 +247,8 @@ const WHOLE: f32 = 1.2;
 /// samples: the evaluation characters lie within 5.0 of their own references
 /// and at most 0.19 of the way to the next one, where 0.12 or 0.2 leave 0.8
 /// and 0.52, and 0.25 misreads "56"), then cut apart by width. The white
-/// italic levels of the weapon and the equipment are read by their fill,
-/// which their outlines keep apart.
+/// italic level of the weapon is read by its fill, which its outlines keep
+/// apart.
 pub const STYLES: &[(&str, Style)] = &[
     (
         "level",
@@ -286,14 +268,6 @@ pub const STYLES: &[(&str, Style)] = &[
     (
         "weapon",
         Style {
-            ..style(LIT, 0.5, WHOLE, 1.3, false, Ground::Around, 0.0)
-        },
-    ),
-    // The equipment's levels break into pieces on a smaller screen.
-    (
-        "equipment",
-        Style {
-            entire: true,
             ..style(LIT, 0.5, WHOLE, 1.3, false, Ground::Around, 0.0)
         },
     ),
@@ -328,30 +302,17 @@ fn text(image: &RgbImage, fonts: &Fonts, name: &str, area: Area) -> Option<Strin
 
 /// The number after `prefix` in the text of `style` in `area`.
 fn number(image: &RgbImage, fonts: &Fonts, style: &str, prefix: &str, area: Area) -> Option<u8> {
-    let rect = rect(image, area)?;
-    let shapes = glyph::shapes(image, rect, style_of(style));
-    let text = if shapes.is_empty() && style == "equipment" {
-        let bright = Style {
-            ink: BRIGHT,
-            ..style_of(style)
-        };
-        after_prefix(
-            fonts,
-            style,
-            &glyph::shapes(image, rect, bright),
-            prefix,
-            CRISP,
-        )
-    } else {
-        after_prefix(fonts, style, &shapes, prefix, f32::INFINITY)
-    };
+    let shapes = glyph::shapes(image, rect(image, area)?, style_of(style));
     let most = if style == "bond" { MOST_BOND } else { MOST };
-    text?.parse().ok().filter(|&n| n <= most)
+    after_prefix(fonts, style, &shapes, prefix)?
+        .parse()
+        .ok()
+        .filter(|&n| n <= most)
 }
 
 /// The most a number of the student screen comes to: two digits (a level of
-/// 90, a weapon's 60, an equipment's 70), a bond's 100. A "0" come apart in
-/// two halves reads as two "1"s (an equipment's "Lv.20" read "211" at 1680
+/// 90, a weapon's 60), a bond's 100. A "0" come apart in two halves reads as
+/// two "1"s (an equipment's "Lv.20", when it was read, read "211" at 1680
 /// wide, 2026-10-16).
 const MOST: u8 = 99;
 const MOST_BOND: u8 = 100;
@@ -360,23 +321,18 @@ const MOST_BOND: u8 = 100;
 /// letter nearest to what it is, at its place, anchoring the rest, which is
 /// told strictly (see `Fonts::read`); the letters before it need only be
 /// there. A stream blurs a level's "L" past what a digit may lie from its
-/// references (23 in the middle equipment slot on a tablet's stream 1920
-/// wide), or breaks its foot off, while the digits keep to theirs. The last
+/// references (23 in an equipment slot on a tablet's stream 1920 wide, when
+/// its level was read), or breaks its foot off, while the digits keep to
+/// theirs. The last
 /// letter is not looked for farther on (a piece of a digit may lie nearest
-/// it). The characters lie within `farthest` of their references as well.
-fn after_prefix(
-    fonts: &Fonts,
-    style: &str,
-    shapes: &[Vec<f32>],
-    prefix: &str,
-    farthest: f32,
-) -> Option<String> {
+/// it).
+fn after_prefix(fonts: &Fonts, style: &str, shapes: &[Vec<f32>], prefix: &str) -> Option<String> {
     let (head, rest) = shapes.split_at_checked(prefix.chars().count())?;
     let anchored = match (head.last(), prefix.chars().last()) {
         (Some(shape), Some(c)) => fonts.nearest(style, shape) == Some(c),
         _ => true,
     };
-    anchored.then(|| fonts.read_within(style, rest, farthest))?
+    anchored.then(|| fonts.read(style, rest))?
 }
 
 /// How many pixels of `ink` `area` holds.
@@ -448,8 +404,7 @@ pub fn read(image: &RgbImage, fonts: &Fonts) -> Training {
     };
     let equipment = |i: usize| -> Option<Gear> {
         let tier = number(image, fonts, "tier", "T", EQUIPMENT_TIER[i])?;
-        let level = number(image, fonts, "equipment", "Lv", EQUIPMENT_LEVEL[i])?;
-        Some(Gear { tier, level })
+        Some(Gear { tier })
     };
     // Not released where the badge's slate is missing; a badge whose text
     // does not read is unknown.
@@ -529,10 +484,10 @@ pub struct Label {
     pub skills: [u8; 4],
     /// `None` while the unique weapon is locked.
     pub weapon: Option<Weapon>,
-    /// Tier and level of each equipment slot; `None` where the slot holds
-    /// nothing (nothing equipped, or locked below the level that opens it),
-    /// which the screen is not read for yet.
-    pub equipment: [Option<[u8; 2]>; 3],
+    /// The tier of each equipment slot; `None` where the slot holds nothing
+    /// (nothing equipped, or locked below the level that opens it), which the
+    /// screen is not read for yet.
+    pub equipment: [Option<u8>; 3],
     pub gear: u8,
     pub ability: [u8; 3],
 }
@@ -545,9 +500,7 @@ impl Label {
             bond: Some(self.bond),
             skills: self.skills.map(Some),
             weapon: Some(self.weapon),
-            equipment: self
-                .equipment
-                .map(|slot| slot.map(|[tier, level]| Gear { tier, level })),
+            equipment: self.equipment.map(|slot| slot.map(|tier| Gear { tier })),
             gear: Some(self.gear),
             ability: self.ability.map(Some),
         }
@@ -568,14 +521,13 @@ impl Label {
         if let Some(weapon) = self.weapon {
             out.push(("weapon", WEAPON_LEVEL, format!("Lv{}", weapon.level)));
         }
-        for (i, [tier, level]) in self
+        for (i, tier) in self
             .equipment
             .iter()
             .enumerate()
             .filter_map(|(i, s)| Some((i, (*s)?)))
         {
             out.push(("tier", EQUIPMENT_TIER[i], format!("T{tier}")));
-            out.push(("equipment", EQUIPMENT_LEVEL[i], format!("Lv{level}")));
         }
         if self.gear > 0 {
             out.push(("tier", GEAR_TIER, format!("T{}", self.gear)));
@@ -622,13 +574,12 @@ mod tests {
     fn a_prefix_is_told_by_its_nearest_letters_and_the_digits_strictly() {
         let refs = [('L', 0), ('v', 4), ('7', 8), ('0', 12)]
             .map(|(c, from)| (c, vec![rows(from, from + 4, 1.0)]));
-        let fonts = Fonts([("equipment".to_owned(), refs.into_iter().collect())].into());
+        let fonts = Fonts([("weapon".to_owned(), refs.into_iter().collect())].into());
         let [l, v, seven, zero] = [0, 4, 8, 12].map(|from| rows(from, from + 4, 1.0));
         let blurred = |from| rows(from, from + 4, 0.4);
-        let read =
-            |shapes: &[Vec<f32>]| after_prefix(&fonts, "equipment", shapes, "Lv", f32::INFINITY);
+        let read = |shapes: &[Vec<f32>]| after_prefix(&fonts, "weapon", shapes, "Lv");
         let lv70 = [blurred(0), v.clone(), seven.clone(), zero.clone()];
-        assert_eq!(fonts.read("equipment", &lv70), None);
+        assert_eq!(fonts.read("weapon", &lv70), None);
         assert_eq!(read(&lv70), Some("70".to_owned()));
         let footless = [seven.clone(), v.clone(), seven.clone(), zero.clone()];
         assert_eq!(read(&footless), Some("70".to_owned()));

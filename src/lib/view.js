@@ -104,7 +104,6 @@ export function studentCells(t) {
     weapon: t.weapon ? `固有武器 Lv${t.weapon.level}` : "",
     skills: show(ex) + others.map((s) => (s === 10 ? "M" : show(s))).join(""),
     equipment: "T" + t.equipment.map((e) => (known(e) ? String(e.tier) : "?")).join("/"),
-    equipmentLevels: "Lv" + t.equipment.map((e) => (known(e) ? String(e.level) : "?")).join("/"),
     gear: !known(t.gear) ? "?" : t.gear === 0 ? "—" : `T${t.gear}`,
     ability: t.ability.map(show).join("/"),
     bond: show(t.bond),
@@ -122,10 +121,7 @@ const STUDENT_KEYS = {
   // The star on into the unique weapon's, then the weapon's level.
   star: (t) => (starOf(t) === null ? null : [starOf(t), t.weapon?.level ?? 0]),
   skills: (t) => sum(t.skills),
-  equipment: (t) =>
-    t.equipment.every(known)
-      ? [sum(t.equipment.map((e) => e.tier)), sum(t.equipment.map((e) => e.level))]
-      : null,
+  equipment: (t) => (t.equipment.every(known) ? sum(t.equipment.map((e) => e.tier)) : null),
   gear: (t) => t.gear,
   ability: (t) => sum(t.ability),
   bond: (t) => t.bond,

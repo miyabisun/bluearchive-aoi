@@ -49,11 +49,9 @@ pub fn yaml(
             Some(None) => "locked".to_owned(),
             Some(Some(w)) => format!("{{stars: {}, level: {}}}", w.stars, w.level),
         };
-        let equipment = t.equipment.map(|e| {
-            e.map_or("null".to_owned(), |e| {
-                format!("{{tier: {}, level: {}}}", e.tier, e.level)
-            })
-        });
+        let equipment = t
+            .equipment
+            .map(|e| e.map_or("null".to_owned(), |e| format!("{{tier: {}}}", e.tier)));
         // A student SchaleDB does not list yet has no id but Aoi's own.
         let id = if s.id < 0 {
             "null".to_owned()
@@ -205,10 +203,7 @@ mod tests {
                     level: 50,
                     stars: 3,
                 })),
-                equipment: [Some(Gear {
-                    tier: 10,
-                    level: 70,
-                }); 3],
+                equipment: [Some(Gear { tier: 10 }); 3],
                 gear: Some(0),
                 ability: [Some(25), Some(25), Some(0)],
             },
@@ -258,7 +253,7 @@ students:
     bond: 43
     skills: [5, 10, 10, 10]
     weapon: {stars: 3, level: 50}
-    equipment: [{tier: 10, level: 70}, {tier: 10, level: 70}, {tier: 10, level: 70}]
+    equipment: [{tier: 10}, {tier: 10}, {tier: 10}]
     gear: 0
     ability: [25, 25, 0]
 items:
@@ -286,7 +281,7 @@ shops: []
             bond: None,
             skills: [Some(2), None, Some(3), Some(6)],
             weapon: Some(None),
-            equipment: [Some(Gear { tier: 4, level: 40 }), None, None],
+            equipment: [Some(Gear { tier: 4 }), None, None],
             gear: None,
             ability: [Some(0), None, Some(0)],
             ..student.training
@@ -305,7 +300,7 @@ shops: []
             "    bond: null",
             "    skills: [2, null, 3, 6]",
             "    weapon: locked",
-            "    equipment: [{tier: 4, level: 40}, null, null]",
+            "    equipment: [{tier: 4}, null, null]",
             "    gear: null",
             "    ability: [0, null, 0]",
         ] {

@@ -71,7 +71,7 @@ fn a_slot_short_of_t10_blueprints_lists_the_t10_box_and_the_universal_ones_left(
             bond: Some(1),
             skills: [Some(10); 4],
             weapon: Some(None),
-            equipment: [Some(Gear { tier: 1, level: 1 }); 3],
+            equipment: [Some(Gear { tier: 1 }); 3],
             gear: Some(0),
             ability: [Some(0); 3],
         },

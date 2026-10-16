@@ -1168,7 +1168,7 @@
                   <td class="num">{cells.level}</td>
                   <td title={cells.weapon || undefined}>{cells.star}</td>
                   <td class="code">{cells.skills}</td>
-                  <td class="code" title={cells.equipmentLevels}>{cells.equipment}</td>
+                  <td class="code">{cells.equipment}</td>
                   <td>{cells.gear}</td>
                   <td class="code">{cells.ability}</td>
                   <td class="num">{cells.bond}</td>

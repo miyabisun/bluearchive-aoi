@@ -398,7 +398,7 @@ pub fn needs(
             // Nothing is asked of a slot left at the first tier.
             (None, _) if to <= 1 => {}
             (Some(gear), Some(category)) => {
-                equipment_needs(&mut n, category, gear.tier, gear.level, to, growth, pieces);
+                equipment_needs(&mut n, category, gear.tier, to, growth, pieces);
             }
             _ => n.unknown.push((id, Part::Equipment(slot))),
         }
@@ -435,13 +435,14 @@ pub fn fed(gained: u64, orbs: &[(i64, u64)]) -> u64 {
     gained.div_ceil(step) * step
 }
 
-/// A slot of `category` from tier `tier` at Lv`level` to tier `to`: each tier
-/// levelled to its top with enhancement orbs, then made into the next.
+/// A slot of `category` from tier `tier` to tier `to`: each tier levelled to
+/// its top with enhancement orbs, then made into the next, which starts at Lv1.
+/// The slot's own tier is taken as levelled to its top: its level is not read
+/// (the user's call, 2026-10-16: "装備のレベルは常にそのTierの最大だと思ってください").
 fn equipment_needs(
     n: &mut Needs,
     category: &str,
     tier: u8,
-    level: u8,
     to: u8,
     growth: &Growth,
     pieces: &[Piece],
@@ -452,8 +453,8 @@ fn equipment_needs(
             .find(|p| p.category == category && p.tier == tier)
     };
     for t in tier..to {
-        let from = if t == tier { level } else { 1 };
-        let top = piece(t).map_or(from, |p| p.max_level);
+        let top = piece(t).map_or(1, |p| p.max_level);
+        let from = if t == tier { top } else { 1 };
         let exp = &growth.equipment_exp[usize::from(t) - 1];
         let gained = exp[usize::from(top) - 1].saturating_sub(exp[usize::from(from) - 1]);
         n.orb_exp += fed(gained, &growth.orbs);
@@ -552,7 +553,7 @@ pub(crate) mod tests {
     #[test]
     fn stars_take_the_students_elephs_up_to_the_weapons_fourth() {
         // ★3 to the weapon's ★3: ★4, ★5 (the weapon's ★1 with it), weapon ★2, ★3.
-        let student = now(4, [1, 1, 1, 1], Some(Gear { tier: 1, level: 1 }));
+        let student = now(4, [1, 1, 1, 1], Some(Gear { tier: 1 }));
         let target = Target {
             star: Some(7),
             ..reached(&student)
@@ -649,7 +650,7 @@ pub(crate) mod tests {
 
     #[test]
     fn levels_take_reports_exp_and_credits_for_it() {
-        let student = now(2, [1, 1, 1, 1], Some(Gear { tier: 1, level: 1 }));
+        let student = now(2, [1, 1, 1, 1], Some(Gear { tier: 1 }));
         let target = Target {
             level: 4,
             ..reached(&student)
@@ -661,7 +662,7 @@ pub(crate) mod tests {
 
     #[test]
     fn a_target_reached_takes_nothing() {
-        let student = now(4, [5, 10, 10, 10], Some(Gear { tier: 3, level: 3 }));
+        let student = now(4, [5, 10, 10, 10], Some(Gear { tier: 3 }));
         let n = needs(
             1,
             Some(&grower()),
@@ -675,7 +676,7 @@ pub(crate) mod tests {
 
     #[test]
     fn skills_take_their_levels_materials_credits_and_the_note_for_lv10() {
-        let student = now(4, [3, 8, 1, 10], Some(Gear { tier: 1, level: 1 }));
+        let student = now(4, [3, 8, 1, 10], Some(Gear { tier: 1 }));
         let target = Target {
             skills: [5, 10, 2, 10],
             ..reached(&student)
@@ -691,17 +692,17 @@ pub(crate) mod tests {
 
     #[test]
     fn equipment_levels_to_the_top_of_each_tier_then_takes_the_next_ones_recipe() {
-        let student = now(4, [1, 1, 1, 1], Some(Gear { tier: 1, level: 2 }));
+        let student = now(4, [1, 1, 1, 1], Some(Gear { tier: 1 }));
         let target = Target {
             equipment: [3, 1, 1],
             ..reached(&student)
         };
         let n = needs(1, Some(&grower()), &student, &target, &growth(), &pieces());
-        // Tier 1 from Lv2 to 3 (10 exp), tier 2 from Lv1 to 3 (50 exp), each
-        // fed in orbs of 90: what passes a tier's top is lost.
-        assert_eq!(n.orb_exp, 90 + 90);
+        // Tier 1 at its top already, tier 2 from Lv1 to 3 (50 exp), fed in
+        // orbs of 90: what passes a tier's top is lost.
+        assert_eq!(n.orb_exp, 90);
         assert_eq!(n.equipment, BTreeMap::from([(101_001, 20), (101_002, 20)]));
-        assert_eq!(n.credits, 60 * 4 + 1500 + 3000);
+        assert_eq!(n.credits, 50 * 4 + 1500 + 3000);
     }
 
     #[test]
@@ -769,7 +770,7 @@ pub(crate) mod tests {
 
     #[test]
     fn what_cannot_be_counted_is_told_by_part() {
-        let mut student = now(2, [1, 1, 1, 1], Some(Gear { tier: 1, level: 1 }));
+        let mut student = now(2, [1, 1, 1, 1], Some(Gear { tier: 1 }));
         student.skills[2] = None;
         let target = Target {
             level: 3,

@@ -97,14 +97,7 @@ mod tests {
                         level: 50,
                         stars: 3,
                     })),
-                    equipment: [
-                        Some(Gear {
-                            tier: 10,
-                            level: 70,
-                        }),
-                        None,
-                        None,
-                    ],
+                    equipment: [Some(Gear { tier: 10 }), None, None],
                     gear: Some(0),
                     ability: [Some(25), Some(25), Some(0)],
                 },

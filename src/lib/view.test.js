@@ -144,11 +144,7 @@ describe("studentCells", () => {
     bond: 34,
     skills: [5, 10, 7, 10],
     weapon: { level: 60, stars: 4 },
-    equipment: [
-      { tier: 10, level: 70 },
-      { tier: 9, level: 65 },
-      { tier: 8, level: 60 },
-    ],
+    equipment: [{ tier: 10 }, { tier: 9 }, { tier: 8 }],
     gear: 2,
     ability: [25, 0, 25],
   };
@@ -160,7 +156,6 @@ describe("studentCells", () => {
       weapon: "固有武器 Lv60",
       skills: "5M7M",
       equipment: "T10/9/8",
-      equipmentLevels: "Lv70/65/60",
       gear: "T2",
       ability: "25/0/25",
       bond: "34",
@@ -173,7 +168,7 @@ describe("studentCells", () => {
       level: null,
       weapon: null,
       skills: [3, null, 1, 1],
-      equipment: [{ tier: 1, level: 1 }, null, { tier: 1, level: 10 }],
+      equipment: [{ tier: 1 }, null, { tier: 1 }],
       gear: 0,
       ability: [0, null, 0],
     });
@@ -186,7 +181,6 @@ describe("studentCells", () => {
     expect(studentCells({ ...known, rarity: null }).star).toBe("?");
     expect(cells.skills).toBe("3?11");
     expect(cells.equipment).toBe("T1/?/1");
-    expect(cells.equipmentLevels).toBe("Lv1/?/10");
     expect(cells.gear).toBe("—");
     expect(cells.ability).toBe("0/?/0");
     expect(studentCells({ ...known, weapon: undefined })).toMatchObject({ star: "?", weapon: "" });
@@ -204,11 +198,7 @@ describe("sortStudents", () => {
       bond: 20,
       skills: [5, 10, 10, 10],
       weapon: { stars: 4, level: 60 },
-      equipment: [
-        { tier: 10, level: 70 },
-        { tier: 10, level: 70 },
-        { tier: 10, level: 70 },
-      ],
+      equipment: [{ tier: 10 }, { tier: 10 }, { tier: 10 }],
       gear: 0,
       ability: [0, 0, 0],
       ...overrides,
@@ -252,23 +242,11 @@ describe("sortStudents", () => {
     ];
     expect(ids(sortStudents(rows, "skills"))).toEqual([1, 2, 3]);
     const geared = [
-      student(1, {
-        equipment: [
-          { tier: 9, level: 65 },
-          { tier: 10, level: 70 },
-          { tier: 10, level: 70 },
-        ],
-      }),
-      student(2, {
-        equipment: [
-          { tier: 9, level: 70 },
-          { tier: 10, level: 70 },
-          { tier: 10, level: 70 },
-        ],
-      }),
+      student(1, { equipment: [{ tier: 9 }, { tier: 10 }, { tier: 10 }] }),
+      student(2, { equipment: [{ tier: 8 }, { tier: 10 }, { tier: 10 }] }),
       student(3),
     ];
-    expect(ids(sortStudents(geared, "equipment"))).toEqual([3, 2, 1]);
+    expect(ids(sortStudents(geared, "equipment"))).toEqual([3, 1, 2]);
     const released = [student(1, { ability: [25, 0, 0] }), student(2, { ability: [25, 0, 25] })];
     expect(ids(sortStudents(released, "ability"))).toEqual([2, 1]);
   });

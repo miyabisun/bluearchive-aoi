@@ -508,7 +508,7 @@ impl Recognizer {
             bond: Some(1),
             skills: [Some(1); 4],
             weapon: Some(None),
-            equipment: [Some(student::Gear { tier: 1, level: 1 }); 3],
+            equipment: [Some(student::Gear { tier: 1 }); 3],
             gear: Some(0),
             ability: [Some(0); 3],
         };

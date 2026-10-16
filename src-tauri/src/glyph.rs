@@ -542,15 +542,7 @@ impl Fonts {
     /// The text the `shapes` spell in `style`, if every one is close to a
     /// reference and clearly nearer to it than to any other character.
     pub fn read(&self, style: &str, shapes: &[Vec<f32>]) -> Option<String> {
-        self.read_within(style, shapes, MAX_DISTANCE)
-    }
-
-    /// As `read`, every character within `farthest` of its reference.
-    pub fn read_within(&self, style: &str, shapes: &[Vec<f32>], farthest: f32) -> Option<String> {
-        shapes
-            .iter()
-            .map(|s| self.character_within(style, s, farthest))
-            .collect()
+        shapes.iter().map(|s| self.character(style, s)).collect()
     }
 
     /// The character whose references lie nearest `shape` in `style`, however
@@ -570,11 +562,6 @@ impl Fonts {
     /// The character `shape` is in `style`, if it is close to a reference and
     /// clearly nearer to it than to any other character.
     pub fn character(&self, style: &str, shape: &[f32]) -> Option<char> {
-        self.character_within(style, shape, MAX_DISTANCE)
-    }
-
-    /// As `character`, within `farthest` of its reference.
-    fn character_within(&self, style: &str, shape: &[f32], farthest: f32) -> Option<char> {
         // The nearest character and the next nearest one's distance: a
         // reference no nearer than both is measured no further.
         let (mut nearest, mut next) = (None, f32::INFINITY);
@@ -591,7 +578,7 @@ impl Fonts {
             }
         }
         let (c, d) = nearest?;
-        (d <= farthest.min(MAX_DISTANCE) && d <= LEAD * next).then_some(c)
+        (d <= MAX_DISTANCE && d <= LEAD * next).then_some(c)
     }
 }
 

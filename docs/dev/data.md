@@ -96,7 +96,7 @@ students:
     bond: 43
     skills: [5, 10, 10, 10]  # EX, normal, passive, sub
     weapon: {stars: 3, level: 50}  # `locked` before it is unlocked
-    equipment: [{tier: 10, level: 70}, {tier: 10, level: 70}, null]
+    equipment: [{tier: 10}, {tier: 10}, null]
     gear: 0  # the favorite item's tier, 0 without one
     ability: [25, 25, 0]  # HP, attack, healing
 items:
