@@ -417,6 +417,14 @@ fn skill_needs(n: &mut Needs, grower: &Grower, skill: usize, from: u8, to: u8, g
     }
 }
 
+/// The orb exp that brings a piece `gained` exp up to its tier's top: orbs
+/// feed the smallest one's exp at a time at least, and what passes the top is
+/// lost (2026-10-16, the user: 「LvMaxに引き上げる時、経験値に端数が生まれた場合は消えてしまう」).
+pub fn fed(gained: u64, orbs: &[(i64, u64)]) -> u64 {
+    let step = orbs.iter().map(|&(_, exp)| exp).min().unwrap_or(1).max(1);
+    gained.div_ceil(step) * step
+}
+
 /// A slot of `category` from tier `tier` at Lv`level` to tier `to`: each tier
 /// levelled to its top with enhancement orbs, then made into the next.
 fn equipment_needs(
@@ -438,7 +446,7 @@ fn equipment_needs(
         let top = piece(t).map_or(from, |p| p.max_level);
         let exp = &growth.equipment_exp[usize::from(t) - 1];
         let gained = exp[usize::from(top) - 1].saturating_sub(exp[usize::from(from) - 1]);
-        n.orb_exp += gained;
+        n.orb_exp += fed(gained, &growth.orbs);
         n.credits += gained * growth.equipment_credits;
         if let Some(next) = piece(t + 1) {
             for &(blueprint, amount) in &next.recipe {
@@ -676,8 +684,9 @@ pub(crate) mod tests {
             ..reached(&student)
         };
         let n = needs(1, Some(&grower()), &student, &target, &growth(), &pieces());
-        // Tier 1 from Lv2 to 3 (10 exp), tier 2 from Lv1 to 3 (50 exp).
-        assert_eq!(n.orb_exp, 60);
+        // Tier 1 from Lv2 to 3 (10 exp), tier 2 from Lv1 to 3 (50 exp), each
+        // fed in orbs of 90: what passes a tier's top is lost.
+        assert_eq!(n.orb_exp, 90 + 90);
         assert_eq!(n.equipment, BTreeMap::from([(101_001, 20), (101_002, 20)]));
         assert_eq!(n.credits, 60 * 4 + 1500 + 3000);
     }

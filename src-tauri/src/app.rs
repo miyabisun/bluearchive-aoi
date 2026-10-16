@@ -1,7 +1,7 @@
 //! The window: shows what the watcher sees and the tally, and keeps it.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::PathBuf,
     sync::{Arc, Mutex, PoisonError},
 };
@@ -17,6 +17,7 @@ use crate::{
     keep::{self, Kept, ReadAt, now},
     plan::{BlueprintRow, NeedRow, Target, UnknownRow},
     shop::ShopRow,
+    strategy::{PlanShop, Reserve},
     student::Training,
     supply::ProcureLine,
     tally::Tally,
@@ -52,6 +53,11 @@ pub struct Snapshot {
     ground: Ground,
     /// The daily plays against what is held.
     work: WorkRows,
+    /// The month-end shops' purchase plan.
+    month_end: Vec<PlanShop>,
+    /// The cards reserved in it.
+    #[serde(skip)]
+    reserved: BTreeSet<Reserve>,
     read_at: ReadAt,
     /// Why what was read could not be kept or brought back, while it lasts.
     keep_error: Option<String>,
@@ -110,6 +116,8 @@ impl Snapshot {
             plan_version: 0,
             ground: Ground::default(),
             work: recognizer.work_rows(&[], &[], None),
+            month_end: Vec::new(),
+            reserved: kept.reserved.clone(),
             read_at: kept.read_at.clone(),
             keep_error,
             phone: Link::Unpaired,
@@ -177,9 +185,10 @@ impl Snapshot {
         );
     }
 
-    /// Counts the daily plays again from what was read.
+    /// Counts the daily plays and the month-end plan again from what was read.
     fn rework(&mut self, recognizer: &Recognizer) {
         self.work = recognizer.work_rows(&self.items, &self.equipment, self.credits);
+        self.month_end = recognizer.month_end(&self.shops, &self.students, &self.reserved);
     }
 
     /// What is kept of the window.
@@ -196,12 +205,20 @@ impl Snapshot {
                 .map(|s| (s.name.clone(), s.shelf()))
                 .collect(),
             targets: self.targets(),
+            reserved: self.reserved.clone(),
             read_at: self.read_at.clone(),
         }
     }
 
-    /// Everything read, as YAML headed by `stamp`.
+    /// Everything read, as YAML headed by `stamp`, and the cards reserved.
     fn yaml(&self, stamp: &str) -> String {
+        let named = |id: i64| {
+            self.shops
+                .iter()
+                .flat_map(|s| &s.goods)
+                .find(|g| g.id == id)
+                .map(|g| g.name.clone())
+        };
         export::yaml(
             stamp,
             &self.read_at,
@@ -210,7 +227,7 @@ impl Snapshot {
             &self.items,
             &self.equipment,
             &self.shops,
-        )
+        ) + &export::reserved_yaml(&self.reserved, named)
     }
 }
 
@@ -255,6 +272,33 @@ fn set_target(
         None => targets.remove(&id),
     };
     snapshot.replan(&recognizer, &targets);
+    let kept = keep_in(&places, &snapshot);
+    snapshot.keep_error = kept
+        .as_ref()
+        .err()
+        .map(|e| format!("読み取り結果を保存できませんでした: {e}"));
+    let _ = app.emit(EVENT, &*snapshot);
+    kept
+}
+
+/// Reserves a month-end shop's `card`, or takes the reservation back; kept.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Tauri hands command arguments over by value.
+fn set_reserved(
+    card: Reserve,
+    reserved: bool,
+    app: tauri::AppHandle,
+    latest: tauri::State<'_, Latest>,
+    recognizer: tauri::State<'_, Arc<Recognizer>>,
+    places: tauri::State<'_, Places>,
+) -> Result<(), String> {
+    let mut snapshot = latest.0.lock().unwrap_or_else(PoisonError::into_inner);
+    if reserved {
+        snapshot.reserved.insert(card);
+    } else {
+        snapshot.reserved.remove(&card);
+    }
+    snapshot.rework(&recognizer);
     let kept = keep_in(&places, &snapshot);
     snapshot.keep_error = kept
         .as_ref()
@@ -479,6 +523,7 @@ pub fn run(context: tauri::Context) {
             snapshot,
             export,
             set_target,
+            set_reserved,
             check_update,
             apply_update,
             set_paused,

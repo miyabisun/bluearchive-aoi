@@ -14,6 +14,9 @@ import {
   tierCell,
   unknownText,
   commissionCells,
+  orbCells,
+  planCard,
+  planCoin,
   farmCells,
   goodTile,
   heldTone,
@@ -805,6 +808,52 @@ describe("work", () => {
       students: "?",
       detail: "? ÷ 41.5M",
     });
+  });
+});
+
+describe("month-end and daily shops", () => {
+  const commissions = {
+    credits_name: "クレジット回収",
+    credits: 248955686,
+    credits_each: 41500000,
+    credit_students: 5.999,
+    reports_name: "拠点防衛",
+    report_exp: 6245925,
+    report_about: false,
+    exp_each: 1249185,
+    report_students: 5.0,
+  };
+
+  it("counts the students the credits and the orbs held raise, the fewer marked", () => {
+    const orbs = { exp: 5700780, about: true, exp_each: 741690, students: 7.686 };
+    expect(orbCells(commissions, orbs)).toEqual({
+      credits: { name: "クレジット", students: "6.0人分", detail: "249M ÷ 41.5M" },
+      orbs: { name: "強化珠", students: "7.7人分", detail: "約5.7M EXP ÷ 0.74M EXP" },
+      fewer: "credits",
+    });
+    const unread = { ...commissions, credits: null, credit_students: null };
+    expect(orbCells(unread, orbs).fewer).toBe(null);
+  });
+
+  it("tells a card's times left at its price, bought up, or its student done", () => {
+    const card = { left: 16, price: 50, amount: 5, sold: false, barred: false };
+    expect(planCard(card)).toEqual({ amount: "×5", text: "16回@50" });
+    expect(planCard({ ...card, price: null, amount: null })).toEqual({
+      amount: "",
+      text: "16回@?",
+    });
+    expect(planCard({ ...card, left: 0, sold: true })).toEqual({ amount: "×5", text: "売切れ" });
+    expect(planCard({ ...card, left: 0, sold: true, barred: true })).toEqual({
+      amount: "×5",
+      text: "固有4",
+    });
+  });
+
+  it("tells the coins held and, where the cards reserved take more, how many short", () => {
+    const coin = { name: "総力戦コイン", icon: "", held: { exact: 600 }, need: 1700, short: true };
+    expect(planCoin(coin)).toEqual({ held: "600", short: "1,100不足" });
+    expect(planCoin({ ...coin, need: 200, short: false })).toEqual({ held: "600", short: null });
+    expect(planCoin({ ...coin, held: null, short: false })).toEqual({ held: "?", short: null });
   });
 });
 

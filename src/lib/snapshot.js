@@ -46,6 +46,20 @@ export async function setTarget(id, target) {
 }
 
 /**
+ * Reserves a month-end shop's `card` ({ shop, id, coin }), or takes the
+ * reservation back; the app answers with a new snapshot. Outside the app it
+ * notes the call in `window.__AOI_CALLS__`.
+ */
+export async function setReserved(card, reserved) {
+  if (!("__TAURI_INTERNALS__" in window)) {
+    const w = /** @type {any} */ (window);
+    (w.__AOI_CALLS__ ??= []).push({ card, reserved });
+    return;
+  }
+  return invoke("set_reserved", { card, reserved });
+}
+
+/**
  * Counts the plan again from what is read now (the 育成 tab's 再読込); the
  * next snapshot carries it. Outside the app it notes the call in
  * `window.__AOI_CALLS__`.

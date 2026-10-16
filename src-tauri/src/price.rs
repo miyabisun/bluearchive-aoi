@@ -122,6 +122,43 @@ impl Prices {
         Some((id - i64::from(tier) + 1, tier))
     }
 
+    /// Whether the month-end purchase plan lists the good `id` in `shop` (the
+    /// user's of 2026-10-16): in 総力戦 and 大決戦 秘伝ノート, the elephs and the
+    /// three great schools' upper notes and BDs; in 合同火力演習 秘伝ノート, the
+    /// elephs, the tailor stones and the ooparts; in 指名手配 the elephs and
+    /// the top ooparts (its coins come too slowly for more); in 熟達証書 神名の
+    /// カケラ and the fest and limited students' elephs (the event students'
+    /// come cheaper from 指名手配).
+    pub fn planned(&self, shop: &str, id: i64) -> bool {
+        let Some(good) = self.goods.get(&id) else {
+            return false;
+        };
+        let kind = |k| is(good, k);
+        let tier = tier(&good.rarity).unwrap_or(0);
+        let great = ["ゲヘナ", "トリニティ", "ミレニアム"]
+            .iter()
+            .any(|school| good.name.contains(&format!("（{school}）")));
+        match shop {
+            "総力戦" | "大決戦" => {
+                kind("秘伝ノート")
+                    || kind("神名文字")
+                    || ((kind("技術ノート") || kind("戦術教育BD")) && tier >= 3 && great)
+            }
+            "合同火力演習" => {
+                kind("秘伝ノート")
+                    || kind("神名文字")
+                    || kind("テイラーストーン")
+                    || kind("オーパーツ")
+            }
+            "指名手配" => kind("神名文字") || (kind("オーパーツ") && tier == 4),
+            "熟達証書" => {
+                kind("神名のカケラ")
+                    || (kind("神名文字") && matches!(self.elephs.get(&id), Some(1 | 3)))
+            }
+            _ => false,
+        }
+    }
+
     /// The coins of `shop`, left first (none for a shop without terms).
     pub fn coins(&self, shop: &str) -> &[String] {
         self.shops.get(shop).map_or(&[], |t| t.coins.as_slice())
@@ -359,5 +396,98 @@ mod tests {
         for shop in crate::shop::SHOPS {
             assert!(terms.contains_key(shop), "{shop}");
         }
+    }
+
+    /// What each month-end shop's purchase plan lists (the user's of
+    /// 2026-10-16).
+    #[test]
+    fn each_month_end_shop_plans_the_goods_the_user_stocks_up_on() {
+        let goods = vec![
+            good(9999, "秘伝ノート", "Material", Some("BookItem"), "SSR"),
+            good(10019, "アズサの神名文字", "SecretStone", None, "N"),
+            good(10032, "ムツキ（正月）の神名文字", "SecretStone", None, "N"),
+            good(10077, "キリノ（水着）の神名文字", "SecretStone", None, "N"),
+            good(10033, "ワカモの神名文字", "SecretStone", None, "N"),
+            good(2, "神名のカケラ", "Material", None, "SSR"),
+            good(
+                3000,
+                "初級技術ノート（ゲヘナ）",
+                "Material",
+                Some("BookItem"),
+                "N",
+            ),
+            good(
+                3002,
+                "上級技術ノート（ゲヘナ）",
+                "Material",
+                Some("BookItem"),
+                "SR",
+            ),
+            good(
+                4003,
+                "最上級技術ノート（百鬼夜行）",
+                "Material",
+                Some("BookItem"),
+                "SSR",
+            ),
+            good(
+                5013,
+                "最上級戦術教育BD（トリニティ）",
+                "Material",
+                Some("CDItem"),
+                "SSR",
+            ),
+            good(
+                201,
+                "破損したトーテムポール",
+                "Material",
+                Some("Artifact"),
+                "R",
+            ),
+            good(
+                203,
+                "完全なトーテムポール",
+                "Material",
+                Some("Artifact"),
+                "SSR",
+            ),
+            good(7, "中級テイラーストーン", "Material", None, "R"),
+            good(8, "最上級レポート", "CharacterExpGrowth", None, "SSR"),
+        ];
+        let students = [
+            ("アズサ", 0),
+            ("ムツキ（正月）", 3),
+            ("キリノ（水着）", 2),
+            ("ワカモ", 1),
+        ]
+        .map(|(name, limited)| Student {
+            name: name.into(),
+            limited,
+        });
+        let p = Prices::new(BTreeMap::new(), goods, &students);
+        let planned = |shop: &str| -> Vec<i64> {
+            let mut ids: Vec<i64> = [
+                9999, 10019, 10032, 10077, 10033, 2, 3000, 3002, 4003, 5013, 201, 203, 7, 8,
+            ]
+            .into_iter()
+            .filter(|&id| p.planned(shop, id))
+            .collect();
+            ids.sort_unstable();
+            ids
+        };
+        // 秘伝ノート, every eleph, the three great schools' upper notes and BDs.
+        let raid = [3002, 5013, 9999, 10019, 10032, 10033, 10077];
+        assert_eq!(planned("総力戦"), raid);
+        assert_eq!(planned("大決戦"), raid);
+        // 秘伝ノート, every eleph, the tailor stones and the ooparts.
+        assert_eq!(
+            planned("合同火力演習"),
+            [7, 201, 203, 9999, 10019, 10032, 10033, 10077]
+        );
+        // Every eleph and the top ooparts.
+        assert_eq!(planned("指名手配"), [203, 10019, 10032, 10033, 10077]);
+        // 神名のカケラ and the fest and limited students' elephs.
+        assert_eq!(planned("熟達証書"), [2, 10032, 10033]);
+        assert_eq!(planned("カケラ(文字)"), Vec::<i64>::new());
     }
 }

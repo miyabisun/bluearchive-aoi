@@ -1013,15 +1013,24 @@ const work = {
     exp_each: 1249185,
     report_students: 5.0,
   },
+  orbs: { exp: 5700780, about: false, exp_each: 741690, students: 7.686 },
 };
 
 test("tells what the daily plays give against what is held", async ({ page }) => {
   await open(page, { status: { state: "other_screen" }, items, equipment, work });
   await page.getByRole("tab", { name: "お仕事" }).click();
-  // Each section folds as a shop does, closed until opened.
+  // The plays grouped by when they are played; each section folds as a shop
+  // does, closed until opened.
+  await expect(page.locator(".work .category")).toHaveText(["日課", "2倍キャンペーン", "月末"]);
   const sections = page.locator(".work summary");
-  await expect(sections).toHaveText(["任務 Normal", "指名手配", "学園交流会", "特別依頼"]);
-  await expect(page.locator(".work summary .chevron")).toHaveCount(4);
+  await expect(sections).toHaveText([
+    "ショップ: 通常アイテム",
+    "指名手配",
+    "学園交流会",
+    "任務 Normal",
+    "特別依頼",
+  ]);
+  await expect(page.locator(".work summary .chevron")).toHaveCount(5);
   await expect(page.locator(".slots")).toBeHidden();
   for (const section of await sections.all()) await section.click();
   // A slot: how many pieces its T10 blueprints and its universal ones make,
@@ -1054,11 +1063,11 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
     expect(new Set(boxes).size).toBe(1);
   }
   // Each place's drops by tier with what is held, "—" where none is counted.
-  await expect(page.locator(".work h3")).toHaveText([
-    "黄金比までの周回（2倍キャンペーン中）",
-    "その後に黄金比を整える周回",
+  await expect(page.locator(".work h4")).toHaveText([
     "ハイウェイ",
     "トリニティ",
+    "黄金比までの周回（2倍キャンペーン中）",
+    "その後に黄金比を整える周回",
   ]);
   await expect(page.locator(".work .tiers td.tier-1")).toHaveText(["51", "—"]);
   // Short of one student red, of two blue, enough for two green.
@@ -1070,13 +1079,105 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
     .evaluateAll((cells) => cells.map((c) => getComputedStyle(c).color));
   expect(new Set(colours).size).toBe(3);
   await expect(page.getByRole("img", { name: "ファイストス円盤の欠片" })).toBeVisible();
-  // The commission raising more students is green, the fewer orange.
+  // The commission raising more students is green, the fewer orange; the
+  // reports first, as the game lists them.
   await expect(page.locator(".commissions tr")).toHaveText([
-    "クレジット回収6.0人分249M ÷ 41.5M",
     "拠点防衛5.0人分6.2M EXP ÷ 1.2M EXP",
+    "クレジット回収6.0人分249M ÷ 41.5M",
   ]);
   await expect(page.locator(".commissions tr.more")).toContainText("クレジット回収");
   await expect(page.locator(".commissions tr.fewer")).toContainText("拠点防衛");
+  // The normal items shop: the credits and the orbs held in students, the fewer red.
+  await expect(page.locator(".raises tr")).toHaveText([
+    "クレジット6.0人分249M ÷ 41.5M",
+    "強化珠7.7人分5.7M EXP ÷ 0.74M EXP",
+  ]);
+  await expect(page.locator(".raises tr.fewer")).toContainText("クレジット");
+  const red = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--c-danger)";
+    document.body.append(probe);
+    const rgb = getComputedStyle(probe).color;
+    probe.remove();
+    return rgb;
+  });
+  await expect(page.locator(".raises tr.fewer strong")).toHaveCSS("color", red);
+});
+
+test("reserves a month-end card by pressing it, kept as new frames come", async ({ page }) => {
+  const coins = (need, short) => [
+    { name: "総力戦コイン", icon: "", held: { exact: 600 }, need, short },
+    { name: "総力戦レアコイン", icon: "", held: { exact: 40 }, need: 0, short: false },
+  ];
+  const card = (id, name, more) => ({
+    id,
+    name,
+    icon: "",
+    coin: 0,
+    left: 16,
+    price: 50,
+    amount: 5,
+    reserved: false,
+    sold: false,
+    barred: false,
+    ...more,
+  });
+  const plan = (reserved) => [
+    {
+      name: "総力戦",
+      read_at: "2026-10-16 07:00:00",
+      coins: reserved ? coins(800, true) : coins(0, false),
+      cards: [
+        card(10019, "アズサの神名文字", { reserved }),
+        card(10020, "ハナコの神名文字", { left: 0, sold: true }),
+        card(10021, "マキの神名文字", { left: 0, sold: true, barred: true }),
+      ],
+    },
+    { name: "大決戦", read_at: null, coins: [], cards: [] },
+    { name: "指名手配", read_at: null, coins: [], cards: [] },
+  ];
+  const snapshot = { status: reading("shops"), items, equipment, work, month_end: plan(false) };
+  await open(page, snapshot, "お仕事");
+  await page.locator(".work summary", { hasText: "ショップ: 総力戦" }).click();
+  // A card a good and a coin: the times left at the price, bought up, or its student done.
+  const cards = page.locator(".plan li");
+  await expect(cards).toHaveText(["×5 16回@50", "×5 売切れ", "×5 固有4"]);
+  for (const [i, name] of ["アズサ", "ハナコ", "マキ"].entries()) {
+    await expect(cards.nth(i).getByRole("button")).toHaveAccessibleName(
+      new RegExp(`${name}の神名文字`),
+    );
+  }
+  const azusa = page.getByRole("button", { name: /アズサの神名文字/ });
+  await expect(azusa).toHaveAttribute("aria-pressed", "false");
+  await azusa.click();
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([
+    { card: { shop: "総力戦", id: 10019, coin: "総力戦コイン" }, reserved: true },
+  ]);
+  // The app answers reserved: ringed and marked, the coin short in red; the
+  // section stays open through the frames that keep coming.
+  for (let frame = 0; frame < 3; frame++) {
+    await page.evaluate((s) => window.__AOI_PUSH__(s), { ...snapshot, month_end: plan(true) });
+  }
+  await expect(azusa).toHaveAttribute("aria-pressed", "true");
+  await expect(azusa).toContainText("予約中");
+  const accent = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--c-accent)";
+    document.body.append(probe);
+    const rgb = getComputedStyle(probe).color;
+    probe.remove();
+    return rgb;
+  });
+  await expect(azusa).toHaveCSS("border-top-color", accent);
+  await expect(page.locator(".work .held .short")).toHaveText(["（200不足）"]);
+  // A shop never read says so.
+  await page.locator(".work summary", { hasText: "ショップ: 大決戦" }).click();
+  await expect(
+    page.locator(".work details", { hasText: "ショップ: 大決戦" }).getByText("まだ読んでいません"),
+  ).toBeVisible();
+  // The shop 指名手配 opens apart from the daily 指名手配.
+  await page.locator(".work summary", { hasText: "ショップ: 指名手配" }).click();
+  await expect(page.locator(".work .tiers").first()).toBeHidden();
 });
 
 test("keeps the tab chosen when the game shows another list", async ({ page }) => {

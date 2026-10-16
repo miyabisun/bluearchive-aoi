@@ -1,12 +1,15 @@
 //! What Aoi read, written as YAML for the user to hand to an agent or another
 //! tool: the students' training, the counts of the item and equipment lists
-//! and the shops' offers.
+//! and the shops' offers, and the month-end shops' cards reserved.
+
+use std::collections::BTreeSet;
 
 use crate::{
     Row,
     keep::ReadAt,
     price::Price,
     shop::{GoodRow, OfferRow, ShopRow},
+    strategy::Reserve,
     watch::StudentRow,
 };
 
@@ -35,6 +38,7 @@ pub fn yaml(
     out += "# id: null の生徒は SchaleDB に未登録（名前だけで照合）。\n";
     out += "# shops の left はあと何回買えるか。held は各コインの所持数。price・amount・limit は 1 回の価格・個数と回数の上限（ショップの決まり、カケラ(文字) の price はカードの値、無ければ null）。\n";
     out += "# カケラ(文字) 以外のショップは月が替わると戻る（read_at が前の月なら前の月の値）。\n";
+    out += "# reserved は月末ショップの購買戦略で予約中のカード（ショップ・品・払うコイン）。\n";
     out += "credits: ";
     out += &credits.map_or("null".to_owned(), |c| c.to_string());
     out += "\n";
@@ -117,6 +121,26 @@ pub fn yaml(
         ]
     });
     out
+}
+
+/// The month-end shops' cards `reserved`, each good `named` where its name is
+/// known.
+pub fn reserved_yaml(
+    reserved: &BTreeSet<Reserve>,
+    named: impl Fn(i64) -> Option<String>,
+) -> String {
+    let cards: Vec<&Reserve> = reserved.iter().collect();
+    list("reserved", &cards, |card| {
+        vec![
+            format!("shop: {}", quoted(&card.shop)),
+            format!("id: {}", card.id),
+            format!(
+                "name: {}",
+                named(card.id).map_or("null".to_owned(), |n| quoted(&n))
+            ),
+            format!("coin: {}", quoted(&card.coin)),
+        ]
+    })
 }
 
 /// A list under `key`, one mapping per entry with the fields `fields` gives.
@@ -402,6 +426,26 @@ shops: []
         limit: 40
 "#
         );
+    }
+
+    #[test]
+    fn writes_the_cards_reserved_with_their_names() {
+        let reserved = BTreeSet::from([Reserve {
+            shop: "総力戦".to_owned(),
+            id: 10019,
+            coin: "総力戦コイン".to_owned(),
+        }]);
+        let named = |id: i64| (id == 10019).then(|| "アズサの神名文字".to_owned());
+        assert_eq!(
+            reserved_yaml(&reserved, named),
+            r#"reserved:
+  - shop: "総力戦"
+    id: 10019
+    name: "アズサの神名文字"
+    coin: "総力戦コイン"
+"#
+        );
+        assert_eq!(reserved_yaml(&BTreeSet::new(), named), "reserved: []\n");
     }
 
     #[test]

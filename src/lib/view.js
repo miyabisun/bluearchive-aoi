@@ -572,6 +572,58 @@ export function commissionCells(c) {
   };
 }
 
+/**
+ * The normal items shop's daily buys against a student raised from Lv1: how
+ * many students the credits and the enhancement orbs held raise (`orbs`,
+ * their exp over a student's T1 to T10), and which raises fewer, none when
+ * they tie or one is unknown.
+ */
+export function orbCells(c, orbs) {
+  const credits = commissionCells(c).credits;
+  const raised = orbs.students;
+  return {
+    credits: { ...credits, name: "クレジット" },
+    orbs: {
+      name: "強化珠",
+      students: `${tenths.format(raised)}人分`,
+      detail: `${orbs.about ? "約" : ""}${millions(orbs.exp)} EXP ÷ ${millions(orbs.exp_each)} EXP`,
+    },
+    fewer:
+      c.credit_students == null || c.credit_students === raised
+        ? null
+        : c.credit_students < raised
+          ? "credits"
+          : "orbs",
+  };
+}
+
+/**
+ * A month-end shop's card: how many one buy gives ("×5"), and the times left
+ * at the price ("16回@50", "@?" without terms), "売切れ" bought up, or "固有4"
+ * where its student takes no more.
+ */
+export function planCard(card) {
+  const price = card.price == null ? "?" : exact.format(card.price);
+  return {
+    amount: card.amount ? `×${exact.format(card.amount)}` : "",
+    text: card.barred ? "固有4" : card.sold ? "売切れ" : `${exact.format(card.left)}回@${price}`,
+  };
+}
+
+/** A month-end shop's coin: how many are held, and how many short of the cards reserved. */
+export function planCoin(coin) {
+  const held =
+    coin.held == null
+      ? null
+      : "thousands" in coin.held
+        ? coin.held.thousands * 1000
+        : coin.held.exact;
+  return {
+    held: coin.held == null ? "?" : formatCount(coin.held),
+    short: coin.short ? `${exact.format(coin.need - held)}不足` : null,
+  };
+}
+
 /** Where checking for an update and taking it stands, as the window tells it. */
 export function updateText(update) {
   switch (update.state) {

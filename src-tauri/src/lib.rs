@@ -24,6 +24,7 @@ pub mod price;
 pub mod quantity;
 pub mod screen;
 pub mod shop;
+pub mod strategy;
 pub mod student;
 pub mod supply;
 pub mod tally;
@@ -377,7 +378,50 @@ impl Recognizer {
                 &self.planner.growth.reports,
                 &items_held,
             ),
+            orbs: work::orbs(&self.planner.growth.orbs, self.orbs_each(), &equipment_held),
         }
+    }
+
+    /// The month-end shops' purchase plan (see `strategy::shops`) of the
+    /// `shops` read: the goods the plan lists, an eleph barred once its
+    /// student's unique weapon has its 4th star (the user's of 2026-10-16:
+    /// 「固有4に達した後は購入できなくなる」).
+    pub fn month_end(
+        &self,
+        shops: &[shop::ShopRow],
+        students: &[watch::StudentRow],
+        reserved: &std::collections::BTreeSet<strategy::Reserve>,
+    ) -> Vec<strategy::PlanShop> {
+        let done = |id: i64| {
+            students
+                .iter()
+                .any(|s| s.id == id && matches!(s.training.weapon, Some(Some(w)) if w.stars >= 4))
+        };
+        strategy::shops(
+            shops,
+            |shop, id| self.prices.planned(shop, id),
+            |id| (self.prices.rank(id), id),
+            |id| self.prices.is_kind(id, "神名文字") && done(id),
+            reserved,
+        )
+    }
+
+    /// The orb exp a student's equipment takes from T1 to T10 (see
+    /// `work::orbs_each`), each tier's top as its pieces have it.
+    fn orbs_each(&self) -> u64 {
+        let growth = &self.planner.growth;
+        let tops: Vec<u8> = (1..=growth.equipment_exp.len())
+            .map(|tier| {
+                self.planner
+                    .pieces
+                    .iter()
+                    .filter(|p| usize::from(p.tier) == tier)
+                    .map(|p| p.max_level)
+                    .max()
+                    .unwrap_or(1)
+            })
+            .collect();
+        work::orbs_each(&growth.equipment_exp, &tops, &growth.orbs)
     }
 
     /// The credits and the report exp a student takes from Lv1, untrained, to

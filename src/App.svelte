@@ -12,6 +12,7 @@
     pairPhone,
     reloadPlan,
     setPaused,
+    setReserved,
     setTarget,
     waitForStream,
   } from "./lib/snapshot.js";
@@ -30,7 +31,10 @@
     heldTone,
     groupPlan,
     needCells,
+    orbCells,
     phoneLine,
+    planCard,
+    planCoin,
     placeName,
     procureCells,
     qrPath,
@@ -133,6 +137,8 @@
     plan_version: 0,
     /** The daily plays against what is held (none before the app sends it). */
     work: /** @type {any} */ (null),
+    /** The month-end shops' purchase plan, card by card. */
+    month_end: /** @type {any[]} */ ([]),
     credits: /** @type {number | null} */ (null),
     /** Why what was read could not be kept or brought back. */
     keep_error: /** @type {string | null} */ (null),
@@ -802,11 +808,69 @@
       {#if snapshot.work}
         {@const work = snapshot.work}
         {@const commission = commissionCells(work.commissions)}
+        {@const orb = orbCells(work.commissions, work.orbs)}
         <div class="table-scroll work" data-state="success">
+          <!-- The plays by when they are played: each day, in a doubled-drop campaign, at the month's end. -->
+          <h2 class="category">日課</h2>
+          <details class="fold" open={opened.has("work:通常アイテム")}>
+            <summary onclick={(event) => toggle(event, "work:通常アイテム")}
+              >{@render chevron()}
+              <h3>ショップ: 通常アイテム</h3></summary
+            >
+            <!-- The credits and the orbs the shop sells daily, in students raised: the more green, the fewer red. -->
+            <table class="raises">
+              <tbody>
+                {#each [{ key: "credits", ...orb.credits }, { key: "orbs", ...orb.orbs }] as cell (cell.key)}
+                  <tr
+                    class:fewer={orb.fewer === cell.key}
+                    class:more={orb.fewer != null && orb.fewer !== cell.key}
+                  >
+                    <td>{cell.name}</td>
+                    <td class="fit"
+                      ><strong>{cell.students}</strong><span class="detail">{cell.detail}</span></td
+                    >
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </details>
+          {#each [{ title: "指名手配", places: work.bounties }, { title: "学園交流会", places: work.scrimmages }] as group (group.title)}
+            <details class="fold" open={opened.has(`work:${group.title}`)}>
+              <summary onclick={(event) => toggle(event, `work:${group.title}`)}
+                >{@render chevron()}
+                <h3>{group.title}</h3></summary
+              >
+              {#each group.places as place (place.name)}
+                <h4>{placeName(place.name)}</h4>
+                <table class="tiers">
+                  <tbody>
+                    {#each place.kinds as tiers, k (k)}
+                      <tr>
+                        {#each tiers as cell, i (i)}
+                          <td class="tier-{i + 1}">
+                            {#if cell}<img
+                                src={iconUrl(cell.icon)}
+                                alt={cell.name}
+                                title={cell.name}
+                                width="40"
+                                height="40"
+                              /><span class={heldTone(cell.held, cell.need)}
+                                >{cell.held == null ? "—" : formatCount(cell.held)}</span
+                              >{/if}
+                          </td>
+                        {/each}
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              {/each}
+            </details>
+          {/each}
+          <h2 class="category">2倍キャンペーン</h2>
           <details class="fold" open={opened.has("work:任務")}>
             <summary onclick={(event) => toggle(event, "work:任務")}
               >{@render chevron()}
-              <h2>任務 Normal</h2></summary
+              <h3>任務 Normal</h3></summary
             >
             <!-- A slot's T10 blueprints, and apart its universal ones with those of T9 and below. -->
             <table class="slots">
@@ -842,7 +906,7 @@
             {#if work.farm}
               {@const farm = farmCells(work.farm)}
               <!-- How many times to play each normal mission, in a doubled-drop campaign, to stock the golden ratio. -->
-              <h3>黄金比までの周回（2倍キャンペーン中）</h3>
+              <h4>黄金比までの周回（2倍キャンペーン中）</h4>
               {#if farm.lines.length === 0}
                 <p class="detail">どの部位も黄金比に届いています</p>
               {:else}
@@ -869,7 +933,7 @@
               {/if}
               {#if farm.next.length > 0}
                 <!-- Past the ratio, the missions that even it out most, best first. -->
-                <h3>その後に黄金比を整える周回</h3>
+                <h4>その後に黄金比を整える周回</h4>
                 <table class="farm next">
                   <tbody>
                     {#each farm.next as line (line.name)}
@@ -883,47 +947,16 @@
               {/if}
             {/if}
           </details>
-          {#each [{ title: "指名手配", places: work.bounties }, { title: "学園交流会", places: work.scrimmages }] as group (group.title)}
-            <details class="fold" open={opened.has(`work:${group.title}`)}>
-              <summary onclick={(event) => toggle(event, `work:${group.title}`)}
-                >{@render chevron()}
-                <h2>{group.title}</h2></summary
-              >
-              {#each group.places as place (place.name)}
-                <h3>{placeName(place.name)}</h3>
-                <table class="tiers">
-                  <tbody>
-                    {#each place.kinds as tiers, k (k)}
-                      <tr>
-                        {#each tiers as cell, i (i)}
-                          <td class="tier-{i + 1}">
-                            {#if cell}<img
-                                src={iconUrl(cell.icon)}
-                                alt={cell.name}
-                                title={cell.name}
-                                width="40"
-                                height="40"
-                              /><span class={heldTone(cell.held, cell.need)}
-                                >{cell.held == null ? "—" : formatCount(cell.held)}</span
-                              >{/if}
-                          </td>
-                        {/each}
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
-              {/each}
-            </details>
-          {/each}
           <details class="fold" open={opened.has("work:特別依頼")}>
             <summary onclick={(event) => toggle(event, "work:特別依頼")}
               >{@render chevron()}
-              <h2>特別依頼</h2></summary
+              <h3>特別依頼</h3></summary
             >
-            <!-- Each commission's haul held, in students raised from Lv1: the more green, the fewer orange. -->
+            <!-- Each commission's haul held, in students raised from Lv1: the more green, the fewer orange.
+                 The reports first, as the game lists 拠点防衛 first. -->
             <table class="commissions">
               <tbody>
-                {#each [{ key: "credits", ...commission.credits }, { key: "reports", ...commission.reports }] as cell (cell.key)}
+                {#each [{ key: "reports", ...commission.reports }, { key: "credits", ...commission.credits }] as cell (cell.key)}
                   <tr
                     class:fewer={commission.fewer === cell.key}
                     class:more={commission.fewer != null && commission.fewer !== cell.key}
@@ -937,6 +970,78 @@
               </tbody>
             </table>
           </details>
+          <h2 class="category">月末</h2>
+          {#each snapshot.month_end ?? [] as shop (shop.name)}
+            <details class="fold" open={opened.has(`work:月末:${shop.name}`)}>
+              <summary onclick={(event) => toggle(event, `work:月末:${shop.name}`)}
+                >{@render chevron()}
+                <h3>
+                  ショップ: {shop.name}{#if shop.read_at}<span class="read-at"
+                      >{shop.read_at.slice(5, 16).replace("-", "/")}</span
+                    >{#if shopStale({ ...shop, resets: true })}<span class="stale">前の月の値</span
+                      >{/if}{/if}
+                </h3>
+                <!-- The coins held, and how many short of the cards reserved. -->
+                <span class="held">
+                  {#each shop.coins as coin (coin.name)}
+                    {@const held = planCoin(coin)}
+                    <span title={coin.name}
+                      ><img
+                        src={iconUrl(coin.icon)}
+                        alt={coin.name}
+                        width="20"
+                        height="20"
+                      />{held.held}{#if held.short}<span class="short">（{held.short}）</span
+                        >{/if}</span
+                    >
+                  {/each}
+                </span>
+              </summary>
+              {#if shop.read_at == null}
+                <p class="detail">まだ読んでいません</p>
+              {:else}
+                <!-- A card a good and a coin, as the game shows them; pressing one reserves it, again takes it back. -->
+                <ul class="tiles goods plan">
+                  {#each shop.cards as card (`${card.id}:${card.coin}`)}
+                    {@const coin = shop.coins[card.coin]}
+                    {@const tile = planCard(card)}
+                    <li class:sold={card.sold || card.barred} class:reserved={card.reserved}>
+                      <button
+                        type="button"
+                        title={card.name}
+                        aria-pressed={card.reserved}
+                        onclick={() =>
+                          setReserved(
+                            { shop: shop.name, id: card.id, coin: coin.name },
+                            !card.reserved,
+                          )}
+                      >
+                        <span class="item"
+                          ><img
+                            src={iconUrl(card.icon)}
+                            alt={card.name}
+                            width="64"
+                            height="64"
+                            loading="lazy"
+                          />{#if tile.amount}<span class="count">{tile.amount}</span>{/if}</span
+                        >
+                        <span class="offer"
+                          ><img
+                            src={iconUrl(coin.icon)}
+                            alt={coin.name}
+                            title={coin.name}
+                            width="18"
+                            height="18"
+                          />{tile.text}</span
+                        >
+                        {#if card.reserved}<span class="booked">予約中</span>{/if}
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </details>
+          {/each}
         </div>
       {/if}
     {:else if rows.length === 0}
@@ -1674,6 +1779,30 @@
         width: 18px
         height: 18px
 
+  // A month-end card: pressed, reserved, ringed in the accent and so marked.
+  .tiles.plan
+    li
+      padding: 0
+    button
+      display: flex
+      flex-direction: column
+      align-items: center
+      gap: var(--sp-1)
+      width: 100%
+      padding: var(--sp-1)
+      border: 2px solid transparent
+      border-radius: var(--radius-sm)
+      background: none
+      color: inherit
+      font: inherit
+      cursor: pointer
+    li.reserved button
+      border-color: var(--c-accent)
+    .booked
+      color: var(--c-accent)
+      font-size: var(--fs-caption)
+      font-weight: 600
+
   h2
     display: inline-flex
     align-items: baseline
@@ -1856,9 +1985,24 @@
       vertical-align: middle
       margin-right: var(--sp-2)
 
-  // The work tab: a section a kind of play, each count with its terms under it.
+  // The work tab: the plays grouped by when they are played, a section a kind
+  // of play, each count with its terms under it.
   .work
-    h3
+    .category
+      display: block
+      margin: var(--sp-5) 0 0
+      color: var(--c-muted)
+      font-size: var(--fs-sm)
+      &:first-child
+        margin-top: 0
+    summary h3
+      display: inline-flex
+      align-items: baseline
+      gap: var(--sp-2)
+      margin: 0
+      font-size: var(--fs-md)
+      font-weight: 600
+    h4
       margin: var(--sp-3) 0 var(--sp-1)
       font-size: var(--fs-sm)
       font-weight: 600
@@ -1884,6 +2028,11 @@
       color: var(--c-ok)
     .fewer strong
       color: var(--c-warn)
+    // The normal items shop's fewer red (the user's 「赤字と緑字」).
+    .raises .fewer strong
+      color: var(--c-danger)
+    .fold summary
+      flex-wrap: wrap
     // Short of one student red; a slot short of the golden ratio orange.
     .short
       color: var(--c-danger)

@@ -60,6 +60,7 @@ pub struct WorkRows {
     pub bounties: Vec<PlaceRow>,
     pub scrimmages: Vec<PlaceRow>,
     pub commissions: CommissionRow,
+    pub orbs: OrbRow,
 }
 
 /// How much a count holds, and whether only about (a count in thousands).
@@ -574,17 +575,7 @@ pub fn commissions<S: BuildHasher>(
     reports: &[(i64, u64)],
     held: &HashMap<i64, Count, S>,
 ) -> CommissionRow {
-    let (report_exp, report_about) = reports.iter().fold((0, false), |(sum, about), &(id, exp)| {
-        let (n, a) = amount(held.get(&id).copied());
-        (sum + n * exp, about || a)
-    });
-    let per = |held: u64, each: u64| {
-        if each == 0 {
-            0.0
-        } else {
-            held as f64 / each as f64
-        }
-    };
+    let (report_exp, report_about) = exp_held(reports, held);
     CommissionRow {
         credits_name: names.credits.clone(),
         credits,
@@ -595,6 +586,61 @@ pub fn commissions<S: BuildHasher>(
         report_about,
         exp_each,
         report_students: per(report_exp, exp_each),
+    }
+}
+
+/// The exp of the `kinds` (item, exp of one) held, and whether only about.
+fn exp_held<S: BuildHasher>(kinds: &[(i64, u64)], held: &HashMap<i64, Count, S>) -> (u64, bool) {
+    kinds.iter().fold((0, false), |(sum, about), &(id, exp)| {
+        let (n, a) = amount(held.get(&id).copied());
+        (sum + n * exp, about || a)
+    })
+}
+
+/// How many `each` make of `held`.
+fn per(held: u64, each: u64) -> f64 {
+    if each == 0 {
+        0.0
+    } else {
+        held as f64 / each as f64
+    }
+}
+
+/// The enhancement orbs held against what one student's equipment takes:
+/// their exp, whether only about, the exp a student takes and how many
+/// students the orbs raise.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct OrbRow {
+    pub exp: u64,
+    pub about: bool,
+    pub exp_each: u64,
+    pub students: f64,
+}
+
+/// The orb exp a student's three slots take from T1 to T10: every tier from
+/// Lv1 to its top (`tops`, tier by tier), fed in orbs (see `plan::fed`): the
+/// user's measure of 2026-10-16, ten times from Lv1 to the top.
+pub fn orbs_each(equipment_exp: &[Vec<u64>], tops: &[u8], orbs: &[(i64, u64)]) -> u64 {
+    let slot: u64 = equipment_exp
+        .iter()
+        .zip(tops)
+        .map(|(exp, &top)| crate::plan::fed(exp[usize::from(top) - 1], orbs))
+        .sum();
+    3 * slot
+}
+
+/// The orbs (`(item, exp of one)`) as `OrbRow` tells, a student taking `each`.
+pub fn orbs<S: BuildHasher>(
+    orbs: &[(i64, u64)],
+    each: u64,
+    held: &HashMap<i64, Count, S>,
+) -> OrbRow {
+    let (exp, about) = exp_held(orbs, held);
+    OrbRow {
+        exp,
+        about,
+        exp_each: each,
+        students: per(exp, each),
     }
 }
 
@@ -902,5 +948,22 @@ mod tests {
             commissions(&names, None, (1, 1), &[], &held).credit_students,
             None
         );
+    }
+
+    /// A student's three slots each level every tier from Lv1 to its top, fed
+    /// in orbs; the orbs held count as so many students.
+    #[test]
+    fn the_orbs_count_the_students_whose_equipment_they_raise() {
+        // Tier 1 takes 15 exp to its top, tier 2 50, fed 10 at a time.
+        let each = orbs_each(
+            &[vec![0, 5, 15], vec![0, 20, 50]],
+            &[3, 3],
+            &[(1, 10), (2, 40)],
+        );
+        assert_eq!(each, 3 * (20 + 50));
+        let held = HashMap::from([(1, Count::Exact(21)), (2, Count::Exact(10))]);
+        let row = orbs(&[(1, 10), (2, 40)], each, &held);
+        assert_eq!((row.exp, row.about, row.exp_each), (210 + 400, false, 210));
+        assert!((row.students - 610.0 / 210.0).abs() < 1e-9);
     }
 }
