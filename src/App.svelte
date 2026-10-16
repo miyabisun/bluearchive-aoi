@@ -847,7 +847,7 @@
                 {#if school}
                   {@const cells = schoolCells(school)}
                   <!-- A school: how many unique weapons its parts held raise, and how; the one to play first red. -->
-                  <div class="school" class:first={cells.first}>
+                  <div class="school" class:first={cells.first} title={cells.why}>
                     <h4>{placeName(place.name)}</h4>
                     <span class="raised"
                       ><strong>{cells.students}</strong><span class="detail">{cells.detail}</span

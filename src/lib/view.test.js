@@ -892,6 +892,9 @@ describe("month-end and daily shops", () => {
 });
 
 describe("schoolCells", () => {
+  const NL = String.fromCharCode(10);
+  const lines = (...l) => l.join(NL);
+
   it("counts the weapons a school's parts raise and how, the first to run out marked", () => {
     const row = {
       exp: 220280,
@@ -899,16 +902,20 @@ describe("schoolCells", () => {
       rate: 1.5,
       exp_each: 49605,
       students: 6.661,
+      share: 0.4593,
       first: true,
     };
     expect(schoolCells(row)).toEqual({
       students: "6.7人前",
       detail: "220,280 EXP × 1.5 ÷ 49,605 EXP",
       first: true,
+      // Why it is red, on hover: the students its parts suit, and per them.
+      why: lines("素材が合う生徒: 46%", "6.7人前 ÷ 46% = 14.5", "最も少ないので先に回します"),
     });
     expect(schoolCells({ ...row, about: true, first: false })).toMatchObject({
       detail: "約220,280 EXP × 1.5 ÷ 49,605 EXP",
       first: false,
+      why: lines("素材が合う生徒: 46%", "6.7人前 ÷ 46% = 14.5"),
     });
   });
 });

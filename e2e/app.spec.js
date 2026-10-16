@@ -1015,7 +1015,15 @@ const work = {
   },
   orbs: { exp: 5700780, about: false, exp_each: 741690, students: 7.686 },
   schools: [
-    { exp: 220280, about: false, rate: 1.5, exp_each: 49605, students: 6.661, first: true },
+    {
+      exp: 220280,
+      about: false,
+      rate: 1.5,
+      exp_each: 49605,
+      students: 6.661,
+      share: 0.4593,
+      first: true,
+    },
   ],
 };
 
@@ -1087,6 +1095,13 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   await expect(school).toHaveText("トリニティ 6.7人前220,280 EXP × 1.5 ÷ 49,605 EXP");
   await expect(school.locator("strong")).toHaveCSS("color", red);
   await expect(school.locator("h4")).toHaveCSS("color", red);
+  // Why, on hover alone: the students its parts suit and the weapons per them.
+  await expect(school).toHaveAttribute(
+    "title",
+    ["素材が合う生徒: 46%", "6.7人前 ÷ 46% = 14.5", "最も少ないので先に回します"].join(
+      String.fromCharCode(10),
+    ),
+  );
   // Short of one student red, of two blue, enough for two green.
   await expect(page.locator(".work .tiers .short")).toHaveText(["51"]);
   await expect(page.locator(".work .tiers .fair")).toHaveText(["100"]);

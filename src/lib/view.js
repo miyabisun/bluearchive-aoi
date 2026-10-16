@@ -651,13 +651,22 @@ export function planCoin(coin) {
 /**
  * A school's scrimmage parts held: how many unique weapons they raise from
  * Lv1 to their cap ("6.7人前"), the exp held times the rate the weapons they
- * suit take it at, over a weapon's; and whether it runs out first.
+ * suit take it at, over a weapon's; whether it runs out first, and why, for
+ * the hover: the share of students its parts suit, and the weapons per it.
  */
 export function schoolCells(row) {
+  const students = `${tenths.format(row.students)}人前`;
+  const share = `${Math.round(row.share * 100)}%`;
+  const why = [`素材が合う生徒: ${share}`];
+  if (row.share > 0) {
+    why.push(`${students} ÷ ${share} = ${tenths.format(row.students / row.share)}`);
+  }
+  if (row.first) why.push("最も少ないので先に回します");
   return {
-    students: `${tenths.format(row.students)}人前`,
+    students,
     detail: `${row.about ? "約" : ""}${exact.format(row.exp)} EXP × ${row.rate} ÷ ${exact.format(row.exp_each)} EXP`,
     first: row.first,
+    why: why.join(String.fromCharCode(10)),
   };
 }
 

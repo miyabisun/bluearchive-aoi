@@ -619,8 +619,9 @@ pub struct School {
 
 /// A school's parts held against the unique weapons they raise: their exp
 /// (whether only about), the rate the weapons they suit take it at, the exp a
-/// weapon takes from Lv1 to its cap and how many weapons the parts raise; and
-/// whether the school's parts run out first.
+/// weapon takes from Lv1 to its cap and how many weapons the parts raise; the
+/// share of students whose weapons they suit, and whether the school's parts
+/// run out first.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SchoolRow {
     pub exp: u64,
@@ -628,6 +629,7 @@ pub struct SchoolRow {
     pub rate: f64,
     pub exp_each: u64,
     pub students: f64,
+    pub share: f64,
     pub first: bool,
 }
 
@@ -656,6 +658,7 @@ pub fn school_rows<S: BuildHasher>(
                 rate: school.rate,
                 exp_each: each,
                 students: per(exp, each) * school.rate,
+                share: school.share,
                 first: false,
             }
         })
@@ -1058,7 +1061,10 @@ mod tests {
                 (1_500, false, 2.25, false),
             ]
         );
-        assert_eq!((rows[0].rate, rows[0].exp_each), (1.5, 1000));
+        assert_eq!(
+            (rows[0].rate, rows[0].exp_each, rows[0].share),
+            (1.5, 1000, 0.5)
+        );
     }
 
     /// A student's three slots each level every tier from Lv1 to its top, fed
