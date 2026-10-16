@@ -85,6 +85,12 @@ const MAX_SIZE: u32 = 1920;
 const BIT_RATE: u32 = 200_000_000;
 /// How long the server takes to listen, at most.
 const SERVER_START: Duration = Duration::from_secs(10);
+/// How long the recording may send nothing: a still screen's frames come on
+/// too (0.2 MB a second), so past this the connection hangs (a USB transfer
+/// that never ended left the window showing the screen of minutes before, the
+/// link said to stream and the pause unheard, 2026-10-16), and the phone is
+/// connected anew.
+const STALL: Duration = Duration::from_secs(5);
 
 /// How a phone's screen comes in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -438,6 +444,10 @@ async fn keep(mut tools: Tools, mut paired: Paired) {
             Err(String::new())
         };
         if streamed.is_err() {
+            // No longer streaming, though looked for again only after a pause.
+            (tools.link)(&Link::Searching {
+                device: paired.device.clone(),
+            });
             tokio::time::sleep(RETRY).await;
         }
     }
@@ -483,8 +493,9 @@ async fn stream_wifi(
 }
 
 /// Records the screen of the phone at `conn` with scrcpy's server, passing
-/// on each frame, till the recording ends or the reading pauses. The phone's
-/// model, kept, and the link streaming are told once its first frame comes.
+/// on each frame, till the recording ends, stalls (`STALL`) or the reading
+/// pauses. The phone's model, kept, and the link streaming are told once its
+/// first frame comes.
 async fn record<T>(
     tools: &Tools,
     paired: &mut Paired,
@@ -535,10 +546,11 @@ where
     let mut decoder = H264::new()?;
     let mut first = true;
     while !tools.paused.load(Ordering::Relaxed) {
-        let n = match conn.read_channel(video, &mut buf).await {
-            Ok(n) => n,
-            Err(libadb::Error::ChannelClosed) => return Ok(()),
-            Err(e) => return Err(e.to_string()),
+        let n = match tokio::time::timeout(STALL, conn.read_channel(video, &mut buf)).await {
+            Ok(Ok(n)) => n,
+            Ok(Err(libadb::Error::ChannelClosed)) => return Ok(()),
+            Ok(Err(e)) => return Err(e.to_string()),
+            Err(_) => return Err("画面が届かなくなりました".to_owned()),
         };
         if let Some(image) = decoder.push(&buf[..n])? {
             if first {

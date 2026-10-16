@@ -15,6 +15,8 @@ device's configuration, which Windows lists for no device that is not composite)
 debugging paired by a QR code and connected over TLS with `libadb`, its services found over mDNS, and the screen recorded by scrcpy's server
 (`src-tauri/vendor/scrcpy`, pushed to the phone and started over ADB) as H.264 from the
 phone's hardware encoder, at most 5 frames a second and 1920 pixels on the longer side, and decoded by `openh264` (`src-tauri/src/video.rs`).
+A recording that sends nothing for 5 seconds (a still screen's frames come too) is taken to hang:
+the link stops streaming and the phone is connected anew.
 The `openh264` crate builds Cisco's decoder from source; Cisco's H.264 patent licence covers
 only its own prebuilt binaries. The key and the phone paired are kept in the app's data folder
 (`adbkey.pem`, `android.json`). Every frame, a phone's cut to its safe area, is scaled down to
