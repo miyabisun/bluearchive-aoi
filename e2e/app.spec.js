@@ -1337,7 +1337,7 @@ test("tells the app is up to date in a passing toast, or why it could not check"
   await page.getByRole("menuitem", { name: "アップデートを確認" }).click();
   // Up to date: a toast says so for a while, and nothing stays in the page.
   const toast = page.locator(".toast");
-  await expect(toast).toHaveText("最新の版です（v0.1.29）");
+  await expect(toast).toHaveText("最新のバージョンです（v0.1.29）");
   await expect(page.locator(".update")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "更新して再起動" })).toHaveCount(0);
   await page.clock.runFor(2500);

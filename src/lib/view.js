@@ -703,7 +703,7 @@ export function updateText(update) {
     case "checking":
       return "アップデートを確認しています…";
     case "latest":
-      return `最新の版です（${update.current}）`;
+      return `最新のバージョンです（${update.current}）`;
     case "available":
       return `${update.latest} があります（今 ${update.current}）`;
     case "installing":

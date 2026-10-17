@@ -425,7 +425,7 @@ fn apply_update() -> Result<(), String> {
 async fn apply_update(app: tauri::AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(|| {
         let release = update::latest()?;
-        let update = update::update_of(&release, VERSION).ok_or("最新の版です")?;
+        let update = update::update_of(&release, VERSION).ok_or("最新のバージョンです")?;
         update::install(&update)
     })
     .await
