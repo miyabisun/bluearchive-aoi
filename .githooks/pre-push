@@ -1,6 +1,7 @@
 #!/bin/sh
 # The gate before main or a release tag reaches GitHub: every check must pass
-# (npm run verify). GitHub Actions only builds releases, so nothing else tests.
+# (npm run verify). GitHub Actions only builds releases and refreshes the SchaleDB
+# data, so nothing else tests.
 # Other branches are pushed without checks. Enable once per clone:
 #   git config core.hooksPath .githooks
 

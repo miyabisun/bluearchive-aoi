@@ -1,0 +1,81 @@
+name: SchaleDB
+
+# New students come with Wednesday's maintenance. Each Thursday the SchaleDB
+# snapshot is refreshed (tools/schaledb/update.ps1); where the students changed,
+# the glyph banks are rebuilt so their names read (build_glyphs); and the change
+# is committed to the branch run on. Nothing is tested here: the next release
+# ships it through the local pre-push gate (npm run verify).
+on:
+  schedule:
+    # Thursday 09:00 JST.
+    - cron: "0 0 * * 4"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_HTTP_MULTIPLEXING: false
+  CARGO_NET_RETRY: 10
+  # Noto Sans JP as the banks are built with (notofonts/noto-cjk, 2021-04-30).
+  NOTO: https://github.com/notofonts/noto-cjk/raw/165c01b46ea533872e002e0785ff17e44f6d97d8/Sans/SubsetOTF/JP
+
+jobs:
+  refresh:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      # Windows PowerShell, whose JavaScriptSerializer the script reads SchaleDB with.
+      - name: Refresh the snapshot
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/schaledb/update.ps1
+
+      - name: Tell what changed
+        id: changed
+        shell: pwsh
+        run: |
+          git add -A src-tauri/data
+          "data=$([bool](git diff --cached --name-only))" >> $env:GITHUB_OUTPUT
+          "students=$([bool](git diff --cached --name-only -- src-tauri/data/schaledb/students.json))" >> $env:GITHUB_OUTPUT
+
+      - name: Set up Rust
+        if: steps.changed.outputs.students == 'True'
+        uses: dtolnay/rust-toolchain@1.96.0
+
+      - name: Cache Rust dependencies
+        if: steps.changed.outputs.students == 'True'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Fetch Noto Sans JP
+        if: steps.changed.outputs.students == 'True'
+        shell: pwsh
+        run: |
+          $sha = @{
+            Regular = 'dff723ba59d57d136764a04b9b2d03205544f7cd785a711442d6d2d085ac5073'
+            Medium = 'f396a3b57256e4515be9cb41f7aac54766d654890082a9f1b5c2451b5c093d8a'
+            Bold = '1b0edfb500b73a4fa8a4fcaae1bbbd403994e08e73e3e0da37e70d3853f42c5f'
+          }
+          New-Item -ItemType Directory "$env:RUNNER_TEMP\fonts" | Out-Null
+          foreach ($weight in $sha.Keys) {
+            $file = "$env:RUNNER_TEMP\fonts\NotoSansJP-$weight.otf"
+            Invoke-WebRequest "$env:NOTO/NotoSansJP-$weight.otf" -OutFile $file
+            if ((Get-FileHash $file -Algorithm SHA256).Hash -ne $sha[$weight]) { throw "$file is not the font the banks are built with" }
+          }
+
+      - name: Rebuild the glyph banks
+        if: steps.changed.outputs.students == 'True'
+        working-directory: src-tauri
+        run: cargo run --release --example build_glyphs -- "$env:RUNNER_TEMP\fonts"
+
+      - name: Commit the refresh
+        if: steps.changed.outputs.data == 'True'
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A src-tauri/data
+          git commit -m "chore: refresh the SchaleDB snapshot"
+          git push origin "HEAD:$env:GITHUB_REF_NAME"

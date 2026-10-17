@@ -15,7 +15,11 @@ from the same snapshot, and with the level tables of the game (`growth.json`, fr
 [electricgoat/ba-data](https://github.com/electricgoat/ba-data)) and the skill credits the
 archived SchaleDB site listed. The choice boxes (`boxes.json`) and the daily stages
 (`stages.json`) come from SchaleDB too. `tools/schaledb/update.ps1` refreshes the
-snapshot and the tables (it runs `stages.ps1` and `boxes.ps1`).
+snapshot and the tables (it runs `stages.ps1` and `boxes.ps1`). New students come with
+Wednesday's maintenance: every Thursday the SchaleDB workflow
+(`.github/workflows/schaledb.yml`) runs the script, rebuilds the glyph banks where the
+students changed (`build_glyphs`, so their names read), and commits the change to main.
+It ships with the next release, which the pre-push gate tests.
 
 The shops' prices, how many come with a purchase and the monthly limits are written in
 `src-tauri/data/shops.yaml`, from the [Blue Archive wiki](https://bluearchive.wiki/wiki/Shop);
