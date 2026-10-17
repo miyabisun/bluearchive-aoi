@@ -463,18 +463,11 @@ impl Recognizer {
         strategy::shops(
             shops,
             |shop, id| {
-                let eleph = self.prices.is_kind(id, "神名文字");
                 Some(strategy::Listing {
                     group: self.prices.planned(shop, id)?,
                     worth: (self.prices.rank(id), id),
-                    barred: eleph && done(id),
+                    barred: self.prices.is_kind(id, "神名文字") && done(id),
                     held: held(id),
-                    eleph,
-                    rarity: self
-                        .shop_goods
-                        .iter()
-                        .find(|g| g.id == id)
-                        .and_then(|g| g.rarity),
                 })
             },
             reserved,
@@ -798,6 +791,8 @@ impl Recognizer {
                         name: named(id),
                         icon: icon(id).unwrap_or_default(),
                         sold: offers.iter().flatten().all(|o| o.left == 0),
+                        rarity: good(id).and_then(|g| g.rarity),
+                        eleph: self.prices.is_kind(id, "神名文字"),
                         offers: order
                             .iter()
                             .map(|&i| {

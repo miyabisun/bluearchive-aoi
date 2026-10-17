@@ -64,15 +64,12 @@ pub struct PlanCard {
 
 /// What the plan knows of a good a shop lists: its `group` (0 the goods to
 /// stock up on, those after them later), its `worth` (the least first),
-/// whether it is `barred`, how many are `held`, whether it is an eleph and its
-/// `rarity` (none where unknown).
+/// whether it is `barred` and how many are `held`.
 pub struct Listing<K> {
     pub group: u8,
     pub worth: K,
     pub barred: bool,
     pub held: Option<Count>,
-    pub eleph: bool,
-    pub rarity: Option<Rarity>,
 }
 
 /// The month-end shops of `rows` (the shops' shelves as read), each with the
@@ -120,8 +117,8 @@ pub fn shops<K: Ord + Clone>(
                         }),
                         barred: listed.barred,
                         held: listed.held,
-                        eleph: listed.eleph,
-                        rarity: listed.rarity,
+                        eleph: good.eleph,
+                        rarity: good.rarity,
                     };
                     cards.push((card, (listed.group, listed.worth.clone())));
                 }
@@ -198,6 +195,8 @@ mod tests {
             icon: format!("icon_{id}"),
             sold: offers.iter().flatten().all(|o| o.left == 0),
             offers,
+            rarity: None,
+            eleph: id >= 10_000,
         }
     }
 
@@ -235,8 +234,6 @@ mod tests {
             worth: id,
             barred: false,
             held: None,
-            eleph: false,
-            rarity: None,
         }
     }
 
@@ -250,8 +247,6 @@ mod tests {
                 worth: (id != 5, id),
                 barred: id == 10_002,
                 held: Some(Count::Exact(u32::try_from(id % 100).unwrap())),
-                eleph: id >= 10_000,
-                rarity: None,
             })
         };
         let plan = shops(&[assault()], listing, &BTreeSet::new());

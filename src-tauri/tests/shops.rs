@@ -267,21 +267,27 @@ fn a_shop_lists_its_goods_worth_buying_first_and_those_bought_up_last() {
     );
 }
 
-/// A month-end card tells its good's rarity, which the game shows in the colour
-/// behind its icon: 初級 N, 中級 R, 上級 SR, 最上級 SSR.
+/// A good tells its rarity, which the game shows in the colour behind its icon
+/// (初級 N, 中級 R, 上級 SR, 最上級 SSR), and whether it is a student's eleph;
+/// its month-end cards tell the same.
 #[test]
-fn a_month_end_card_tells_its_goods_rarity() {
+fn a_good_tells_its_rarity_and_whether_it_is_an_eleph() {
     let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
     let items = recognizer.shop_goods();
-    let grades = ["初級", "中級", "上級", "最上級"];
-    let offers = grades
-        .iter()
-        .map(|grade| Offer {
-            id: items
-                .iter()
-                .find(|i| i.name == format!("{grade}テイラーストーン"))
-                .unwrap()
-                .id,
+    let expected: BTreeMap<String, (Option<Rarity>, bool)> = [
+        ("初級テイラーストーン", Rarity::N, false),
+        ("中級テイラーストーン", Rarity::R, false),
+        ("上級テイラーストーン", Rarity::SR, false),
+        ("最上級テイラーストーン", Rarity::SSR, false),
+        ("ミドリの神名文字", Rarity::N, true),
+    ]
+    .into_iter()
+    .map(|(name, rarity, eleph)| (name.to_owned(), (Some(rarity), eleph)))
+    .collect();
+    let offers = expected
+        .keys()
+        .map(|name| Offer {
+            id: items.iter().find(|i| &i.name == name).unwrap().id,
             coin: 0,
             left: 1,
             price: None,
@@ -296,21 +302,22 @@ fn a_month_end_card_tells_its_goods_rarity() {
         &BTreeMap::from([("合同火力演習".to_owned(), shelf)]),
         &std::collections::HashMap::new(),
     );
+    let goods: BTreeMap<String, (Option<Rarity>, bool)> = rows[0]
+        .goods
+        .iter()
+        .map(|g| (g.name.clone(), (g.rarity, g.eleph)))
+        .collect();
+    assert_eq!(goods, expected);
     let plan = recognizer.month_end(&rows, &[], |_| None, &std::collections::BTreeSet::new());
-    let rarity: BTreeMap<String, Option<Rarity>> = plan
+    let cards: BTreeMap<String, (Option<Rarity>, bool)> = plan
         .iter()
         .find(|s| s.name == "合同火力演習")
         .unwrap()
         .cards
         .iter()
-        .map(|c| (c.name.clone(), c.rarity))
+        .map(|c| (c.name.clone(), (c.rarity, c.eleph)))
         .collect();
-    let expected = grades
-        .iter()
-        .zip([Rarity::N, Rarity::R, Rarity::SR, Rarity::SSR])
-        .map(|(grade, r)| (format!("{grade}テイラーストーン"), Some(r)))
-        .collect();
-    assert_eq!(rarity, expected);
+    assert_eq!(cards, expected);
 }
 
 /// A still screen's card panel stays the same to the pixel, and a frame whose

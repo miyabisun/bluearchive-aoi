@@ -160,6 +160,12 @@ export function shopStale(shop, now = new Date()) {
 }
 
 /**
+ * The face a good's tile is painted (`data-face`): a student's eleph its own,
+ * any other good its rarity ("N" to "SSR"), none where that is unknown.
+ */
+export const goodFace = (good) => (good.eleph ? "eleph" : (good.rarity ?? undefined));
+
+/**
  * A good as its tile shows it: how many come with a purchase ("×5", none
  * without terms), and what each of the shop's coins buys of it, the times
  * left at the price ("12回@10", "@?" without terms, "売切れ" at none; `null`

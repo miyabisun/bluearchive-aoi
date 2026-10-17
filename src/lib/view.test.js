@@ -21,6 +21,7 @@ import {
   schoolCells,
   farmCells,
   goodTile,
+  goodFace,
   heldTone,
   placeName,
   stockCells,
@@ -295,6 +296,12 @@ describe("shops", () => {
       amount: "",
       offers: [{ text: "3回@?", sold: false }],
     });
+  });
+
+  it("paints a good on its rarity, a student's eleph on its own, and one unknown on none", () => {
+    expect(goodFace({ rarity: "SR", eleph: false })).toBe("SR");
+    expect(goodFace({ rarity: "N", eleph: true })).toBe("eleph");
+    expect(goodFace({ rarity: null, eleph: false })).toBeUndefined();
   });
 
   it("narrows each shop's goods by name and leaves out a shop with none", () => {

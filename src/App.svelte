@@ -28,6 +28,7 @@
     formatCount,
     farmCells,
     goodTile,
+    goodFace,
     heldTone,
     groupPlan,
     needCells,
@@ -1021,7 +1022,7 @@
                     <li
                       class:sold={card.left === 0 || card.barred}
                       class:reserved={card.reserved}
-                      data-rarity={card.rarity}
+                      data-face={goodFace(card)}
                     >
                       <button
                         type="button"
@@ -1108,7 +1109,7 @@
                 {#each shop.goods as good (good.id)}
                   {@const tile = goodTile(good)}
                   <!-- A good bought up with every coin is greyed out (the app lists it last). -->
-                  <li title={good.name} class:sold={good.sold}>
+                  <li title={good.name} class:sold={good.sold} data-face={goodFace(good)}>
                     <span class="item"
                       ><img
                         src={iconUrl(good.icon)}
@@ -1780,6 +1781,11 @@
       opacity: 0.55
       img
         filter: grayscale(1)
+    // A good on its rarity, as the game colours it (初級 to 最上級 on tier-1 to 4), a
+    // student's eleph on pink.
+    @each $face, $color in (N: tier-1, R: tier-2, SR: tier-3, SSR: tier-4, eleph: eleph)
+      li[data-face="#{$face}"]
+        background: var(--c-#{$color})
     .offers
       display: flex
       flex-direction: column
@@ -1819,10 +1825,6 @@
       cursor: pointer
     li.reserved button
       border-color: var(--c-accent)
-    // A card on its good's rarity, as the game colours it: 初級 to 最上級 on tier-1 to 4.
-    @each $rarity, $tier in (N: 1, R: 2, SR: 3, SSR: 4)
-      li[data-rarity="#{$rarity}"]
-        background: var(--c-tier-#{$tier})
     // On the border's corner; the surface's colour on the accent reads in both themes.
     .booked
       position: absolute

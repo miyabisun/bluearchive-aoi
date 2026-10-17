@@ -19,6 +19,7 @@ use crate::{
         word::{self, Ink},
     },
     grid::Card,
+    icon::Rarity,
     icon::{IconMatcher, Mask},
     price::{Price, Prices},
     quantity::Count,
@@ -831,7 +832,8 @@ pub struct CoinRow {
 }
 
 /// A good of a shop, named, with its icon, what each coin buys of it
-/// (`None`: that coin does not) and whether every coin bought it up.
+/// (`None`: that coin does not), whether every coin bought it up, its rarity
+/// (none where unknown) and whether it is a student's eleph.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GoodRow {
     pub id: i64,
@@ -839,6 +841,8 @@ pub struct GoodRow {
     pub icon: String,
     pub offers: Vec<Option<OfferRow>>,
     pub sold: bool,
+    pub rarity: Option<Rarity>,
+    pub eleph: bool,
 }
 
 /// How many more times a coin buys a good, and on what terms (`None`: none

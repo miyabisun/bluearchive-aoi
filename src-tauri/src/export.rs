@@ -390,6 +390,8 @@ shops: []
                     }),
                 ],
                 sold: false,
+                rarity: None,
+                eleph: false,
             }],
         }];
         let text = yaml("", &ReadAt::default(), None, &[], &[], &[], &shops);

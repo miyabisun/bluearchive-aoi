@@ -462,6 +462,8 @@ const shops = [
           { left: 12, price: { price: 10, amount: 1, limit: 12 } },
         ],
         sold: false,
+        rarity: "N",
+        eleph: false,
       },
       {
         id: 10019,
@@ -469,6 +471,8 @@ const shops = [
         icon: "item_icon_secretstone_azusa",
         offers: [null, { left: 0, price: { price: 50, amount: 5, limit: 10 } }],
         sold: true,
+        rarity: "N",
+        eleph: true,
       },
     ],
   },
@@ -484,6 +488,8 @@ const shops = [
         icon: "item_icon_material_ether_0",
         offers: [{ left: 25, price: null }],
         sold: false,
+        rarity: null,
+        eleph: false,
       },
     ],
   },
@@ -529,6 +535,9 @@ test("shows each shop's goods, shop by shop, when the game shows a shop", async 
   await expect(tiles.nth(1)).toHaveClass(/sold/);
   await expect(tiles.first()).not.toHaveClass(/sold/);
   expect(await tiles.nth(1).evaluate((t) => Number(getComputedStyle(t).opacity))).toBeLessThan(1);
+  // A good on its rarity's face (初級 on tier-1), a student's eleph on pink.
+  await expect(tiles.first()).toHaveCSS("background-color", await colorOf(page, "--c-tier-1"));
+  await expect(tiles.nth(1)).toHaveCSS("background-color", await colorOf(page, "--c-eleph"));
   // The icons load from the app.
   await expect
     .poll(() =>
@@ -1158,6 +1167,7 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
     barred: false,
     held: null,
     eleph: true,
+    rarity: "N",
     ...more,
   });
   const plan = (reserved) => [
@@ -1166,9 +1176,9 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
       read_at: "2026-10-16 07:00:00",
       coins: reserved ? coins(800, true) : coins(0, false),
       cards: [
-        card(10019, "アズサの神名文字", { reserved, held: { exact: 120 }, rarity: "N" }),
-        card(10020, "ハナコの神名文字", { left: 0, rarity: "SR" }),
-        card(10021, "マキの神名文字", { left: 0, barred: true, rarity: null }),
+        card(10019, "アズサの神名文字", { reserved, held: { exact: 120 } }),
+        card(10020, "ハナコの神名文字", { left: 0 }),
+        card(10021, "マキの神名文字", { left: 0, barred: true }),
       ],
     },
     { name: "大決戦", read_at: null, coins: [], cards: [] },
@@ -1188,9 +1198,9 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
   // A card a good and a coin: the times left at the price, bought up, or its student done.
   const cards = page.locator(".plan li");
   await expect(cards).toHaveText(["×5 16回@50", "×5 売切れ", "×5 固有4"]);
-  // Each on its good's rarity (N tier-1, SR tier-3), one of none on the plain tile.
-  for (const [i, token] of ["--c-tier-1", "--c-tier-3", "--c-wash-base"].entries()) {
-    await expect(cards.nth(i)).toHaveCSS("background-color", await colorOf(page, token));
+  // The elephs on pink, as the shop tab paints them, though their rarity is 初級.
+  for (let i = 0; i < 3; i++) {
+    await expect(cards.nth(i)).toHaveCSS("background-color", await colorOf(page, "--c-eleph"));
   }
   for (const [i, name] of ["アズサ", "ハナコ", "マキ"].entries()) {
     await expect(cards.nth(i).getByRole("button")).toHaveAccessibleName(
