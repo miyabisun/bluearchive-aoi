@@ -31,7 +31,7 @@ fn each_slot_counts_pieces_from_its_blueprints() {
     // 5,175 universal ones (schale-calc's equipment-upgrade.md).
     assert_eq!((hat.top.need, hat.top.pieces), (60, 4.5));
     assert_eq!((hat.universal.held, hat.universal.need), (9700, 5175));
-    assert_eq!(hat.golden, 3);
+    assert_eq!(hat.golden.students, 3);
 }
 
 #[test]
@@ -106,7 +106,7 @@ fn the_farm_plays_for_t10_blueprints_and_gives_the_rest_where_the_ratio_wants_it
                 each * 2.0 * f64::from(s.runs)
             })
             .sum();
-        let want = f64::from(slot.golden * 60);
+        let want = f64::from(slot.golden.students * 60);
         assert!(f64::from(held) + dropped >= want, "{}", slot.name);
     }
 }

@@ -79,14 +79,14 @@ fn amount(count: Option<Count>) -> (u64, bool) {
 
 /// An equipment slot as the normal missions serve it: its name, the icon of
 /// its T10 piece, how many students' pieces from T1 to T10 the golden ratio
-/// keeps of it, and what the blueprints held make of pieces (the T10
+/// keeps of it (and why), and what the blueprints held make of pieces (the T10
 /// blueprints, and apart the universal blueprints with those of T9 and below
 /// counted at `RATE`).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SlotRow {
     pub name: String,
     pub icon: String,
-    pub golden: u32,
+    pub golden: Golden,
     pub top: Stock,
     pub universal: Stock,
 }
@@ -110,7 +110,7 @@ const GOLDEN_STUDENTS: u64 = 24;
 /// (`growers`) in `GOLDEN_STUDENTS` students (the user's of 2026-10-17: 「黄金比
 /// は全実装生徒の装備の割合を元に算出した数値」), in whole students (see
 /// `whole_students`).
-pub fn golden(growers: &[Grower]) -> BTreeMap<String, u32> {
+pub fn golden(growers: &[Grower]) -> BTreeMap<String, Golden> {
     let mut slots: BTreeMap<String, u64> = BTreeMap::new();
     for slot in growers.iter().flat_map(|g| &g.equipment) {
         *slots.entry(slot.clone()).or_default() += 1;
@@ -118,11 +118,27 @@ pub fn golden(growers: &[Grower]) -> BTreeMap<String, u32> {
     let all = slots.values().sum();
     slots
         .into_iter()
-        .map(|(slot, n)| {
-            let whole = whole_students(n * GOLDEN_STUDENTS, all);
-            (slot, u32::try_from(whole).unwrap_or(u32::MAX))
+        .map(|(slot, slots)| {
+            let whole = whole_students(slots * GOLDEN_STUDENTS, all);
+            let golden = Golden {
+                students: u32::try_from(whole).unwrap_or(u32::MAX),
+                slots,
+                all,
+                total: GOLDEN_STUDENTS,
+            };
+            (slot, golden)
         })
         .collect()
+}
+
+/// A slot's golden ratio: how many students' pieces to keep, and why: the
+/// slot is `slots` of the `all` slots of every student, in `total` students.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct Golden {
+    pub students: u32,
+    pub slots: u64,
+    pub all: u64,
+    pub total: u64,
 }
 
 /// `part / all` students, rounded up from a quarter on (the user's of
@@ -140,7 +156,7 @@ fn whole_students(part: u64, all: u64) -> u64 {
 struct Slot {
     name: String,
     icon: String,
-    golden: u32,
+    golden: Golden,
     universal: i64,
     prints: Vec<(i64, u8, u64)>,
 }
@@ -162,7 +178,7 @@ impl Slot {
 }
 
 /// The slots in the order of their T10 pieces.
-fn slot_data(pieces: &[Piece], equipment: &[Item], golden: &BTreeMap<String, u32>) -> Vec<Slot> {
+fn slot_data(pieces: &[Piece], equipment: &[Item], golden: &BTreeMap<String, Golden>) -> Vec<Slot> {
     let tops = pieces.iter().filter(|p| p.id < BLUEPRINTS && p.tier == 10);
     tops.filter_map(|top| {
         let slot = |p: &&Piece| p.category == top.category;
@@ -181,7 +197,7 @@ fn slot_data(pieces: &[Piece], equipment: &[Item], golden: &BTreeMap<String, u32
         Some(Slot {
             name: entry(universal)?.name.strip_suffix(UNIVERSAL)?.to_owned(),
             icon: entry(top.id)?.icon.clone(),
-            golden: golden.get(&top.category).copied().unwrap_or(0),
+            golden: golden.get(&top.category).copied().unwrap_or_default(),
             universal,
             prints,
         })
@@ -194,7 +210,7 @@ fn slot_data(pieces: &[Piece], equipment: &[Item], golden: &BTreeMap<String, u32
 pub fn slots<S: BuildHasher>(
     pieces: &[Piece],
     equipment: &[Item],
-    golden: &BTreeMap<String, u32>,
+    golden: &BTreeMap<String, Golden>,
     held: &HashMap<i64, Count, S>,
 ) -> Vec<SlotRow> {
     slot_data(pieces, equipment, golden)
@@ -275,7 +291,7 @@ pub struct NextStage {
 pub fn farm<S: BuildHasher>(
     pieces: &[Piece],
     equipment: &[Item],
-    golden: &BTreeMap<String, u32>,
+    golden: &BTreeMap<String, Golden>,
     missions: &[Mission],
     held: &HashMap<i64, Count, S>,
     multiplier: u32,
@@ -405,7 +421,7 @@ impl Farming<'_> {
         let times = f64::from(self.multiplier);
         let tops = self.slots.iter().flat_map(|slot| {
             let tops = slot.prints.iter().filter(|p| p.1 == 10);
-            tops.map(move |&(id, _, per)| (id, f64::from(slot.golden) * per as f64))
+            tops.map(move |&(id, _, per)| (id, f64::from(slot.golden.students) * per as f64))
         });
         tops.filter(|&(_, need)| need > 0.0)
             .map(|(id, need)| {
@@ -465,7 +481,7 @@ impl Farming<'_> {
                     supply.push((made, 1.0));
                     universal.push((made, RATE[usize::from(tier)] as f64));
                 }
-                let want = f64::from(slot.golden) * per as f64 - self.has(id);
+                let want = f64::from(slot.golden.students) * per as f64 - self.has(id);
                 problem.add_constraint(supply, Ge, want);
             }
             if !top {
@@ -779,7 +795,7 @@ mod tests {
         assert_eq!(rows.len(), 1);
         let hat = &rows[0];
         assert_eq!(
-            (hat.name.as_str(), hat.icon.as_str(), hat.golden),
+            (hat.name.as_str(), hat.icon.as_str(), hat.golden.students),
             ("帽子", "icon_1009", 3)
         );
         assert_eq!((hat.top.held, hat.top.need, hat.top.pieces), (270, 60, 4.5));
@@ -791,11 +807,15 @@ mod tests {
     }
 
     /// A golden ratio of 3 hats, 2 bags and 4 shoes.
-    fn ratio() -> BTreeMap<String, u32> {
+    fn ratio() -> BTreeMap<String, Golden> {
+        let students = |students| Golden {
+            students,
+            ..Golden::default()
+        };
         BTreeMap::from([
-            ("Hat".to_owned(), 3),
-            ("Bag".to_owned(), 2),
-            ("Shoes".to_owned(), 4),
+            ("Hat".to_owned(), students(3)),
+            ("Bag".to_owned(), students(2)),
+            ("Shoes".to_owned(), students(4)),
         ])
     }
 
@@ -993,13 +1013,19 @@ mod tests {
         .into_iter()
         .map(student)
         .collect();
+        let ratio = |students, slots| Golden {
+            students,
+            slots,
+            all: 30,
+            total: 24,
+        };
         assert_eq!(
             golden(&growers),
             BTreeMap::from([
-                ("Bag".to_owned(), 4),
-                ("Hat".to_owned(), 8),
-                ("Shoes".to_owned(), 5),
-                ("Watch".to_owned(), 7),
+                ("Bag".to_owned(), ratio(4, 5)),
+                ("Hat".to_owned(), ratio(8, 10)),
+                ("Shoes".to_owned(), ratio(5, 6)),
+                ("Watch".to_owned(), ratio(7, 9)),
             ])
         );
     }

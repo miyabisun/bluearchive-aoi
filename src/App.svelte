@@ -29,6 +29,7 @@
     farmCells,
     goodTile,
     goodFace,
+    goldenTitle,
     heldTone,
     groupPlan,
     needCells,
@@ -900,7 +901,7 @@
               <tbody>
                 {#each work.slots as slot (slot.name)}
                   <tr>
-                    <td class="slot" title="黄金比 {slot.golden}人">
+                    <td class="slot" title={goldenTitle(slot.golden)}>
                       <span class="part"
                         ><img
                           src={iconUrl(slot.icon)}
@@ -911,7 +912,7 @@
                       >
                     </td>
                     {#each [slot.top, slot.universal] as stock, i (i)}
-                      {@const cells = stockCells(stock, slot.golden)}
+                      {@const cells = stockCells(stock, slot.golden.students)}
                       <td>
                         <strong class={cells.tone}>{cells.pieces}</strong>
                         <span class="detail">{cells.held}</span>

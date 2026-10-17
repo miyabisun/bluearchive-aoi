@@ -522,6 +522,21 @@ export function stockCells(stock, golden) {
   };
 }
 
+/**
+ * A slot's golden ratio in its hover: how many students, and why: the slot's
+ * share of every student's slots in `total` students, cut to two decimals as
+ * the rounding goes by (a quarter and more rounds up).
+ */
+export function goldenTitle(golden) {
+  const { students, slots, all, total } = golden;
+  const share = (Math.floor((slots * total * 100) / all) / 100).toFixed(2);
+  return [
+    `黄金比 ${students}人`,
+    `全実装生徒の装備欄 ${exact.format(all)} のうち ${exact.format(slots)}`,
+    `${exact.format(slots)} ÷ ${exact.format(all)} × ${total} = ${share}（0.25以上は切り上げ）`,
+  ].join("\n");
+}
+
 /** How many a count holds ("51K" about 51,000; none 0). */
 const amountOf = (count) => (count == null ? 0 : (count.exact ?? count.thousands * 1000));
 

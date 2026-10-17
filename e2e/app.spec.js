@@ -955,7 +955,7 @@ const work = {
     {
       name: "帽子",
       icon: "equipment_icon_hat_tier10",
-      golden: 3,
+      golden: { students: 3, slots: 103, all: 834, total: 24 },
       top: { held: 150, about: false, need: 60, pieces: 2.5 },
       universal: { held: 2150, about: true, need: 430, pieces: 5.0 },
     },
@@ -1069,8 +1069,11 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   await expect(page.locator(".slots tbody tr")).toHaveText([
     "帽子2.5個分 150 / 605.0個分 約2,150 / 430",
   ]);
-  // The slot's golden ratio in its hover, off the table's lines.
-  await expect(page.locator(".slots .slot")).toHaveAttribute("title", "黄金比 3人");
+  // The slot's golden ratio in its hover, off the table's lines, with why.
+  await expect(page.locator(".slots .slot")).toHaveAttribute(
+    "title",
+    /^黄金比 3人\n全実装生徒の装備欄 834 のうち 103\n/,
+  );
   await expect(page.locator(".slots strong.low")).toHaveText(["2.5個分"]);
   // How many times to play each mission, in the campaign, to the golden ratio.
   // The totals under a double rule.

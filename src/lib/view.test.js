@@ -25,6 +25,7 @@ import {
   heldTone,
   placeName,
   stockCells,
+  goldenTitle,
   updateText,
   castLine,
   castNote,
@@ -738,6 +739,18 @@ describe("work", () => {
     expect(stockCells({ held: 2150, about: true, need: 430, pieces: 5.0 }, 4).held).toBe(
       "約2,150 / 430",
     );
+  });
+
+  it("tells why a slot's golden ratio is so many: its share of every student's slots in 24", () => {
+    expect(goldenTitle({ students: 3, slots: 103, all: 834, total: 24 })).toBe(
+      [
+        "黄金比 3人",
+        "全実装生徒の装備欄 834 のうち 103",
+        "103 ÷ 834 × 24 = 2.96（0.25以上は切り上げ）",
+      ].join("\n"),
+    );
+    // Cut to two decimals as the rounding goes by: 2.129… shows 2.12, never 2.13.
+    expect(goldenTitle({ students: 2, slots: 74, all: 834, total: 24 })).toContain("= 2.12（");
   });
 
   it("tells a drop held short of one student's need, of two, or enough for two", () => {
