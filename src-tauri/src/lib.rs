@@ -366,12 +366,14 @@ impl Recognizer {
         let (items_held, equipment_held) = (counts(items), counts(equipment));
         let (goods, pieces) = (self.items.entries(), self.equipment.entries());
         let stages = &self.stages;
+        let golden = work::golden(&self.planner.growers);
         work::WorkRows {
-            slots: work::slots(&self.planner.pieces, pieces, &equipment_held),
+            slots: work::slots(&self.planner.pieces, pieces, &golden, &equipment_held),
             // The missions are played in a campaign, which doubles the drops.
             farm: work::farm(
                 &self.planner.pieces,
                 pieces,
+                &golden,
                 &stages.missions,
                 &equipment_held,
                 2,

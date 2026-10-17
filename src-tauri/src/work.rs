@@ -3,7 +3,10 @@
 //! bounties and of the scrimmages, and how many students the credits and the
 //! reports raise.
 
-use std::{collections::HashMap, hash::BuildHasher};
+use std::{
+    collections::{BTreeMap, HashMap},
+    hash::BuildHasher,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -98,19 +101,39 @@ pub struct Stock {
     pub pieces: f64,
 }
 
-/// The golden ratio (オニア先生の黄金比, as schale-calc's onia-golden-ratio.md
-/// has it): how many students' pieces from T1 to T10 to keep of each slot.
-const GOLDEN: [(&str, u32); 9] = [
-    ("Hat", 3),
-    ("Gloves", 2),
-    ("Shoes", 4),
-    ("Bag", 2),
-    ("Badge", 2),
-    ("Hairpin", 4),
-    ("Charm", 1),
-    ("Watch", 4),
-    ("Necklace", 2),
-];
+/// How many students' pieces the golden ratio keeps in all, as オニア先生's
+/// (schale-calc's onia-golden-ratio.md) did.
+const GOLDEN_STUDENTS: u64 = 24;
+
+/// The golden ratio, by slot (its category): how many students' pieces from
+/// T1 to T10 to keep, the slot's share of the slots of every student released
+/// (`growers`) in `GOLDEN_STUDENTS` students (the user's of 2026-10-17: 「黄金比
+/// は全実装生徒の装備の割合を元に算出した数値」), in whole students (see
+/// `whole_students`).
+pub fn golden(growers: &[Grower]) -> BTreeMap<String, u32> {
+    let mut slots: BTreeMap<String, u64> = BTreeMap::new();
+    for slot in growers.iter().flat_map(|g| &g.equipment) {
+        *slots.entry(slot.clone()).or_default() += 1;
+    }
+    let all = slots.values().sum();
+    slots
+        .into_iter()
+        .map(|(slot, n)| {
+            let whole = whole_students(n * GOLDEN_STUDENTS, all);
+            (slot, u32::try_from(whole).unwrap_or(u32::MAX))
+        })
+        .collect()
+}
+
+/// `part / all` students, rounded up from a quarter on (the user's of
+/// 2026-10-17: 「0.24以下: 切り捨てる」「0.25以上: 切り上げる」): a stock short of
+/// a student fails, and a stock of 2.5 students' blueprints is not enough.
+fn whole_students(part: u64, all: u64) -> u64 {
+    if all == 0 {
+        return 0;
+    }
+    part / all + u64::from(part % all * 4 >= all)
+}
 
 /// A slot's blueprints: its universal one, and each tier's with what one piece
 /// from T1 to T10 takes of it.
@@ -139,7 +162,7 @@ impl Slot {
 }
 
 /// The slots in the order of their T10 pieces.
-fn slot_data(pieces: &[Piece], equipment: &[Item]) -> Vec<Slot> {
+fn slot_data(pieces: &[Piece], equipment: &[Item], golden: &BTreeMap<String, u32>) -> Vec<Slot> {
     let tops = pieces.iter().filter(|p| p.id < BLUEPRINTS && p.tier == 10);
     tops.filter_map(|top| {
         let slot = |p: &&Piece| p.category == top.category;
@@ -158,10 +181,7 @@ fn slot_data(pieces: &[Piece], equipment: &[Item]) -> Vec<Slot> {
         Some(Slot {
             name: entry(universal)?.name.strip_suffix(UNIVERSAL)?.to_owned(),
             icon: entry(top.id)?.icon.clone(),
-            golden: GOLDEN
-                .iter()
-                .find(|g| g.0 == top.category)
-                .map_or(0, |g| g.1),
+            golden: golden.get(&top.category).copied().unwrap_or(0),
             universal,
             prints,
         })
@@ -169,13 +189,15 @@ fn slot_data(pieces: &[Piece], equipment: &[Item]) -> Vec<Slot> {
     .collect()
 }
 
-/// The slots in the order of their T10 pieces, each as `SlotRow` tells.
+/// The slots in the order of their T10 pieces, each as `SlotRow` tells, of the
+/// `golden` ratio (see `golden`).
 pub fn slots<S: BuildHasher>(
     pieces: &[Piece],
     equipment: &[Item],
+    golden: &BTreeMap<String, u32>,
     held: &HashMap<i64, Count, S>,
 ) -> Vec<SlotRow> {
-    slot_data(pieces, equipment)
+    slot_data(pieces, equipment, golden)
         .into_iter()
         .map(|slot| {
             let stock = |worth: &[(i64, u64, u64)]| {
@@ -253,12 +275,13 @@ pub struct NextStage {
 pub fn farm<S: BuildHasher>(
     pieces: &[Piece],
     equipment: &[Item],
+    golden: &BTreeMap<String, u32>,
     missions: &[Mission],
     held: &HashMap<i64, Count, S>,
     multiplier: u32,
 ) -> Option<Farm> {
     let mut farming = Farming {
-        slots: slot_data(pieces, equipment),
+        slots: slot_data(pieces, equipment, golden),
         missions,
         stock: held
             .iter()
@@ -752,7 +775,7 @@ mod tests {
             (101_001, Count::Exact(5)),
             (501_000, Count::Thousands(1)),
         ]);
-        let rows = slots(&hat_pieces(), &hat_entries(), &held);
+        let rows = slots(&hat_pieces(), &hat_entries(), &ratio(), &held);
         assert_eq!(rows.len(), 1);
         let hat = &rows[0];
         assert_eq!(
@@ -765,6 +788,15 @@ mod tests {
         let u = &hat.universal;
         assert_eq!((u.held, u.about, u.need), (1010, true, 70));
         assert!((u.pieces - 1010.0 / 70.0).abs() < 1e-9);
+    }
+
+    /// A golden ratio of 3 hats, 2 bags and 4 shoes.
+    fn ratio() -> BTreeMap<String, u32> {
+        BTreeMap::from([
+            ("Hat".to_owned(), 3),
+            ("Bag".to_owned(), 2),
+            ("Shoes".to_owned(), 4),
+        ])
     }
 
     /// A hat's pieces: T2 takes 15 of its own; T10 60 of its own and 20 of T2's.
@@ -806,7 +838,7 @@ mod tests {
             },
         ];
         let held = HashMap::from([(101_009, Count::Exact(120))]);
-        let farm = farm(&hat_pieces(), &hat_entries(), &missions, &held, 2).unwrap();
+        let farm = farm(&hat_pieces(), &hat_entries(), &ratio(), &missions, &held, 2).unwrap();
         // 60 T10 blueprints at 1 a run; the 105 of T2's from 210 universal
         // ones, 20 a run.
         let runs: Vec<(&str, u32)> = farm
@@ -851,7 +883,7 @@ mod tests {
         };
         let missions = [mission("28-4", 104_009), mission("29-2", 103_009)];
         let held = HashMap::from([(104_009, Count::Exact(1000)), (103_009, Count::Exact(250))]);
-        let farm = farm(&pieces, &entries, &missions, &held, 2).unwrap();
+        let farm = farm(&pieces, &entries, &ratio(), &missions, &held, 2).unwrap();
         let runs: Vec<(&str, u32)> = farm
             .stages
             .iter()
@@ -883,7 +915,7 @@ mod tests {
             (104_009, Count::Exact(1000)),
             (103_009, Count::Exact(480)),
         ]);
-        let farm = farm(&pieces, &entries, &missions, &held, 2).unwrap();
+        let farm = farm(&pieces, &entries, &ratio(), &missions, &held, 2).unwrap();
         assert!(farm.stages.is_empty());
         let next: Vec<&str> = farm.next.iter().map(|n| n.name.as_str()).collect();
         assert_eq!(next, ["29-2", "28-4", "29-9"]);
@@ -927,7 +959,49 @@ mod tests {
     }
 
     fn farm_of(missions: &[Mission], held: &HashMap<i64, Count>) -> Farm {
-        farm(&hat_pieces(), &hat_entries(), missions, held, 2).unwrap()
+        farm(&hat_pieces(), &hat_entries(), &ratio(), missions, held, 2).unwrap()
+    }
+
+    /// A share is rounded up from a quarter on, down below it.
+    #[test]
+    fn a_share_of_students_rounds_up_from_a_quarter() {
+        assert_eq!(whole_students(624, 100), 6);
+        assert_eq!(whole_students(625, 100), 7);
+        assert_eq!(whole_students(600, 100), 6);
+        assert_eq!(whole_students(699, 100), 7);
+    }
+
+    /// Each slot keeps its share of the students' slots in 24 students: of 10
+    /// students' 30 slots, 10 hats are 8, 6 shoes 4.8 (5), 9 watches 7.2 (7)
+    /// and 5 bags 4.
+    #[test]
+    fn the_golden_ratio_is_each_slots_share_of_every_students_in_24() {
+        let student = |slots: [&str; 3]| Grower {
+            id: 0,
+            equipment: slots.iter().map(|&s| s.to_owned()).collect(),
+            ex: Vec::new(),
+            skills: Vec::new(),
+            potential: None,
+            weapon: None,
+        };
+        let growers: Vec<Grower> = [
+            [["Hat", "Shoes", "Watch"]; 5].to_vec(),
+            [["Hat", "Bag", "Watch"]; 4].to_vec(),
+            vec![["Hat", "Shoes", "Bag"]],
+        ]
+        .concat()
+        .into_iter()
+        .map(student)
+        .collect();
+        assert_eq!(
+            golden(&growers),
+            BTreeMap::from([
+                ("Bag".to_owned(), 4),
+                ("Hat".to_owned(), 8),
+                ("Shoes".to_owned(), 5),
+                ("Watch".to_owned(), 7),
+            ])
+        );
     }
 
     #[test]
