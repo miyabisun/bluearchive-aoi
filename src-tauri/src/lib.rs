@@ -470,6 +470,11 @@ impl Recognizer {
                     barred: eleph && done(id),
                     held: held(id),
                     eleph,
+                    rarity: self
+                        .shop_goods
+                        .iter()
+                        .find(|g| g.id == id)
+                        .and_then(|g| g.rarity),
                 })
             },
             reserved,

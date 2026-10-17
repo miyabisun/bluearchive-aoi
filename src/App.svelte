@@ -1018,7 +1018,11 @@
                   {#each shop.cards as card (`${card.id}:${card.coin}`)}
                     {@const coin = shop.coins[card.coin]}
                     {@const tile = planCard(card)}
-                    <li class:sold={card.left === 0 || card.barred} class:reserved={card.reserved}>
+                    <li
+                      class:sold={card.left === 0 || card.barred}
+                      class:reserved={card.reserved}
+                      data-rarity={card.rarity}
+                    >
                       <button
                         type="button"
                         title={planTitle(card, snapshot.students)}
@@ -1815,6 +1819,10 @@
       cursor: pointer
     li.reserved button
       border-color: var(--c-accent)
+    // A card on its good's rarity, as the game colours it: 初級 to 最上級 on tier-1 to 4.
+    @each $rarity, $tier in (N: 1, R: 2, SR: 3, SSR: 4)
+      li[data-rarity="#{$rarity}"]
+        background: var(--c-tier-#{$tier})
     // On the border's corner; the surface's colour on the accent reads in both themes.
     .booked
       position: absolute

@@ -61,6 +61,17 @@ async function open(page, snapshot, tab) {
 const tileNames = (page) =>
   page.locator(".tiles li").evaluateAll((tiles) => tiles.map((t) => t.title));
 
+/** The colour the theme's `token` (as `--c-accent`) computes to. */
+const colorOf = (page, token) =>
+  page.evaluate((t) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(${t})`;
+    document.body.append(probe);
+    const rgb = getComputedStyle(probe).color;
+    probe.remove();
+    return rgb;
+  }, token);
+
 const overflow = (page) =>
   page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
@@ -1155,9 +1166,9 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
       read_at: "2026-10-16 07:00:00",
       coins: reserved ? coins(800, true) : coins(0, false),
       cards: [
-        card(10019, "アズサの神名文字", { reserved, held: { exact: 120 } }),
-        card(10020, "ハナコの神名文字", { left: 0 }),
-        card(10021, "マキの神名文字", { left: 0, barred: true }),
+        card(10019, "アズサの神名文字", { reserved, held: { exact: 120 }, rarity: "N" }),
+        card(10020, "ハナコの神名文字", { left: 0, rarity: "SR" }),
+        card(10021, "マキの神名文字", { left: 0, barred: true, rarity: null }),
       ],
     },
     { name: "大決戦", read_at: null, coins: [], cards: [] },
@@ -1177,6 +1188,10 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
   // A card a good and a coin: the times left at the price, bought up, or its student done.
   const cards = page.locator(".plan li");
   await expect(cards).toHaveText(["×5 16回@50", "×5 売切れ", "×5 固有4"]);
+  // Each on its good's rarity (N tier-1, SR tier-3), one of none on the plain tile.
+  for (const [i, token] of ["--c-tier-1", "--c-tier-3", "--c-wash-base"].entries()) {
+    await expect(cards.nth(i)).toHaveCSS("background-color", await colorOf(page, token));
+  }
   for (const [i, name] of ["アズサ", "ハナコ", "マキ"].entries()) {
     await expect(cards.nth(i).getByRole("button")).toHaveAccessibleName(
       new RegExp(`${name}の神名文字`),
@@ -1211,15 +1226,7 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
   const mark = await azusa.getByText("予約中").boundingBox();
   expect(Math.abs(mark.y - box.y)).toBeLessThanOrEqual(1);
   expect(Math.abs(mark.x + mark.width - (box.x + box.width))).toBeLessThanOrEqual(1);
-  const accent = await page.evaluate(() => {
-    const probe = document.createElement("span");
-    probe.style.color = "var(--c-accent)";
-    document.body.append(probe);
-    const rgb = getComputedStyle(probe).color;
-    probe.remove();
-    return rgb;
-  });
-  await expect(azusa).toHaveCSS("border-top-color", accent);
+  await expect(azusa).toHaveCSS("border-top-color", await colorOf(page, "--c-accent"));
   // The coins left once the cards reserved are paid: 600 less 16 × 50, short red.
   await expect(coinsLeft).toHaveText(["-200", "40"]);
   await expect(page.locator(".work .held .short")).toHaveText(["-200"]);

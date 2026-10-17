@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{quantity::Count, shop::ShopRow};
+use crate::{icon::Rarity, quantity::Count, shop::ShopRow};
 
 /// The month-end shops, in the order the work tab lists them.
 pub const SHOPS: [&str; 5] = ["総力戦", "大決戦", "合同火力演習", "指名手配", "熟達証書"];
@@ -45,7 +45,7 @@ pub struct PlanCoin {
 /// A card: a good and the coin (by its place in `PlanShop::coins`) paying for
 /// it, the times left (none: bought up) and the price; whether it is reserved
 /// or barred (an eleph its student can take no more of); how many of the good
-/// are held (none: not read) and whether it is an eleph.
+/// are held (none: not read), whether it is an eleph, and its rarity.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PlanCard {
     pub id: i64,
@@ -59,17 +59,20 @@ pub struct PlanCard {
     pub barred: bool,
     pub held: Option<Count>,
     pub eleph: bool,
+    pub rarity: Option<Rarity>,
 }
 
 /// What the plan knows of a good a shop lists: its `group` (0 the goods to
 /// stock up on, those after them later), its `worth` (the least first),
-/// whether it is `barred`, how many are `held` and whether it is an eleph.
+/// whether it is `barred`, how many are `held`, whether it is an eleph and its
+/// `rarity` (none where unknown).
 pub struct Listing<K> {
     pub group: u8,
     pub worth: K,
     pub barred: bool,
     pub held: Option<Count>,
     pub eleph: bool,
+    pub rarity: Option<Rarity>,
 }
 
 /// The month-end shops of `rows` (the shops' shelves as read), each with the
@@ -118,6 +121,7 @@ pub fn shops<K: Ord + Clone>(
                         barred: listed.barred,
                         held: listed.held,
                         eleph: listed.eleph,
+                        rarity: listed.rarity,
                     };
                     cards.push((card, (listed.group, listed.worth.clone())));
                 }
@@ -232,6 +236,7 @@ mod tests {
             barred: false,
             held: None,
             eleph: false,
+            rarity: None,
         }
     }
 
@@ -246,6 +251,7 @@ mod tests {
                 barred: id == 10_002,
                 held: Some(Count::Exact(u32::try_from(id % 100).unwrap())),
                 eleph: id >= 10_000,
+                rarity: None,
             })
         };
         let plan = shops(&[assault()], listing, &BTreeSet::new());

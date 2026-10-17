@@ -7,7 +7,7 @@
 //! shortlist is compared at full template size with a small position search.
 
 use image::{RgbImage, RgbaImage, imageops::FilterType};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::grid::Card;
 
@@ -32,7 +32,7 @@ pub struct Mask {
 }
 /// How rare an item is (SchaleDB's `rarity`), which the game shows in the
 /// colour of the card behind its icon: grey, blue, gold, purple.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Rarity {
     N,
     R,

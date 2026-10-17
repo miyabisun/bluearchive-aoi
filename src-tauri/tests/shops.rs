@@ -12,6 +12,7 @@ use std::{
 
 use aoi::{
     Recognizer,
+    icon::Rarity,
     shop::{Offer, Shelf},
 };
 use serde::Deserialize;
@@ -264,6 +265,52 @@ fn a_shop_lists_its_goods_worth_buying_first_and_those_bought_up_last() {
             "ブースターチケット",
         ]
     );
+}
+
+/// A month-end card tells its good's rarity, which the game shows in the colour
+/// behind its icon: 初級 N, 中級 R, 上級 SR, 最上級 SSR.
+#[test]
+fn a_month_end_card_tells_its_goods_rarity() {
+    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let items = recognizer.shop_goods();
+    let grades = ["初級", "中級", "上級", "最上級"];
+    let offers = grades
+        .iter()
+        .map(|grade| Offer {
+            id: items
+                .iter()
+                .find(|i| i.name == format!("{grade}テイラーストーン"))
+                .unwrap()
+                .id,
+            coin: 0,
+            left: 1,
+            price: None,
+        })
+        .collect();
+    let shelf = Shelf {
+        read_at: String::new(),
+        offers,
+        held: Vec::new(),
+    };
+    let rows = recognizer.shop_rows(
+        &BTreeMap::from([("合同火力演習".to_owned(), shelf)]),
+        &std::collections::HashMap::new(),
+    );
+    let plan = recognizer.month_end(&rows, &[], |_| None, &std::collections::BTreeSet::new());
+    let rarity: BTreeMap<String, Option<Rarity>> = plan
+        .iter()
+        .find(|s| s.name == "合同火力演習")
+        .unwrap()
+        .cards
+        .iter()
+        .map(|c| (c.name.clone(), c.rarity))
+        .collect();
+    let expected = grades
+        .iter()
+        .zip([Rarity::N, Rarity::R, Rarity::SR, Rarity::SSR])
+        .map(|(grade, r)| (format!("{grade}テイラーストーン"), Some(r)))
+        .collect();
+    assert_eq!(rarity, expected);
 }
 
 /// A still screen's card panel stays the same to the pixel, and a frame whose
