@@ -4,7 +4,7 @@ iPhone 版のブルーアーカイブの画面を、スマホの配信アプリ�
 Aoi に送って読ませます。iPhone では [Moblin](https://apps.apple.com/app/moblin/id6466745933)（無料）を
 使います。Aoi は RTMP で届く H.264 の映像なら、どの配信アプリからでも受け取ります。
 
-Android のスマホは、配信アプリを入れずに USB ケーブルか Wi-Fi で送ることもできます
+Android のスマホは配信アプリを入れずに USB ケーブルか Wi-Fi で送ることもできます
 （[Android のスマホの画面を読む](android.md)）。
 
 ## 必要なもの
@@ -13,7 +13,7 @@ Android のスマホは、配信アプリを入れずに USB ケーブルか Wi-
 - PC とスマホが同じ Wi-Fi につながっていること。ゲスト用の Wi-Fi など、つながった機器どうしが
   通信できない回線では使えません。
 
-iPhone、Moblin、ほかの配信アプリでは、まだ確かめていません。Aoi の受け取り方は、Windows の PC 上で
+iPhone、Moblin、ほかの配信アプリでは、まだ確かめていません。Aoi の受け取り方は Windows の PC 上で
 配信アプリの代わりの送信プログラムを使って確かめています。
 
 ## iPhone（Moblin）で送る
