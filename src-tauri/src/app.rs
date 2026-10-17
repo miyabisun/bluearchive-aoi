@@ -442,13 +442,14 @@ pub fn run(context: tauri::Context) {
                 state: app.path().app_data_dir()?.join("state.json"),
                 latest: app.path().document_dir()?.join("Aoi").join("aoi.yaml"),
             };
-            let (kept, trouble) = match keep::load(&places.state) {
+            let (mut kept, trouble) = match keep::load(&places.state) {
                 Ok(kept) => (kept, None),
                 Err(e) => (
                     Kept::default(),
                     Some(format!("前回の読み取り結果を読み戻せませんでした: {e}")),
                 ),
             };
+            kept.renumber(recognizer.renamed());
             app.manage(Latest(Mutex::new(Snapshot::starting(
                 &recognizer,
                 &kept,

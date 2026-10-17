@@ -124,9 +124,10 @@ pub struct StudentEntry {
     pub name: String,
 }
 
-/// A student the snapshot lacks (`data/extra/students.json`), known by name
+/// A student the snapshot lacked (`data/extra/students.json`), known by name
 /// until SchaleDB lists them. Such a student takes an id of Aoi's own below
-/// zero, which an export writes as no id.
+/// zero, which an export writes as no id; the list's n-th takes -n for good,
+/// so a student stays in the list once SchaleDB lists them.
 #[derive(Deserialize, Debug, Clone)]
 struct ExtraStudent {
     name: String,
@@ -186,6 +187,8 @@ pub struct Recognizer {
     /// Each list's screen title (`data/title-*.png`).
     titles: Vec<(List, RgbImage)>,
     students: Vec<(i64, String)>,
+    /// The ids of Aoi's own whose students SchaleDB now lists, with SchaleDB's.
+    renamed: Vec<(i64, i64)>,
     /// The student screen's title and its selected "基本情報" tab.
     /// The student screen's title, its selected 基本情報 tab, and the same tab
     /// while another is selected.
@@ -203,24 +206,42 @@ struct Texts {
     fonts: glyph::Fonts,
 }
 
-/// The students by id and name: SchaleDB's, then those it lacks
-/// (`data/extra/students.json`) under ids of Aoi's own, below zero.
-fn students(read: &Read) -> Result<Vec<(i64, String)>, String> {
-    Ok(json::<Vec<StudentEntry>>(read, "schaledb/students.json")?
+/// The students by id and name, and the ids of Aoi's own whose students
+/// SchaleDB now lists, with SchaleDB's (see `join_students`).
+type Students = (Vec<(i64, String)>, Vec<(i64, i64)>);
+
+/// The students as the files list them (see `join_students`).
+fn students(read: &Read) -> Result<Students, String> {
+    let listed = json::<Vec<StudentEntry>>(read, "schaledb/students.json")?
         .into_iter()
         .map(|s| (s.id, s.name))
-        .chain(
-            json::<Vec<ExtraStudent>>(read, "extra/students.json")?
-                .into_iter()
-                .zip(1..)
-                .map(|(s, n): (ExtraStudent, i64)| (-n, s.name)),
-        )
-        .collect())
+        .collect();
+    let extra = json::<Vec<ExtraStudent>>(read, "extra/students.json")?;
+    Ok(join_students(listed, extra.into_iter().map(|s| s.name)))
+}
+
+/// The students by id and name: SchaleDB's (`listed`), then those of the
+/// `extra` list it lacks under ids of Aoi's own (see `ExtraStudent`); and each
+/// id of Aoi's own whose student SchaleDB lists, with SchaleDB's id.
+fn join_students(
+    mut listed: Vec<(i64, String)>,
+    extra: impl IntoIterator<Item = String>,
+) -> Students {
+    let (mut own, mut renamed) = (Vec::new(), Vec::new());
+    for (n, name) in (1..).zip(extra) {
+        match listed.iter().find(|(_, listed)| *listed == name) {
+            Some(&(id, _)) => renamed.push((-n, id)),
+            None => own.push((-n, name)),
+        }
+    }
+    listed.extend(own);
+    (listed, renamed)
 }
 
 /// The students (see `Recognizer::students`) as the files under `data` list them.
 pub fn student_names(data: &Path) -> Result<Vec<(i64, String)>, String> {
     students(&|path| std::fs::read(data.join(path)).map_err(|e| format!("{path}: {e}")))
+        .map(|(names, _)| names)
 }
 
 impl Recognizer {
@@ -289,6 +310,7 @@ impl Recognizer {
                     rarity: g.rarity.map(|r| format!("{r:?}")).unwrap_or_default(),
                 }),
         );
+        let (students, renamed) = students(read)?;
         Ok(Self {
             person_needs: work::person_needs(&planner.growers, &planner.growth),
             planner,
@@ -310,7 +332,8 @@ impl Recognizer {
                 (List::Items, template("title-items.png")?),
                 (List::Equipment, template("title-equipment.png")?),
             ],
-            students: students(read)?,
+            students,
+            renamed,
             student_screen: (
                 template("title-students.png")?,
                 template("student-tab.png")?,
@@ -840,6 +863,12 @@ impl Recognizer {
         &self.students
     }
 
+    /// The ids of Aoi's own whose students SchaleDB now lists, each with
+    /// SchaleDB's id (see `Kept::renumber`).
+    pub fn renamed(&self) -> &[(i64, i64)] {
+        &self.renamed
+    }
+
     /// The references of the texts read in a window (see `glyph::bank`).
     pub fn glyphs(&self) -> &glyph::bank::Bank {
         &self.texts[0].glyphs
@@ -979,6 +1008,23 @@ fn kakera_offer(shops: &[shop::ShopRow], id: i64) -> Option<shop::OfferRow> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A student of the extra list SchaleDB now lists goes by SchaleDB's id, and
+    /// the id of Aoi's own they had is told with it; the others keep theirs.
+    #[test]
+    fn a_student_schaledb_comes_to_list_goes_by_its_id() {
+        let listed = vec![(10000, "アル".to_owned()), (10152, "ツムギ".to_owned())];
+        let (names, renamed) = join_students(listed, ["ツムギ".to_owned(), "ミライ".to_owned()]);
+        assert_eq!(
+            names,
+            [
+                (10000, "アル".to_owned()),
+                (10152, "ツムギ".to_owned()),
+                (-2, "ミライ".to_owned()),
+            ]
+        );
+        assert_eq!(renamed, [(-1, 10152)]);
+    }
 
     /// A shop's good is held as its list counts it: an item in the item list,
     /// an equipment entry (チタン撃針) in the equipment list, the credits as

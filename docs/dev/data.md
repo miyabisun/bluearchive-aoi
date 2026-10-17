@@ -6,7 +6,9 @@ Names and icons of items and equipment, and student names, come from a snapshot 
 [SchaleDB](https://schaledb.com) built into the exe (`src-tauri/data/schaledb`). A few
 items and students SchaleDB lacks, and a few icons the game draws unlike SchaleDB, are
 added in `src-tauri/data/extra`, cut from the game; a student added there is told by name
-alone until SchaleDB lists them.
+alone, under an id of Aoi's own below zero, until SchaleDB lists them. Then they go by
+SchaleDB's id and what was read of them moves with them; they stay in the list, as each
+student there takes the id of their place in it.
 
 The training plan counts with the students' skill materials and the equipment recipes
 from the same snapshot, and with the level tables of the game (`growth.json`, from

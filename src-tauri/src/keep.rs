@@ -36,6 +36,22 @@ pub struct Kept {
     pub read_at: ReadAt,
 }
 
+impl Kept {
+    /// Moves what is kept under the ids of Aoi's own whose students SchaleDB
+    /// now lists (`renamed`, see `Recognizer::renamed`) to SchaleDB's ids, but
+    /// for what was already read under those.
+    pub fn renumber(&mut self, renamed: &[(i64, i64)]) {
+        for &(own, listed) in renamed {
+            if let Some(training) = self.students.remove(&own) {
+                self.students.entry(listed).or_insert(training);
+            }
+            if let Some(target) = self.targets.remove(&own) {
+                self.targets.entry(listed).or_insert(target);
+            }
+        }
+    }
+}
+
 /// The local time, as the kept data and the exports write it.
 pub fn now() -> String {
     chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
@@ -166,6 +182,24 @@ mod tests {
         assert_eq!(kept.items.get(&1), Some(&Count::Exact(5)));
         assert_eq!(kept.credits, None);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// What was kept under an id of Aoi's own moves to SchaleDB's id once
+    /// SchaleDB lists the student, but for what was already read under that id.
+    #[test]
+    fn a_student_schaledb_comes_to_list_keeps_what_was_read() {
+        let mut moved = kept();
+        let training = moved.students[&10059];
+        let mut older = training;
+        older.level = Some(1);
+        moved.students = BTreeMap::from([(-1, training), (-2, older), (10059, training)]);
+        moved.targets = BTreeMap::from([(-1, Target::default())]);
+        moved.renumber(&[(-1, 10152), (-2, 10059)]);
+        assert_eq!(
+            moved.students,
+            BTreeMap::from([(10059, training), (10152, training)])
+        );
+        assert_eq!(moved.targets, BTreeMap::from([(10152, Target::default())]));
     }
 
     #[test]

@@ -280,19 +280,29 @@ fn every_student_has_a_name_to_be_told_by() {
     }
 }
 
-/// A student SchaleDB does not list yet is named from the extra list
-/// (`data/extra/students.json`) under an id of Aoi's own, below zero.
+/// The banks name every student the data lists, a name two ids share under
+/// the lower: rebuild them (`build_glyphs`) once SchaleDB's students change.
 #[test]
-fn a_student_schaledb_lacks_is_named_from_the_extra_list() {
+fn the_banks_name_the_students_the_data_lists() {
     let recognizer = recognizer();
-    let word = recognizer
+    let mut lowest: std::collections::BTreeMap<&str, i64> = std::collections::BTreeMap::new();
+    for (id, name) in recognizer.students() {
+        let at = lowest.entry(name.as_str()).or_insert(*id);
+        *at = (*at).min(*id);
+    }
+    let named: std::collections::BTreeMap<&str, i64> = recognizer
         .glyphs()
         .index
         .names
         .iter()
-        .find(|w| w.text == "ツムギ")
-        .unwrap();
-    assert!(word.id < 0, "{}", word.id);
+        .map(|w| (w.text.as_str(), w.id))
+        .collect();
+    let differ: Vec<_> = named
+        .iter()
+        .filter(|(name, id)| lowest.get(*name) != Some(*id))
+        .chain(lowest.iter().filter(|(name, _)| !named.contains_key(*name)))
+        .collect();
+    assert!(differ.is_empty(), "rebuild the banks: {differ:?}");
 }
 
 fn weapon_blue(c: [u8; 3]) -> bool {

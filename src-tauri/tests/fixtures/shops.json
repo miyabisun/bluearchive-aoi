@@ -224,9 +224,10 @@
     "role": "tune",
     "shop": "カケラ(文字)",
     "held": [1211],
-    "note": "2026-10-15 capture on a Lenovo Legion Tab Y700 (TB322FC, Android, 3040x1904, 16:10) over USB with adb's screencap. Rates of 1 and 2, times left of three digits. ツムギの神名文字 is left unlabeled: the student is newer than the data. Labels by eye.",
+    "note": "2026-10-15 capture on a Lenovo Legion Tab Y700 (TB322FC, Android, 3040x1904, 16:10) over USB with adb's screencap. Rates of 1 and 2, times left of three digits. Labels by eye.",
     "offers": [
       { "name": "エリの神名文字", "coin": 0, "left": 376, "price": 1 },
+      { "name": "ツムギの神名文字", "coin": 0, "left": 380, "price": 1 },
       { "name": "コユキ（パジャマ）の神名文字", "coin": 0, "left": 720, "price": 1 },
       { "name": "アンナの神名文字", "coin": 0, "left": 378, "price": 1 },
       { "name": "エリナの神名文字", "coin": 0, "left": 380, "price": 1 },

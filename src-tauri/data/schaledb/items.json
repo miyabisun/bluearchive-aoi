@@ -413,6 +413,7 @@
 {"id":10149,"name":"ココロの神名文字","icon":"item_icon_secretstone_ch0368","category":"SecretStone","rarity":"N"},
 {"id":10150,"name":"コトネの神名文字","icon":"item_icon_secretstone_ch0369","category":"SecretStone","rarity":"N"},
 {"id":10151,"name":"アンナの神名文字","icon":"item_icon_secretstone_ch0320","category":"SecretStone","rarity":"N"},
+{"id":10152,"name":"ツムギの神名文字","icon":"item_icon_secretstone_ch0252","category":"SecretStone","rarity":"N"},
 {"id":13000,"name":"アカネの神名文字","icon":"item_icon_secretstone_akane","category":"SecretStone","rarity":"N"},
 {"id":13001,"name":"チセの神名文字","icon":"item_icon_secretstone_chise","category":"SecretStone","rarity":"N"},
 {"id":13002,"name":"アカリの神名文字","icon":"item_icon_secretstone_akari","category":"SecretStone","rarity":"N"},
