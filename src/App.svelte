@@ -899,14 +899,16 @@
               <tbody>
                 {#each work.slots as slot (slot.name)}
                   <tr>
-                    <td class="slot"
-                      ><img
-                        src={iconUrl(slot.icon)}
-                        alt=""
-                        width="32"
-                        height="32"
-                      />{slot.name}<span class="detail">黄金比 {slot.golden}人</span></td
-                    >
+                    <td class="slot" title="黄金比 {slot.golden}人">
+                      <span class="part"
+                        ><img
+                          src={iconUrl(slot.icon)}
+                          alt=""
+                          width="32"
+                          height="32"
+                        />{slot.name}</span
+                      >
+                    </td>
                     {#each [slot.top, slot.universal] as stock, i (i)}
                       {@const cells = stockCells(stock, slot.golden)}
                       <td>
@@ -1705,9 +1707,11 @@
   .code
     font-variant-numeric: tabular-nums
 
-  // A fold's marker: a triangle, turned down while open.
+  // A fold's marker: a triangle, turned down while open. Its title is no text to
+  // select: a double click opens and closes it, and selects nothing.
   summary
     list-style: none
+    user-select: none
     &::-webkit-details-marker
       display: none
   .chevron
@@ -2041,9 +2045,16 @@
     .slot
       white-space: nowrap
       img
-        vertical-align: middle
-        margin-right: var(--sp-2)
         object-fit: contain
+    // The icon and the slot's name on one line; its golden ratio in the hover.
+    .part
+      display: flex
+      align-items: center
+      gap: var(--sp-2)
+    // A slot's two lines kept close (the user's 「上下paddingを半分にする」).
+    .slots td
+      padding-top: var(--sp-1)
+      padding-bottom: var(--sp-1)
     .more strong
       color: var(--c-ok)
     .fewer strong
@@ -2081,8 +2092,6 @@
       font-weight: 600
     .enough
       font-weight: 600
-    .slot .detail
-      margin-left: 40px
     // A mission a row, the slots it serves muted; the totals under a double rule.
     .farm
       td, th

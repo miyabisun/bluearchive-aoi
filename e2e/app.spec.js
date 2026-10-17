@@ -1047,8 +1047,10 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   // A slot: how many pieces its T10 blueprints and its universal ones make,
   // short of its golden ratio orange.
   await expect(page.locator(".slots tbody tr")).toHaveText([
-    "帽子黄金比 3人2.5個分 150 / 605.0個分 約2,150 / 430",
+    "帽子2.5個分 150 / 605.0個分 約2,150 / 430",
   ]);
+  // The slot's golden ratio in its hover, off the table's lines.
+  await expect(page.locator(".slots .slot")).toHaveAttribute("title", "黄金比 3人");
   await expect(page.locator(".slots strong.low")).toHaveText(["2.5個分"]);
   // How many times to play each mission, in the campaign, to the golden ratio.
   // The totals under a double rule.
@@ -1442,4 +1444,13 @@ test("the menu waits for a streaming app: a QR code for Moblin or another app, t
   await page.getByRole("menuitem", { name: "配信アプリとの連携" }).click();
   await expect(dialog.getByText("192.168.1.20 から画面を受け取っています")).toBeVisible();
   await expect(dialog.getByText("縦向き（Portrait）の配信にすると大きく届きます")).toBeVisible();
+});
+
+test("a double click on a fold's title opens and closes it and selects no text", async ({
+  page,
+}) => {
+  await open(page, { status: { state: "other_screen" }, items, equipment, work });
+  await page.getByRole("tab", { name: "お仕事" }).click();
+  await page.locator(".work summary h3", { hasText: "任務 Normal" }).dblclick();
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe("");
 });
