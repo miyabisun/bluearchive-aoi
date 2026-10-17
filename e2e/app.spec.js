@@ -1092,13 +1092,13 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
     return rgb;
   });
   const school = page.locator(".work .school");
-  await expect(school).toHaveText("トリニティ 6.7人前220,280 EXP × 1.5 ÷ 49,605 EXP");
+  await expect(school).toHaveText("トリニティ 6.6人前220,280 EXP × 1.5 ÷ 49,605 EXP");
   await expect(school.locator("strong")).toHaveCSS("color", red);
   await expect(school.locator("h4")).toHaveCSS("color", red);
   // Why, on hover alone: the students its parts suit and the weapons per them.
   await expect(school).toHaveAttribute(
     "title",
-    ["素材が合う生徒: 46%", "6.7人前 ÷ 46% = 14.5", "最も少ないので先に回します"].join(
+    ["素材が合う生徒: 46%", "6.6人前 ÷ 46% = 14.5", "最も少ないので先に回します"].join(
       String.fromCharCode(10),
     ),
   );
@@ -1115,14 +1115,14 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   // reports first, as the game lists them.
   await expect(page.locator(".commissions tr")).toHaveText([
     "拠点防衛5.0人分6.2M EXP ÷ 1.2M EXP",
-    "クレジット回収6.0人分249M ÷ 41.5M",
+    "クレジット回収5.9人分249M ÷ 41.5M",
   ]);
   await expect(page.locator(".commissions tr.more")).toContainText("クレジット回収");
   await expect(page.locator(".commissions tr.fewer")).toContainText("拠点防衛");
   // The normal items shop: the credits and the orbs held in students, the fewer red.
   await expect(page.locator(".raises tr")).toHaveText([
-    "クレジット6.0人分249M ÷ 41.5M",
-    "強化珠7.7人分5.7M EXP ÷ 0.74M EXP",
+    "クレジット5.9人分249M ÷ 41.5M",
+    "強化珠7.6人分5.7M EXP ÷ 0.74M EXP",
   ]);
   await expect(page.locator(".raises tr.fewer")).toContainText("クレジット");
   await expect(page.locator(".raises tr.fewer strong")).toHaveCSS("color", red);

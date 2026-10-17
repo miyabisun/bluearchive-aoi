@@ -723,6 +723,11 @@ describe("work", () => {
     expect(stockCells(stock(4.5), 3)).toEqual({ pieces: "4.5個分", held: "270 / 60", tone: "" });
     expect(stockCells(stock(2.96), 3).tone).toBe("low");
     expect(stockCells(stock(0.9), 3).tone).toBe("short");
+    // Short of the ratio never shows as reaching it: 238 / 60 is 3.96, cut to a tenth.
+    expect(stockCells({ held: 238, about: false, need: 60, pieces: 238 / 60 }, 4)).toMatchObject({
+      pieces: "3.9個分",
+      tone: "low",
+    });
     expect(stockCells({ held: 2150, about: true, need: 430, pieces: 5.0 }, 4).held).toBe(
       "約2,150 / 430",
     );
@@ -779,7 +784,7 @@ describe("work", () => {
       report_students: 5.0,
     };
     expect(commissionCells(row)).toEqual({
-      credits: { name: "クレジット回収", students: "6.0人分", detail: "249M ÷ 41.5M" },
+      credits: { name: "クレジット回収", students: "5.9人分", detail: "249M ÷ 41.5M" },
       reports: { name: "拠点防衛", students: "5.0人分", detail: "約6.2M EXP ÷ 1.2M EXP" },
       fewer: "reports",
     });
@@ -807,8 +812,8 @@ describe("month-end and daily shops", () => {
   it("counts the students the credits and the orbs held raise, the fewer marked", () => {
     const orbs = { exp: 5700780, about: true, exp_each: 741690, students: 7.686 };
     expect(orbCells(commissions, orbs)).toEqual({
-      credits: { name: "クレジット", students: "6.0人分", detail: "249M ÷ 41.5M" },
-      orbs: { name: "強化珠", students: "7.7人分", detail: "約5.7M EXP ÷ 0.74M EXP" },
+      credits: { name: "クレジット", students: "5.9人分", detail: "249M ÷ 41.5M" },
+      orbs: { name: "強化珠", students: "7.6人分", detail: "約5.7M EXP ÷ 0.74M EXP" },
       fewer: "credits",
     });
     const unread = { ...commissions, credits: null, credit_students: null };
@@ -884,16 +889,16 @@ describe("schoolCells", () => {
       first: true,
     };
     expect(schoolCells(row)).toEqual({
-      students: "6.7人前",
+      students: "6.6人前",
       detail: "220,280 EXP × 1.5 ÷ 49,605 EXP",
       first: true,
       // Why it is red, on hover: the students its parts suit, and per them.
-      why: lines("素材が合う生徒: 46%", "6.7人前 ÷ 46% = 14.5", "最も少ないので先に回します"),
+      why: lines("素材が合う生徒: 46%", "6.6人前 ÷ 46% = 14.5", "最も少ないので先に回します"),
     });
     expect(schoolCells({ ...row, about: true, first: false })).toMatchObject({
       detail: "約220,280 EXP × 1.5 ÷ 49,605 EXP",
       first: false,
-      why: lines("素材が合う生徒: 46%", "6.7人前 ÷ 46% = 14.5"),
+      why: lines("素材が合う生徒: 46%", "6.6人前 ÷ 46% = 14.5"),
     });
   });
 });

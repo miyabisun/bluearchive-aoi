@@ -487,10 +487,20 @@ export function unknownText(rows) {
   return [...byStudent.values()].map(({ name, parts }) => `${name}: ${parts.join("・")}`);
 }
 
-const tenths = new Intl.NumberFormat("ja-JP", {
+/**
+ * A count of students or pieces to a tenth, cut down, not rounded: a share short of
+ * what is needed never shows as reaching it (238 / 60 shows 3.9, not 4.0; the user's
+ * call, 2026-10-17).
+ */
+const oneDecimal = new Intl.NumberFormat("ja-JP", {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
 });
+const tenths = {
+  /** @param {number} n */
+  // The 1e-9 keeps an exact tenth that floating point lands just under (0.7 * 3).
+  format: (n) => oneDecimal.format(Math.floor(n * 10 + 1e-9) / 10),
+};
 
 /**
  * What a slot's blueprints make: how many pieces from T1 to T10, to a tenth
@@ -542,7 +552,7 @@ export const placeName = (name) => name.split(/：| - /).at(-1);
 
 /**
  * The commissions against a student raised from Lv1: how many students the
- * credits and the reports' exp held raise ("6.0人分"), from what over what,
+ * credits and the reports' exp held raise ("5.9人分"), from what over what,
  * and which raises fewer (the one to play), none when they tie or one is unknown.
  */
 export function commissionCells(c) {
@@ -646,7 +656,7 @@ export function planCoin(coin) {
 
 /**
  * A school's scrimmage parts held: how many unique weapons they raise from
- * Lv1 to their cap ("6.7人前"), the exp held times the rate the weapons they
+ * Lv1 to their cap ("6.6人前"), the exp held times the rate the weapons they
  * suit take it at, over a weapon's; whether it runs out first, and why, for
  * the hover: the share of students its parts suit, and the weapons per it.
  */
