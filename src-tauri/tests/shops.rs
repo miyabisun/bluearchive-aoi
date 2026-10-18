@@ -320,11 +320,12 @@ fn a_good_tells_its_rarity_and_whether_it_is_an_eleph() {
     assert_eq!(cards, expected);
 }
 
-/// A frame whose chosen menu entry does not read yet (its letters still
-/// drawing in as the shop opens) reads no shop, and the next frame with the
-/// same cards reads the shop: the menu is read again while no shop is read.
+/// The chosen menu entry is read again whenever its letters change, though the
+/// cards stay: a tap's sparkle over the entry hides the shop's name, and the
+/// name reads once the sparkle is gone (the user's of 2026-10-18: 「変わってるのに
+/// 変わらないとサボっている」).
 #[test]
-fn a_shop_reads_once_its_menu_entry_does_though_its_cards_stay() {
+fn the_menu_entry_reads_again_when_its_letters_change_though_the_cards_stay() {
     let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
     let recognizer = Recognizer::load(&data).unwrap();
     let image = image::open(fixtures_dir().join("shops/jukutatsu-credits.png"))
@@ -332,7 +333,7 @@ fn a_shop_reads_once_its_menu_entry_does_though_its_cards_stay() {
         .to_rgb8();
     let image = aoi::screen::normalize(&image).into_owned();
     // The chosen entry's rows, mostly dark at the menu's left, with their
-    // letters painted over in the entry's navy.
+    // letters painted over in the entry's navy, as a sparkle may hide them.
     let mut unlettered = image.clone();
     let menu = (0.30 * f64::from(image.height())) as u32;
     let luminance =
@@ -356,6 +357,7 @@ fn a_shop_reads_once_its_menu_entry_does_though_its_cards_stay() {
         .read_shop(&image)
         .expect("the shop reads once its entry does");
     assert_eq!(seen.shop, "熟達証書");
+    assert_eq!(recognizer.read_shop(&unlettered), None);
 }
 
 /// A still screen's card panel stays the same to the pixel, and a frame whose

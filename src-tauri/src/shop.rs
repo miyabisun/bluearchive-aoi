@@ -244,12 +244,9 @@ pub struct Goods {
     matcher: IconMatcher,
     /// The items each icon draws.
     drawn: Vec<Vec<i64>>,
-    /// The card panel (see `panel`) of the last frame that read a shop, and
-    /// what it read: a still screen's panel stays the same to the pixel, and so
-    /// does its reading. A frame that read none is kept by none: its menu entry
-    /// may not read yet (its letters drawing in as the shop opens) while its
-    /// cards are already the ones that stay.
-    last: Mutex<Option<(Vec<u8>, Seen)>>,
+    /// What the last frame was read from (see `read_from`) and what it read:
+    /// a still screen's stays the same to the pixel, and so does its reading.
+    last: Mutex<Option<(Vec<u8>, Option<Seen>)>>,
 }
 
 impl Goods {
@@ -287,8 +284,8 @@ impl Goods {
     /// offers of the cards shown whole; `prices` tell how many coins it takes,
     /// the `glyphs` and the `fonts` the shops' names and the digits.
     /// Any other screen gives `None`.
-    /// A frame whose card panel is that of the last frame that read a shop
-    /// reads as it did.
+    /// A frame read from the same as the last one (see `read_from`) reads as
+    /// it did.
     pub fn read(
         &self,
         image: &RgbImage,
@@ -301,16 +298,16 @@ impl Goods {
         if bars.is_empty() {
             return None;
         }
-        let panel = panel(image);
+        let from = read_from(image, entry);
         let mut last = self.last.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some((seen_panel, seen)) = last.as_ref()
-            && *seen_panel == panel
+        if let Some((seen_from, seen)) = last.as_ref()
+            && *seen_from == from
         {
-            return Some(seen.clone());
+            return seen.clone();
         }
-        let seen = self.read_afresh(image, (glyphs, fonts), prices, entry, &bars)?;
-        *last = Some((panel, seen.clone()));
-        Some(seen)
+        let seen = self.read_afresh(image, (glyphs, fonts), prices, entry, &bars);
+        *last = Some((from, seen.clone()));
+        seen
     }
 
     fn read_afresh(
@@ -545,9 +542,27 @@ fn menu_entry(image: &RgbImage) -> Option<(u32, u32)> {
     ((0.06..0.12).contains(&((bottom - top) as f32 / u))).then_some((top, bottom))
 }
 
-/// The card panel with the coins over it, row by row: all a shop is read from
-/// but the menu, which moves on a still screen. Another shop chosen shows
-/// other cards and coins.
+/// What a shop is read from: the card panel with the coins over it, row by
+/// row, then the chosen menu entry's rows and its letters (the pixels its name
+/// is read from, see `entry_ink`), so a sparkle over the entry or its going
+/// counts as another frame. The rest of the menu moves on a still screen.
+fn read_from(image: &RgbImage, (top, bottom): (u32, u32)) -> Vec<u8> {
+    let u = unit(image);
+    let (left, right) = (
+        (MENU_START * u) as u32,
+        ((MENU_ENDS[1] * u) as u32).min(image.width()),
+    );
+    let mut from = panel(image);
+    from.extend(top.to_le_bytes());
+    from.extend(bottom.to_le_bytes());
+    for y in top..=bottom {
+        from.extend((left..right).map(|x| u8::from(luminance(image.get_pixel(x, y).0) > LIGHT)));
+    }
+    from
+}
+
+/// The card panel with the coins over it, row by row. Another shop chosen
+/// shows other cards and coins.
 fn panel(image: &RgbImage) -> Vec<u8> {
     let w = image.width() as usize;
     let from = w.saturating_sub((PANEL * unit(image)) as usize) * 3;
