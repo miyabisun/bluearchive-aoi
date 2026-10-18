@@ -244,9 +244,12 @@ pub struct Goods {
     matcher: IconMatcher,
     /// The items each icon draws.
     drawn: Vec<Vec<i64>>,
-    /// The last frame's card panel (see `panel`) and what it read: a still
-    /// screen's panel stays the same to the pixel, and so does its reading.
-    last: Mutex<Option<(Vec<u8>, Option<Seen>)>>,
+    /// The card panel (see `panel`) of the last frame that read a shop, and
+    /// what it read: a still screen's panel stays the same to the pixel, and so
+    /// does its reading. A frame that read none is kept by none: its menu entry
+    /// may not read yet (its letters drawing in as the shop opens) while its
+    /// cards are already the ones that stay.
+    last: Mutex<Option<(Vec<u8>, Seen)>>,
 }
 
 impl Goods {
@@ -284,7 +287,8 @@ impl Goods {
     /// offers of the cards shown whole; `prices` tell how many coins it takes,
     /// the `glyphs` and the `fonts` the shops' names and the digits.
     /// Any other screen gives `None`.
-    /// A frame whose card panel is the last one's reads as it did.
+    /// A frame whose card panel is that of the last frame that read a shop
+    /// reads as it did.
     pub fn read(
         &self,
         image: &RgbImage,
@@ -302,11 +306,11 @@ impl Goods {
         if let Some((seen_panel, seen)) = last.as_ref()
             && *seen_panel == panel
         {
-            return seen.clone();
+            return Some(seen.clone());
         }
-        let seen = self.read_afresh(image, (glyphs, fonts), prices, entry, &bars);
+        let seen = self.read_afresh(image, (glyphs, fonts), prices, entry, &bars)?;
         *last = Some((panel, seen.clone()));
-        seen
+        Some(seen)
     }
 
     fn read_afresh(

@@ -320,6 +320,44 @@ fn a_good_tells_its_rarity_and_whether_it_is_an_eleph() {
     assert_eq!(cards, expected);
 }
 
+/// A frame whose chosen menu entry does not read yet (its letters still
+/// drawing in as the shop opens) reads no shop, and the next frame with the
+/// same cards reads the shop: the menu is read again while no shop is read.
+#[test]
+fn a_shop_reads_once_its_menu_entry_does_though_its_cards_stay() {
+    let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
+    let recognizer = Recognizer::load(&data).unwrap();
+    let image = image::open(fixtures_dir().join("shops/jukutatsu-credits.png"))
+        .unwrap()
+        .to_rgb8();
+    let image = aoi::screen::normalize(&image).into_owned();
+    // The chosen entry's rows, mostly dark at the menu's left, with their
+    // letters painted over in the entry's navy.
+    let mut unlettered = image.clone();
+    let menu = (0.30 * f64::from(image.height())) as u32;
+    let luminance =
+        |c: [u8; 3]| 0.299 * f32::from(c[0]) + 0.587 * f32::from(c[1]) + 0.114 * f32::from(c[2]);
+    let dark = |c: [u8; 3]| luminance(c) < 90.0;
+    let light = |c: [u8; 3]| luminance(c) > 110.0;
+    for y in 0..image.height() {
+        let row = |x| image.get_pixel(x, y).0;
+        if (0..menu).filter(|&x| dark(row(x))).count() * 2 < menu as usize {
+            continue;
+        }
+        let navy = row(2);
+        for x in 0..menu {
+            if light(row(x)) {
+                unlettered.put_pixel(x, y, image::Rgb(navy));
+            }
+        }
+    }
+    assert_eq!(recognizer.read_shop(&unlettered), None);
+    let seen = recognizer
+        .read_shop(&image)
+        .expect("the shop reads once its entry does");
+    assert_eq!(seen.shop, "熟達証書");
+}
+
 /// A still screen's card panel stays the same to the pixel, and a frame whose
 /// panel is the last one's reads as it did at a fraction of the time; any
 /// other frame is read afresh.
