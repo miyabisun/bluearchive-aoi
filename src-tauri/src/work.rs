@@ -152,13 +152,15 @@ fn whole_students(part: u64, all: u64) -> u64 {
 }
 
 /// A slot's blueprints: its universal one, and each tier's with what one piece
-/// from T1 to T10 takes of it.
-struct Slot {
-    name: String,
-    icon: String,
+/// from T1 to T10 takes of it; the slot's category ("Hat") and name ("帽子"),
+/// and the icon of its T10 piece.
+pub(crate) struct Slot {
+    pub(crate) category: String,
+    pub(crate) name: String,
+    pub(crate) icon: String,
     golden: Golden,
-    universal: i64,
-    prints: Vec<(i64, u8, u64)>,
+    pub(crate) universal: i64,
+    pub(crate) prints: Vec<(i64, u8, u64)>,
 }
 
 impl Slot {
@@ -178,7 +180,11 @@ impl Slot {
 }
 
 /// The slots in the order of their T10 pieces.
-fn slot_data(pieces: &[Piece], equipment: &[Item], golden: &BTreeMap<String, Golden>) -> Vec<Slot> {
+pub(crate) fn slot_data(
+    pieces: &[Piece],
+    equipment: &[Item],
+    golden: &BTreeMap<String, Golden>,
+) -> Vec<Slot> {
     let tops = pieces.iter().filter(|p| p.id < BLUEPRINTS && p.tier == 10);
     tops.filter_map(|top| {
         let slot = |p: &&Piece| p.category == top.category;
@@ -195,6 +201,7 @@ fn slot_data(pieces: &[Piece], equipment: &[Item], golden: &BTreeMap<String, Gol
             .collect();
         let entry = |id: i64| equipment.iter().find(|e| e.id == id);
         Some(Slot {
+            category: top.category.clone(),
             name: entry(universal)?.name.strip_suffix(UNIVERSAL)?.to_owned(),
             icon: entry(top.id)?.icon.clone(),
             golden: golden.get(&top.category).copied().unwrap_or_default(),
@@ -539,6 +546,23 @@ pub struct HeldCell {
     pub need: Option<u64>,
 }
 
+impl HeldCell {
+    /// `entry` with how many are held and what one student `needs` of it.
+    pub fn of<S: BuildHasher, T: BuildHasher>(
+        entry: &Item,
+        held: &HashMap<i64, Count, S>,
+        needs: &HashMap<i64, u64, T>,
+    ) -> Self {
+        Self {
+            id: entry.id,
+            name: entry.name.clone(),
+            icon: entry.icon.clone(),
+            held: held.get(&entry.id).copied(),
+            need: needs.get(&entry.id).copied(),
+        }
+    }
+}
+
 /// The tier a rarity stands for (N 1 … SSR 4).
 fn tier(rarity: Rarity) -> usize {
     match rarity {
@@ -549,9 +573,32 @@ fn tier(rarity: Rarity) -> usize {
     }
 }
 
+/// The `entries` of the kinds that come in tiers grouped by `kind` (none for
+/// an entry of no such kind), in the order first seen, each with its tiers by
+/// rarity: how many are held and what one student `needs`.
+pub fn by_tier<'a, S: BuildHasher, T: BuildHasher>(
+    entries: impl IntoIterator<Item = &'a Item>,
+    kind: impl Fn(&Item) -> Option<String>,
+    held: &HashMap<i64, Count, S>,
+    needs: &HashMap<i64, u64, T>,
+) -> Vec<(String, [Option<HeldCell>; 4])> {
+    let mut kinds: Vec<(String, [Option<HeldCell>; 4])> = Vec::new();
+    for entry in entries {
+        let (Some(key), Some(rarity)) = (kind(entry), entry.rarity) else {
+            continue;
+        };
+        let found = kinds.iter().position(|(k, _)| *k == key);
+        let at = found.unwrap_or_else(|| {
+            kinds.push((key, Default::default()));
+            kinds.len() - 1
+        });
+        kinds[at].1[tier(rarity)] = Some(HeldCell::of(entry, held, needs));
+    }
+    kinds
+}
+
 /// The places with what they drop of the kinds that come in tiers, grouped by
-/// `kind` (none for a good of no such kind), in the order first dropped, with
-/// what one student `needs`.
+/// `kind` (see `by_tier`), in the order first dropped.
 pub fn places<S: BuildHasher, T: BuildHasher>(
     places: &[Place],
     entries: &[Item],
@@ -562,31 +609,16 @@ pub fn places<S: BuildHasher, T: BuildHasher>(
     places
         .iter()
         .map(|place| {
-            let mut kinds: Vec<(String, [Option<HeldCell>; 4])> = Vec::new();
-            for entry in place
+            let dropped = place
                 .drops
                 .iter()
-                .filter_map(|id| entries.iter().find(|e| e.id == *id))
-            {
-                let (Some(key), Some(rarity)) = (kind(entry), entry.rarity) else {
-                    continue;
-                };
-                let found = kinds.iter().position(|(k, _)| *k == key);
-                let at = found.unwrap_or_else(|| {
-                    kinds.push((key, Default::default()));
-                    kinds.len() - 1
-                });
-                kinds[at].1[tier(rarity)] = Some(HeldCell {
-                    id: entry.id,
-                    name: entry.name.clone(),
-                    icon: entry.icon.clone(),
-                    held: held.get(&entry.id).copied(),
-                    need: needs.get(&entry.id).copied(),
-                });
-            }
+                .filter_map(|id| entries.iter().find(|e| e.id == *id));
             PlaceRow {
                 name: place.name.clone(),
-                kinds: kinds.into_iter().map(|(_, tiers)| tiers).collect(),
+                kinds: by_tier(dropped, &kind, held, needs)
+                    .into_iter()
+                    .map(|(_, tiers)| tiers)
+                    .collect(),
             }
         })
         .collect()

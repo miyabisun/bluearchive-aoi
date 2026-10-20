@@ -16,6 +16,8 @@ fn row(id: i64, count: u32) -> Row {
         icon: String::new(),
         tier: None,
         count: Count::Exact(count),
+        rarity: None,
+        eleph: false,
     }
 }
 

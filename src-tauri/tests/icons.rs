@@ -16,3 +16,16 @@ fn every_item_and_piece_of_equipment_has_its_icon_built_in() {
         .collect();
     assert!(missing.is_empty(), "{missing:?}");
 }
+
+#[test]
+fn every_school_of_the_skill_materials_has_its_emblem_built_in() {
+    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let missing: Vec<String> = recognizer
+        .kinds(&[], &[])
+        .schools
+        .into_iter()
+        .filter(|s| aoi::icon(&s.icon).is_none())
+        .map(|s| format!("{} {}", s.name, s.icon))
+        .collect();
+    assert!(missing.is_empty(), "{missing:?}");
+}

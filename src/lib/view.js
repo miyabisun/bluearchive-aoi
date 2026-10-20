@@ -27,6 +27,22 @@ export const LISTS = [
   { id: "work", name: "お仕事" },
 ];
 
+/**
+ * The item and equipment tabs' sub-tabs: everything held as tiles, then
+ * tables by kind (the user's of 2026-10-21).
+ */
+export const SUBTABS = {
+  items: [
+    { id: "all", name: "全体" },
+    { id: "skills", name: "スキル素材" },
+    { id: "ooparts", name: "オーパーツ" },
+  ],
+  equipment: [
+    { id: "all", name: "全体" },
+    { id: "blueprints", name: "設計図" },
+  ],
+};
+
 const listName = (id) => LISTS.find((l) => l.id === id)?.name ?? id;
 
 /** The watcher's status as a short label and a tone for its badge. */
@@ -647,15 +663,25 @@ export function planCard(card) {
  * how many of the good are held ("?" where its list was never read).
  */
 export function planTitle(card, students) {
-  const lines = [card.name];
-  if (card.eleph) {
-    const student = students.find((s) => s.id === card.id);
-    const star = student ? starOf(student.training) : null;
-    lines.push(`星: ${student == null ? "未読み取り" : star == null ? "?" : starName(star)}`);
-  }
+  const lines = [tileTitle(card, students)];
   lines.push(`所持: ${card.held == null ? "?" : formatCount(card.held)}`);
   return lines.join("\n");
 }
+
+/**
+ * A good's or an item's hover: its name and, for an eleph (its id its
+ * student's), the student's star as the students tab names it ("未読み取り" for
+ * a student never read).
+ */
+export function tileTitle(good, students) {
+  if (!good.eleph) return good.name;
+  const student = students.find((s) => s.id === good.id);
+  const star = student ? starOf(student.training) : null;
+  return `${good.name}\n星: ${student == null ? "未読み取り" : star == null ? "?" : starName(star)}`;
+}
+
+/** A count held as its tile writes it, "—" where its list was never read. */
+export const heldText = (held) => (held == null ? "—" : formatCount(held));
 
 /**
  * A month-end shop's coin: how many are left once the cards reserved are

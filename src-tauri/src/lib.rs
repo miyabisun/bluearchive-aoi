@@ -18,6 +18,7 @@ pub mod grid;
 pub mod icon;
 pub mod items;
 pub mod keep;
+pub mod kinds;
 mod order;
 pub mod plan;
 pub mod price;
@@ -38,11 +39,13 @@ mod embedded {
 
 /// The picture of the item or equipment icon `name` built into the program
 /// (`data/schaledb/icons`, `data/schaledb/equipment-icons`, `data/extra/icons`,
-/// `data/extra/equipment-icons`), with its media type.
+/// `data/extra/equipment-icons`), or of a school's emblem
+/// (`data/schaledb/school-icons`), with its media type.
 pub fn icon(name: &str) -> Option<(&'static [u8], &'static str)> {
     [
         ("schaledb/icons/", ".webp", "image/webp"),
         ("schaledb/equipment-icons/", ".webp", "image/webp"),
+        ("schaledb/school-icons/", ".png", "image/png"),
         ("extra/icons/", ".png", "image/png"),
         ("extra/equipment-icons/", ".png", "image/png"),
     ]
@@ -150,6 +153,10 @@ pub struct Row {
     pub icon: String,
     pub tier: Option<u8>,
     pub count: Count,
+    /// None where unknown (see `Item::rarity`).
+    pub rarity: Option<icon::Rarity>,
+    /// Whether it is a student's eleph (神名文字).
+    pub eleph: bool,
 }
 
 /// Reads a data file by its path under `data`.
@@ -413,6 +420,37 @@ impl Recognizer {
                     .get(WEAPON_TOP - 1)
                     .copied()
                     .unwrap_or(0),
+                &equipment_held,
+            ),
+        }
+    }
+
+    /// The item and equipment tabs' tables by kind (see `kinds::Kinds`), with
+    /// how many `items` and `equipment` are held and, for the skill materials
+    /// and the ooparts, what one student takes.
+    pub fn kinds(&self, items: &[Row], equipment: &[Row]) -> kinds::Kinds {
+        let counts = |rows: &[Row]| -> HashMap<i64, Count> {
+            rows.iter().map(|r| (r.id, r.count)).collect()
+        };
+        let (items_held, equipment_held) = (counts(items), counts(equipment));
+        let goods = self.items.entries();
+        let kind = |e: &Item| {
+            [
+                ("戦術教育BD", kinds::Kind::Bd),
+                ("技術ノート", kinds::Kind::Note),
+                ("オーパーツ", kinds::Kind::Oopart),
+            ]
+            .into_iter()
+            .find_map(|(name, kind)| self.prices.is_kind(e.id, name).then_some(kind))
+        };
+        let needs = &self.person_needs;
+        kinds::Kinds {
+            secret: kinds::secret(goods, &items_held, needs),
+            schools: kinds::schools(goods, kind, &items_held, needs),
+            ooparts: kinds::ooparts(goods, kind, &items_held, needs),
+            blueprints: kinds::blueprints(
+                &self.planner.pieces,
+                self.equipment.entries(),
                 &equipment_held,
             ),
         }
@@ -1039,6 +1077,8 @@ mod tests {
             icon: String::new(),
             tier: None,
             count: Count::Exact(n),
+            rarity: None,
+            eleph: false,
         };
         let (items, equipment) = ([row(9999, 3)], [row(43, 12)]);
         let held = |id| good_held(id, &items, &equipment, Some(132_577_090));

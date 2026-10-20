@@ -30,6 +30,7 @@
     goodTile,
     goodFace,
     goldenTitle,
+    heldText,
     heldTone,
     groupPlan,
     needCells,
@@ -51,6 +52,8 @@
     statusView,
     stockCells,
     studentCells,
+    SUBTABS,
+    tileTitle,
     TIERS,
     tierCell,
     unknownText,
@@ -143,6 +146,8 @@
     work: /** @type {any} */ (null),
     /** The month-end shops' purchase plan, card by card. */
     month_end: /** @type {any[]} */ ([]),
+    /** The item and equipment tabs' tables by kind (none before the app sends them). */
+    kinds: /** @type {any} */ (null),
     credits: /** @type {number | null} */ (null),
     /** Why what was read could not be kept or brought back. */
     keep_error: /** @type {string | null} */ (null),
@@ -151,7 +156,14 @@
     /** Where waiting for a streaming app stands (see `castLine`). */
     cast: /** @type {any} */ ({ state: "off" }),
   });
-  let view = $state({ tab: "items" });
+  /** The tab open, and the sub-tab open in each tab that has them (see `SUBTABS`). */
+  let view = $state({ tab: "items", sub: { items: "all", equipment: "all" } });
+  const sub = $derived(view.sub[view.tab] ?? "all");
+  const kinds = $derived(
+    snapshot.kinds ?? { secret: [], schools: [], ooparts: [], blueprints: [] },
+  );
+  /** The tiers a slot's blueprints are counted at: its T1 piece's, then T2 to T10. */
+  const PRINT_TIERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   /** Whether the menu is open, and the theme chosen in it. */
   let menuOpen = $state(false);
   /** The dialog of the link to a phone, opened from the menu. */
@@ -349,6 +361,22 @@
     if (menuOpen && event.key === "Escape") menuOpen = false;
   }}
 />
+
+<!-- A kind's tiers on their colours, each by its icon (its name on hover) and how
+     many are held, coloured against what one student takes. -->
+{#snippet heldTiers(/** @type {any[]} */ tiers)}
+  {#each tiers as cell, i (i)}
+    <td class="tier-{i + 1}">
+      {#if cell}<img
+          src={iconUrl(cell.icon)}
+          alt={cell.name}
+          title={cell.name}
+          width="40"
+          height="40"
+        /><span class={heldTone(cell.held, cell.need)}>{heldText(cell.held)}</span>{/if}
+    </td>
+  {/each}
+{/snippet}
 
 {#snippet chevron()}
   <svg class="chevron" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"
@@ -859,24 +887,10 @@
                 {:else}
                   <h4>{placeName(place.name)}</h4>
                 {/if}
-                <table class="tiers">
+                <table class="tiers stock">
                   <tbody>
                     {#each place.kinds as tiers, k (k)}
-                      <tr>
-                        {#each tiers as cell, i (i)}
-                          <td class="tier-{i + 1}">
-                            {#if cell}<img
-                                src={iconUrl(cell.icon)}
-                                alt={cell.name}
-                                title={cell.name}
-                                width="40"
-                                height="40"
-                              /><span class={heldTone(cell.held, cell.need)}
-                                >{cell.held == null ? "—" : formatCount(cell.held)}</span
-                              >{/if}
-                          </td>
-                        {/each}
-                      </tr>
+                      <tr>{@render heldTiers(tiers)}</tr>
                     {/each}
                   </tbody>
                 </table>
@@ -1066,144 +1080,254 @@
     {:else if rows.length === 0}
       <p class="empty" data-state="empty">{EMPTY[view.tab]}</p>
     {:else}
-      <label class="search">
-        <span>名前で検索</span>
-        <input type="search" bind:value={query} autocomplete="off" />
-      </label>
-      {#if shown.length === 0}
-        <p class="empty" data-state="no-match">一致する項目がありません</p>
-      {:else if view.tab === "shops"}
-        <div class="table-scroll">
-          {#each shown as shop (shop.name)}
-            <!-- Closed until opened, and open while a search narrows the goods. -->
-            <details class="shop" open={query.trim() !== "" || opened.has(shop.name)}>
-              <!-- Opened and closed here, not by the page: the snapshot of the
-                   next frame may come before the page's toggle event. -->
-              <summary
-                onclick={(event) => {
-                  if (query.trim() === "") toggle(event, shop.name);
-                  else event.preventDefault();
-                }}
-              >
-                {@render chevron()}
-                <h2>
-                  {shop.name}<span class="read-at"
-                    >{shop.read_at.slice(5, 16).replace("-", "/")}</span
-                  >{#if shopStale(shop)}<span class="stale">前の月の値</span>{/if}
-                </h2>
-                <!-- The coins held, as the shop shows them over its cards. -->
-                <span class="held">
-                  {#each shop.coins as coin (coin.name)}
-                    <span title={coin.name}
-                      ><img
-                        src={iconUrl(coin.icon)}
-                        alt={coin.name}
-                        width="20"
-                        height="20"
-                      />{coin.held == null ? "?" : formatCount(coin.held)}</span
-                    >
-                  {/each}
-                </span>
-              </summary>
-              <!-- Each good by its icon; under it, what each coin buys, the plain coin first. -->
-              <ul class="tiles goods" data-state="success">
-                {#each shop.goods as good (good.id)}
-                  {@const tile = goodTile(good)}
-                  <!-- A good bought up with every coin is greyed out (the app lists it last). -->
-                  <li title={good.name} class:sold={good.sold} data-face={goodFace(good)}>
-                    <span class="item"
-                      ><img
-                        src={iconUrl(good.icon)}
-                        alt={good.name}
-                        width="64"
-                        height="64"
-                        loading="lazy"
-                      />{#if tile.amount}<span class="count">{tile.amount}</span>{/if}</span
-                    >
-                    <span class="offers">
-                      {#each tile.offers as offer, i (i)}
-                        <span class="offer" class:sold={offer?.sold}
-                          >{#if offer}<img
-                              src={iconUrl(shop.coins[i].icon)}
-                              alt={shop.coins[i].name}
-                              title={shop.coins[i].name}
-                              width="18"
-                              height="18"
-                            />{offer.text}{/if}</span
-                        >
-                      {/each}
-                    </span>
-                  </li>
-                {/each}
-              </ul>
-            </details>
+      {#if SUBTABS[view.tab]}
+        <!-- Everything held, then tables by kind; the search only over everything,
+             as the tables are of too few kinds to search. -->
+        <div class="subtabs" role="tablist" aria-label="分類">
+          {#each SUBTABS[view.tab] as choice (choice.id)}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sub === choice.id}
+              onclick={() => (view.sub[view.tab] = choice.id)}>{choice.name}</button
+            >
           {/each}
         </div>
-      {:else if view.tab === "students"}
-        <div class="table-scroll">
-          <table data-state="success" class="students">
+      {/if}
+      {#if sub === "skills"}
+        <!-- The secret notes, then each school's BDs over its tech notes, its emblem
+             at the left, the three great schools first. -->
+        <div class="table-scroll" data-state="success">
+          <table class="tiers stock skills">
+            {#if kinds.secret.length > 0}
+              <tbody>
+                <tr>
+                  <td class="emblem"></td>
+                  {#each kinds.secret as cell (cell.id)}
+                    <!-- Both 最上級. -->
+                    <td class="tier-4"
+                      ><img
+                        src={iconUrl(cell.icon)}
+                        alt={cell.name}
+                        title={cell.name}
+                        width="40"
+                        height="40"
+                      /><span class={heldTone(cell.held, cell.need)}>{heldText(cell.held)}</span
+                      ></td
+                    >
+                  {/each}
+                  <td colspan={4 - kinds.secret.length}></td>
+                </tr>
+              </tbody>
+            {/if}
+            {#each kinds.schools as school (school.icon)}
+              <tbody>
+                <tr>
+                  <th scope="rowgroup" rowspan="2" class="emblem"
+                    ><img
+                      src={iconUrl(school.icon)}
+                      alt={school.name}
+                      title={school.name}
+                      width="40"
+                      height="36"
+                    /></th
+                  >
+                  {@render heldTiers(school.bd)}
+                </tr>
+                <tr>{@render heldTiers(school.notes)}</tr>
+              </tbody>
+            {/each}
+          </table>
+        </div>
+      {:else if sub === "ooparts"}
+        <!-- An oopart a row, its tiers on their colours. -->
+        <div class="table-scroll" data-state="success">
+          <table class="tiers stock ooparts">
+            <tbody>
+              {#each kinds.ooparts as tiers, k (k)}
+                <tr>{@render heldTiers(tiers)}</tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {:else if sub === "blueprints"}
+        <!-- A slot a row: its T1 pieces, its blueprints of T2 to T10 and its universal
+             ones held, each named on hover. -->
+        <div class="table-scroll" data-state="success">
+          <table class="prints">
             <thead>
               <tr>
-                <th scope="col" class="mark">育成</th>
-                <th scope="col">生徒</th>
-                {#each STUDENT_COLUMNS as column (column.key)}
-                  <th
-                    scope="col"
-                    class:num={column.num}
-                    aria-sort={sortBy === column.key ? "descending" : undefined}
-                  >
-                    <button type="button" class="sort" onclick={() => (sortBy = column.key)}
-                      >{column.label}</button
-                    >{#if sortBy === column.key}<span class="sorted" aria-hidden="true">▼</span
-                      >{/if}
-                  </th>
+                <th scope="col">部位</th>
+                {#each PRINT_TIERS as tier (tier)}
+                  <th scope="col" class="count">T{tier}</th>
                 {/each}
+                <th scope="col" class="count">万能</th>
               </tr>
             </thead>
             <tbody>
-              {#each shown as row (row.id)}
-                {@const cells = studentCells(row.training)}
+              {#each kinds.blueprints as slot (slot.name)}
                 <tr>
-                  <td class="mark">
-                    <input
-                      type="checkbox"
-                      checked={targeted.has(row.id)}
-                      aria-label="{row.name}を育成対象にする"
-                      onchange={() => setTarget(row.id, targeted.has(row.id) ? null : {})}
-                    />
-                  </td>
-                  <td class="name">{row.name}</td>
-                  <td class="num">{cells.level}</td>
-                  <td title={cells.weapon || undefined}>{cells.star}</td>
-                  <td class="code">{cells.skills}</td>
-                  <td class="code">{cells.equipment}</td>
-                  <td>{cells.gear}</td>
-                  <td class="code">{cells.ability}</td>
-                  <td class="num">{cells.bond}</td>
+                  <td class="slot"
+                    ><span class="part"
+                      ><img
+                        src={iconUrl(slot.icon)}
+                        alt=""
+                        width="32"
+                        height="32"
+                      />{slot.name}</span
+                    ></td
+                  >
+                  {#each [...slot.tiers, slot.universal] as cell, i (i)}
+                    <td class="count" title={cell?.name}>{cell ? heldText(cell.held) : ""}</td>
+                  {/each}
                 </tr>
               {/each}
             </tbody>
           </table>
         </div>
       {:else}
-        <!-- Each item by its icon, the count at its corner and the name on hover. -->
-        <div class="table-scroll">
-          <ul class="tiles" data-state="success">
-            {#each shown as row (row.id)}
-              <li title={row.name}>
-                <img
-                  src={iconUrl(row.icon)}
-                  alt={row.name}
-                  width="64"
-                  height="64"
-                  loading="lazy"
-                />{#if row.tier}<span class="badge">T{row.tier}</span>{/if}<span class="count"
-                  >{formatCount(row.count)}</span
+        <label class="search">
+          <span>名前で検索</span>
+          <input type="search" bind:value={query} autocomplete="off" />
+        </label>
+        {#if shown.length === 0}
+          <p class="empty" data-state="no-match">一致する項目がありません</p>
+        {:else if view.tab === "shops"}
+          <div class="table-scroll">
+            {#each shown as shop (shop.name)}
+              <!-- Closed until opened, and open while a search narrows the goods. -->
+              <details class="shop" open={query.trim() !== "" || opened.has(shop.name)}>
+                <!-- Opened and closed here, not by the page: the snapshot of the
+                   next frame may come before the page's toggle event. -->
+                <summary
+                  onclick={(event) => {
+                    if (query.trim() === "") toggle(event, shop.name);
+                    else event.preventDefault();
+                  }}
                 >
-              </li>
+                  {@render chevron()}
+                  <h2>
+                    {shop.name}<span class="read-at"
+                      >{shop.read_at.slice(5, 16).replace("-", "/")}</span
+                    >{#if shopStale(shop)}<span class="stale">前の月の値</span>{/if}
+                  </h2>
+                  <!-- The coins held, as the shop shows them over its cards. -->
+                  <span class="held">
+                    {#each shop.coins as coin (coin.name)}
+                      <span title={coin.name}
+                        ><img
+                          src={iconUrl(coin.icon)}
+                          alt={coin.name}
+                          width="20"
+                          height="20"
+                        />{coin.held == null ? "?" : formatCount(coin.held)}</span
+                      >
+                    {/each}
+                  </span>
+                </summary>
+                <!-- Each good by its icon; under it, what each coin buys, the plain coin first. -->
+                <ul class="tiles goods" data-state="success">
+                  {#each shop.goods as good (good.id)}
+                    {@const tile = goodTile(good)}
+                    <!-- A good bought up with every coin is greyed out (the app lists it last). -->
+                    <li title={good.name} class:sold={good.sold} data-face={goodFace(good)}>
+                      <span class="item"
+                        ><img
+                          src={iconUrl(good.icon)}
+                          alt={good.name}
+                          width="64"
+                          height="64"
+                          loading="lazy"
+                        />{#if tile.amount}<span class="count">{tile.amount}</span>{/if}</span
+                      >
+                      <span class="offers">
+                        {#each tile.offers as offer, i (i)}
+                          <span class="offer" class:sold={offer?.sold}
+                            >{#if offer}<img
+                                src={iconUrl(shop.coins[i].icon)}
+                                alt={shop.coins[i].name}
+                                title={shop.coins[i].name}
+                                width="18"
+                                height="18"
+                              />{offer.text}{/if}</span
+                          >
+                        {/each}
+                      </span>
+                    </li>
+                  {/each}
+                </ul>
+              </details>
             {/each}
-          </ul>
-        </div>
+          </div>
+        {:else if view.tab === "students"}
+          <div class="table-scroll">
+            <table data-state="success" class="students">
+              <thead>
+                <tr>
+                  <th scope="col" class="mark">育成</th>
+                  <th scope="col">生徒</th>
+                  {#each STUDENT_COLUMNS as column (column.key)}
+                    <th
+                      scope="col"
+                      class:num={column.num}
+                      aria-sort={sortBy === column.key ? "descending" : undefined}
+                    >
+                      <button type="button" class="sort" onclick={() => (sortBy = column.key)}
+                        >{column.label}</button
+                      >{#if sortBy === column.key}<span class="sorted" aria-hidden="true">▼</span
+                        >{/if}
+                    </th>
+                  {/each}
+                </tr>
+              </thead>
+              <tbody>
+                {#each shown as row (row.id)}
+                  {@const cells = studentCells(row.training)}
+                  <tr>
+                    <td class="mark">
+                      <input
+                        type="checkbox"
+                        checked={targeted.has(row.id)}
+                        aria-label="{row.name}を育成対象にする"
+                        onchange={() => setTarget(row.id, targeted.has(row.id) ? null : {})}
+                      />
+                    </td>
+                    <td class="name">{row.name}</td>
+                    <td class="num">{cells.level}</td>
+                    <td title={cells.weapon || undefined}>{cells.star}</td>
+                    <td class="code">{cells.skills}</td>
+                    <td class="code">{cells.equipment}</td>
+                    <td>{cells.gear}</td>
+                    <td class="code">{cells.ability}</td>
+                    <td class="num">{cells.bond}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {:else}
+          <!-- Each item by its icon, the count at its corner and the name on hover. -->
+          <div class="table-scroll">
+            <ul class="tiles" data-state="success">
+              {#each shown as row (row.id)}
+                <li
+                  title={tileTitle(row, snapshot.students)}
+                  data-face={view.tab === "items" ? goodFace(row) : undefined}
+                >
+                  <img
+                    src={iconUrl(row.icon)}
+                    alt={row.name}
+                    width="64"
+                    height="64"
+                    loading="lazy"
+                  />{#if row.tier}<span class="badge">T{row.tier}</span>{/if}<span class="count"
+                    >{formatCount(row.count)}</span
+                  >
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
       {/if}
     {/if}
   </div>
@@ -1493,7 +1617,19 @@
     display: flex
     justify-content: center
     margin: 0 0 var(--sp-2)
+  // A tab's sub-tabs, over a rule; narrower than they are, they scroll sideways.
+  .subtabs
+    display: flex
+    flex: none
+    margin: 0 0 var(--sp-3)
+    overflow-x: auto
+    scrollbar-width: thin
+    border-bottom: 1px solid var(--c-border)
     button
+      flex: none
+      margin-bottom: -1px
+      white-space: nowrap
+  :is(.code-choice, .subtabs) button
       padding: var(--sp-1) var(--sp-3)
       border: 0
       border-bottom: 2px solid transparent
@@ -1782,11 +1918,6 @@
       opacity: 0.55
       img
         filter: grayscale(1)
-    // A good on its rarity, as the game colours it (初級 to 最上級 on tier-1 to 4), a
-    // student's eleph on pink.
-    @each $face, $color in (N: tier-1, R: tier-2, SR: tier-3, SSR: tier-4, eleph: eleph)
-      li[data-face="#{$face}"]
-        background: var(--c-#{$color})
     .offers
       display: flex
       flex-direction: column
@@ -2004,6 +2135,58 @@
         vertical-align: middle
         margin: 0 var(--sp-1)
 
+  // What is held of a kind, against what one student takes: short of one red (see
+  // `.short`), of two blue, enough for two green.
+  .stock
+    .fair
+      color: var(--c-accent)
+      font-weight: 600
+    .enough
+      font-weight: 600
+
+  // The skill materials: the secret notes, then a school's BDs over its notes,
+  // its emblem at the left; a wider gap between schools.
+  .tiers:is(.skills, .ooparts)
+    margin-top: 0
+  .skills
+    .emblem
+      position: static
+      width: 48px
+      padding: var(--sp-1)
+      border-bottom: 2px solid var(--c-surface)
+      vertical-align: middle
+      img
+        display: block
+        margin: 0 auto
+        object-fit: contain
+        filter: var(--emblem-filter)
+    tbody:not(:last-child) :is(tr:last-child > td, .emblem)
+      border-bottom-width: var(--sp-2)
+
+  // A slot's T1 pieces and blueprints held: a tier a column, the counts at the right.
+  .prints
+    th, td
+      padding: var(--sp-1)
+    // The tiers' columns alike, the slot's name taking the rest.
+    .count
+      width: 7%
+      text-align: right
+      font-size: var(--fs-sm)
+      font-variant-numeric: tabular-nums
+      white-space: nowrap
+    th.count
+      font-size: var(--fs-caption)
+    .slot
+      white-space: nowrap
+      img
+        object-fit: contain
+
+  // A slot's icon and name on one line.
+  .part
+    display: flex
+    align-items: center
+    gap: var(--sp-2)
+
   // Each tier on its colour, from the grey of the first to the purple of the last.
   .tiers
     margin-top: var(--sp-4)
@@ -2057,11 +2240,6 @@
       white-space: nowrap
       img
         object-fit: contain
-    // The icon and the slot's name on one line; its golden ratio in the hover.
-    .part
-      display: flex
-      align-items: center
-      gap: var(--sp-2)
     // A slot's two lines kept close (the user's 「上下paddingを半分にする」).
     .slots td
       padding-top: var(--sp-1)
@@ -2096,12 +2274,6 @@
       font-weight: 600
     .low
       color: var(--c-warn)
-      font-weight: 600
-    // A drop held short of two students blue, enough for two green.
-    .fair
-      color: var(--c-accent)
-      font-weight: 600
-    .enough
       font-weight: 600
     // A mission a row, the slots it serves muted; the totals under a double rule.
     .farm
@@ -2156,6 +2328,11 @@
       padding: var(--sp-1)
       border-radius: var(--radius-sm)
       background: var(--c-wash-base)
+    // A good or an item on its rarity, as the game colours it (初級 to 最上級 on
+    // tier-1 to 4), a student's eleph on pink.
+    @each $face, $color in (N: tier-1, R: tier-2, SR: tier-3, SSR: tier-4, eleph: eleph)
+      li[data-face="#{$face}"]
+        background: var(--c-#{$color})
     img
       display: block
       width: 64px

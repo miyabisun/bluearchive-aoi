@@ -23,6 +23,8 @@ import {
   goodTile,
   goodFace,
   heldTone,
+  heldText,
+  tileTitle,
   placeName,
   stockCells,
   goldenTitle,
@@ -891,6 +893,33 @@ describe("month-end and daily shops", () => {
       short: false,
       title: "総力戦コイン: 所持 ? − 予約 200",
     });
+  });
+});
+
+describe("item tiles", () => {
+  it("tells on hover an eleph's student's star, any other item by its name", () => {
+    const students = [
+      { id: 10019, name: "アズサ", training: { rarity: 5, weapon: { stars: 2, level: 40 } } },
+      { id: 10020, name: "ハナコ", training: { rarity: 3, weapon: null } },
+    ];
+    const eleph = (id, name) => ({ id, name, eleph: true });
+    const lines = (...l) => l.join("\n");
+    expect(tileTitle(eleph(10019, "アズサの神名文字"), students)).toBe(
+      lines("アズサの神名文字", "星: 固有2"),
+    );
+    expect(tileTitle(eleph(10020, "ハナコの神名文字"), students)).toBe(
+      lines("ハナコの神名文字", "星: ★3"),
+    );
+    expect(tileTitle(eleph(10099, "ミカの神名文字"), students)).toBe(
+      lines("ミカの神名文字", "星: 未読み取り"),
+    );
+    expect(tileTitle({ id: 9999, name: "秘伝ノート", eleph: false }, students)).toBe("秘伝ノート");
+  });
+
+  it("writes a count held, a dash where its list never read it", () => {
+    expect(heldText({ exact: 1234 })).toBe("1,234");
+    expect(heldText({ thousands: 51 })).toBe("51K");
+    expect(heldText(null)).toBe("—");
   });
 });
 

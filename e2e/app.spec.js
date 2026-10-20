@@ -38,7 +38,11 @@ const equipment = [
 ];
 
 /** Where the app's icons are, which the page loads from `/icon/<name>` here. */
-const ICONS = ["src-tauri/data/schaledb/icons", "src-tauri/data/schaledb/equipment-icons"];
+const ICONS = [
+  "src-tauri/data/schaledb/icons/*.webp",
+  "src-tauri/data/schaledb/equipment-icons/*.webp",
+  "src-tauri/data/schaledb/school-icons/*.png",
+];
 
 const reading = (list, fps = 27.4) => ({ state: "reading", list, fps, dropped: 0 });
 
@@ -49,7 +53,7 @@ const reading = (list, fps = 27.4) => ({ state: "reading", list, fps, dropped: 0
 async function open(page, snapshot, tab) {
   await page.route("**/icon/*", (route) => {
     const name = new URL(route.request().url()).pathname.slice("/icon/".length);
-    const file = ICONS.map((dir) => `${dir}/${name}.webp`).find(existsSync);
+    const file = ICONS.map((path) => path.replace("*", name)).find(existsSync);
     return file ? route.fulfill({ path: file }) : route.fulfill({ status: 404 });
   });
   await page.addInitScript((demo) => (window.__AOI_DEMO__ = demo), snapshot);
@@ -124,6 +128,163 @@ test("shows the equipment by tile, each piece's tier at its corner", async ({ pa
 
   await page.getByRole("tab", { name: "アイテム" }).click();
   await expect(page.locator(".tiles li")).toHaveCount(120);
+});
+
+/** A tier's cell of a kind: its icon and how many are held, against what one student takes. */
+const heldCell = (id, name, icon, held, need = null) => ({ id, name, icon, held, need });
+
+/** The tables by kind: the secret notes, two schools, two ooparts and a slot. */
+const kinds = {
+  secret: [
+    heldCell(9999, "秘伝ノート", "item_icon_skillbook_ultimate", { exact: 1 }, 3),
+    heldCell(9998, "秘伝ノートの断片", "item_icon_skillbook_ultimate_piece", { exact: 11 }),
+  ],
+  schools: ["trinity", "gehenna"].map((key, s) => ({
+    name: ["トリニティ", "ゲヘナ"][s],
+    icon: `school_icon_${key}`,
+    bd: [0, 1, 2, 3].map((t) =>
+      heldCell(3020 + 10 * s + t, `BD${t}`, `item_icon_material_exskill_${key}_${t}`, {
+        exact: 10 * t + s,
+      }),
+    ),
+    notes: [0, 1, 2, 3].map((t) =>
+      heldCell(
+        4020 + 10 * s + t,
+        `ノート${t}`,
+        `item_icon_skillbook_${key}_${t}`,
+        t === 3 ? null : { exact: 100 * t + s },
+        t === 0 ? 50 : null,
+      ),
+    ),
+  })),
+  ooparts: [
+    [0, 1, 2, 3].map((t) =>
+      heldCell(100 + t, `ネブラ${t}`, `item_icon_material_nebra_${t}`, { exact: 1680 - t }),
+    ),
+    [
+      heldCell(110, "ファイストス0", "item_icon_material_phaistos_0", { exact: 2291 }),
+      null,
+      null,
+      null,
+    ],
+  ],
+  blueprints: [
+    {
+      name: "帽子",
+      icon: "equipment_icon_hat_tier10",
+      tiers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((t) =>
+        heldCell(
+          t === 1 ? 1000 : 101_000 + t - 1,
+          t === 1 ? "無地のキャップ" : `帽子T${t}の設計図`,
+          t === 1 ? "equipment_icon_hat_tier1" : `equipment_icon_hat_tier${t}_piece`,
+          t === 9 ? null : { exact: 1000 + t },
+        ),
+      ),
+      universal: heldCell(501_000, "帽子の万能設計図", "equipment_icon_hat_useall_piece", {
+        thousands: 59,
+      }),
+    },
+  ],
+};
+
+test("the item tab's sub-tabs: every item on its rarity, the skill materials, the ooparts", async ({
+  page,
+}) => {
+  const item = (id, name, icon, n, rarity, eleph = false) => ({
+    id,
+    name,
+    icon,
+    tier: null,
+    count: { exact: n },
+    rarity,
+    eleph,
+  });
+  const held = [
+    item(10019, "アズサの神名文字", "item_icon_secretstone_azusa", 120, "N", true),
+    item(3023, "最上級戦術教育BD（トリニティ）", "item_icon_material_exskill_trinity_3", 30, "SSR"),
+    item(4021, "中級技術ノート（トリニティ）", "item_icon_skillbook_trinity_1", 100, "R"),
+  ];
+  const training = { ...students[0].training, rarity: 5, weapon: { stars: 2, level: 40 } };
+  const azusa = { id: 10019, name: "アズサ", training };
+  const snapshot = { status: reading("items"), items: held, equipment, students: [azusa], kinds };
+  await open(page, snapshot);
+  // Everything held: each tile on its rarity, an eleph on pink with its student's star on hover.
+  await expect(page.getByRole("tab", { name: "全体" })).toHaveAttribute("aria-selected", "true");
+  const tiles = page.locator(".tiles li");
+  const face = (t) => t.map((li) => [li.dataset.face, getComputedStyle(li).backgroundColor]);
+  expect(await tiles.evaluateAll(face)).toEqual([
+    ["eleph", await colorOf(page, "--c-eleph")],
+    ["SSR", await colorOf(page, "--c-tier-4")],
+    ["R", await colorOf(page, "--c-tier-2")],
+  ]);
+  await expect(tiles.first()).toHaveAttribute("title", "アズサの神名文字\n星: 固有2");
+  await page.getByLabel("名前で検索").fill("ノート");
+  await expect(tiles).toHaveCount(1);
+
+  // The skill materials: no search; the secret notes, then a school's BDs over its notes.
+  await page.getByRole("tab", { name: "スキル素材" }).click();
+  await expect(page.getByLabel("名前で検索")).toHaveCount(0);
+  const skills = page.locator("table.skills");
+  const secret = skills.locator("tbody").first();
+  await expect(secret.locator("td")).toHaveText(["", "1", "11", ""]);
+  await expect(secret.getByRole("img", { name: "秘伝ノート", exact: true })).toBeVisible();
+  // Short of one student red.
+  await expect(secret.locator("td span").first()).toHaveClass(/short/);
+  const emblems = skills.locator("th.emblem img");
+  expect(await emblems.evaluateAll((i) => i.map((e) => e.alt))).toEqual(["トリニティ", "ゲヘナ"]);
+  const loaded = await emblems.evaluateAll((i) => i.map((e) => e.complete && e.naturalWidth > 0));
+  expect(loaded).toEqual([true, true]);
+  const trinity = skills.locator("tbody").nth(1).locator("tr");
+  await expect(trinity.nth(0).locator("td")).toHaveText(["0", "10", "20", "30"]);
+  await expect(trinity.nth(1).locator("td")).toHaveText(["0", "100", "200", "—"]);
+  await expect(trinity.nth(1).locator("td").first()).toHaveClass(/tier-1/);
+  // The choice holds as new frames come, and when the tab is left and taken again.
+  await page.evaluate(
+    (s) => window.__AOI_PUSH__({ ...s, status: { ...s.status, fps: 9 } }),
+    snapshot,
+  );
+  await expect(page.getByRole("tab", { name: "スキル素材" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.getByRole("tab", { name: "装備", exact: true }).click();
+  await page.getByRole("tab", { name: "アイテム" }).click();
+  await expect(page.getByRole("tab", { name: "スキル素材" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(skills).toBeVisible();
+
+  // The ooparts: one a row, its tiers on their colours.
+  await page.getByRole("tab", { name: "オーパーツ" }).click();
+  const ooparts = page.locator("table.ooparts tr");
+  await expect(ooparts).toHaveCount(2);
+  await expect(ooparts.nth(0).locator("td")).toHaveText(["1,680", "1,679", "1,678", "1,677"]);
+  await expect(ooparts.nth(1).locator("td")).toHaveText(["2,291", "", "", ""]);
+  expect(await overflow(page)).toBe(0);
+});
+
+test("the equipment tab's blueprints: a slot a row, its T1 pieces to T10 blueprints and universal ones", async ({
+  page,
+}) => {
+  await open(page, { status: reading("equipment"), items, equipment, kinds }, "装備");
+  await expect(page.locator(".tiles li")).toHaveCount(4);
+  await page.getByRole("tab", { name: "設計図" }).click();
+  await expect(page.getByLabel("名前で検索")).toHaveCount(0);
+  const prints = page.locator("table.prints");
+  const tiers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  await expect(prints.locator("thead th")).toHaveText([
+    "部位",
+    ...tiers.map((t) => `T${t}`),
+    "万能",
+  ]);
+  const hat = prints.locator("tbody tr").first().locator("td");
+  const held = tiers.map((t) => (t === 9 ? "—" : (1000 + t).toLocaleString("en")));
+  await expect(hat).toHaveText(["帽子", ...held, "59K"]);
+  await expect(hat.nth(2)).toHaveAttribute("title", "帽子T2の設計図");
+  await expect(hat.last()).toHaveAttribute("title", "帽子の万能設計図");
+  await page.setViewportSize({ width: 360, height: 640 });
+  expect(await overflow(page)).toBe(0);
 });
 
 test("the status pauses the reading when pressed, and resumes it", async ({ page }) => {
@@ -236,6 +397,11 @@ test("the tabs and the search field take focus from the keyboard", async ({ page
   await expect(page.getByRole("button", { name: /集計中/ })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "メニュー" })).toBeFocused();
+  // Then the sub-tabs, and the search over everything.
+  for (const name of ["全体", "設計図"]) {
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("tab", { name })).toBeFocused();
+  }
   await page.keyboard.press("Tab");
   await expect(page.getByLabel("名前で検索")).toBeFocused();
   await page.screenshot({ path: "test-results/wide-dark.png" });

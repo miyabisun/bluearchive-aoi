@@ -15,6 +15,7 @@ use crate::{
     broadcast::Cast,
     export,
     keep::{self, Kept, ReadAt, now},
+    kinds::Kinds,
     plan::{BlueprintRow, NeedRow, Target, UnknownRow},
     shop::ShopRow,
     strategy::{PlanShop, Reserve},
@@ -51,6 +52,8 @@ pub struct Snapshot {
     /// plan was last reloaded, so a student trained meanwhile leaves it as it is.
     #[serde(skip)]
     ground: Ground,
+    /// The item and equipment tabs' tables by kind.
+    kinds: Kinds,
     /// The daily plays against what is held.
     work: WorkRows,
     /// The month-end shops' purchase plan.
@@ -115,6 +118,7 @@ impl Snapshot {
             procure: Vec::new(),
             plan_version: 0,
             ground: Ground::default(),
+            kinds: Kinds::default(),
             work: recognizer.work_rows(&[], &[], None),
             month_end: Vec::new(),
             reserved: kept.reserved.clone(),
@@ -185,8 +189,10 @@ impl Snapshot {
         );
     }
 
-    /// Counts the daily plays and the month-end plan again from what was read.
+    /// Counts the tables by kind, the daily plays and the month-end plan again
+    /// from what was read.
     fn rework(&mut self, recognizer: &Recognizer) {
+        self.kinds = recognizer.kinds(&self.items, &self.equipment);
         self.work = recognizer.work_rows(&self.items, &self.equipment, self.credits);
         let held = |id| crate::good_held(id, &self.items, &self.equipment, self.credits);
         self.month_end = recognizer.month_end(&self.shops, &self.students, held, &self.reserved);

@@ -112,7 +112,7 @@ $equipment = Update-List 'equipment' 'equipment-icons' 'https://schaledb.com/ima
 
 # Students are told apart by name, so no pictures are needed. Their skills'
 # materials, level by level: EX from Lv2 to 5, the other skills from Lv2 to 9.
-Update-List 'students' $null $null {
+$students = Update-List 'students' $null $null {
   param($student)
   [ordered]@{
     id = [int64]$student.Id
@@ -129,7 +129,22 @@ Update-List 'students' $null $null {
     # The ooparts (their first tier) the student's potential takes.
     potential = if ($student.PotentialMaterial) { [int64]$student.PotentialMaterial } else { $null }
   }
-} | Out-Null
+}
+
+# The emblems of the schools whose tech notes the items list
+# (`item_icon_skillbook_<key>_0`), for the item tab's skill materials, named by
+# that key. SchaleDB names a school as the students do ("RedWinter").
+$keys = @($items.Icon | Where-Object { $_ -match '^item_icon_skillbook_([a-z]+)_0$' } |
+  ForEach-Object { $_ -replace '^item_icon_skillbook_([a-z]+)_0$', '$1' })
+$dir = Join-Path $root 'school-icons'
+New-Item -ItemType Directory -Force $dir | Out-Null
+foreach ($school in ($students.School | Sort-Object -Unique)) {
+  $key = $school.ToLower()
+  $path = Join-Path $dir "school_icon_$key.png"
+  if ($keys -notcontains $key -or (Test-Path $path)) { continue }
+  curl.exe -sSf -o $path "https://schaledb.com/images/schoolicon/$school.png"
+  if ($LASTEXITCODE -ne 0) { throw "failed to fetch the emblem of $school" }
+}
 
 # Growth tables. SchaleDB no longer carries the level tables, so they come from
 # the game's own tables as electricgoat/ba-data extracts them (JP).

@@ -204,6 +204,8 @@ fn rows(entries: &[Item], rules: &Rules, counts: &HashMap<i64, Count>) -> Vec<Ro
             icon: e.icon.clone(),
             tier: (e.tier > 0).then_some(e.tier),
             count,
+            rarity: e.rarity,
+            eleph: e.category == "SecretStone",
         })
         .collect()
 }
@@ -317,6 +319,23 @@ mod tests {
             ),
             ["event ticket 2", "secret stone 7", "material 5"]
         );
+    }
+
+    #[test]
+    fn a_row_carries_its_entrys_rarity_and_whether_it_is_an_eleph() {
+        let entries = [
+            Item {
+                rarity: Some(Rarity::SR),
+                ..entry(10, "material", "Material", 0)
+            },
+            entry(3, "secret stone", "SecretStone", 0),
+        ];
+        let counts = HashMap::from([(10, Count::Exact(5)), (3, Count::Exact(7))]);
+        let rows: Vec<_> = rows(&entries, &items::RULES, &counts)
+            .into_iter()
+            .map(|r| (r.id, r.rarity, r.eleph))
+            .collect();
+        assert_eq!(rows, [(3, None, true), (10, Some(Rarity::SR), false)]);
     }
 
     fn cell(id: Option<i64>) -> Cell {

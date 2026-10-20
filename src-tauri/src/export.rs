@@ -217,6 +217,8 @@ mod tests {
             icon: String::new(),
             tier,
             count,
+            rarity: None,
+            eleph: false,
         }
     }
 
