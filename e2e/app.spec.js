@@ -1380,7 +1380,10 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
   const coinsLeft = page
     .locator(".work details", { hasText: "ショップ: 総力戦" })
     .locator(".held > span");
+  // Nothing reserved: the coins held, in the text's colour.
   await expect(coinsLeft).toHaveText(["600", "40"]);
+  const onSurface = await colorOf(page, "--c-on-surface");
+  await expect(coinsLeft.first().locator("span")).toHaveCSS("color", onSurface);
   await expect(azusa).toHaveAttribute("aria-pressed", "false");
   // Its hover tells the student's star and how many of the eleph are held.
   await expect(azusa).toHaveAttribute(
@@ -1409,6 +1412,18 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
   // The coins left once the cards reserved are paid: 600 less 16 × 50, short red.
   await expect(coinsLeft).toHaveText(["-200", "40"]);
   await expect(page.locator(".work .held .short")).toHaveText(["-200"]);
+  await expect(coinsLeft.first().locator("span")).toHaveCSS(
+    "color",
+    await colorOf(page, "--c-danger"),
+  );
+  // Enough for what is reserved: blue, so the count left is not taken for the game's.
+  const enough = plan(true).map((s, i) => (i === 0 ? { ...s, coins: coins(400, false) } : s));
+  await page.evaluate((s) => window.__AOI_PUSH__(s), { ...snapshot, month_end: enough });
+  await expect(coinsLeft).toHaveText(["200", "40"]);
+  const blue = await colorOf(page, "--c-accent");
+  await expect(coinsLeft.first().locator("span")).toHaveCSS("color", blue);
+  await expect(coinsLeft.last().locator("span")).toHaveCSS("color", onSurface);
+  await page.evaluate((s) => window.__AOI_PUSH__(s), { ...snapshot, month_end: plan(true) });
   await expect(coinsLeft.first()).toHaveAttribute("title", "総力戦コイン: 所持 600 − 予約 800");
   // A shop never read says so.
   await page.locator(".work summary", { hasText: "ショップ: 大決戦" }).click();

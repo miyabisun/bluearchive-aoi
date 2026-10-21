@@ -874,13 +874,16 @@ describe("month-end and daily shops", () => {
     expect(planTitle(note, students)).toBe(lines("秘伝ノート", "所持: 2K"));
   });
 
-  it("tells the coins left once the cards reserved are paid, short below none", () => {
+  it("tells the coins left once the cards reserved are paid, marked while any is reserved", () => {
     const coin = { name: "総力戦コイン", icon: "", held: { exact: 600 }, need: 200, short: false };
     expect(planCoin(coin)).toEqual({
       left: "400",
+      reserved: true,
       short: false,
       title: "総力戦コイン: 所持 600 − 予約 200",
     });
+    // Nothing reserved: the count held, unmarked.
+    expect(planCoin({ ...coin, need: 0 })).toMatchObject({ left: "600", reserved: false });
     expect(planCoin({ ...coin, need: 1700, short: true })).toMatchObject({
       left: "-1,100",
       short: true,
@@ -890,6 +893,7 @@ describe("month-end and daily shops", () => {
     });
     expect(planCoin({ ...coin, held: null })).toEqual({
       left: "?",
+      reserved: true,
       short: false,
       title: "総力戦コイン: 所持 ? − 予約 200",
     });

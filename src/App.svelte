@@ -1014,12 +1014,14 @@
                     >{#if shopStale({ ...shop, resets: true })}<span class="stale">前の月の値</span
                       >{/if}{/if}
                 </h3>
-                <!-- The coins left once the cards reserved are paid, short red. -->
+                <!-- The coins left once the cards reserved are paid: blue while any is
+                     reserved, so it is not taken for the game's count; short red. -->
                 <span class="held">
                   {#each shop.coins as coin (coin.name)}
                     {@const left = planCoin(coin)}
                     <span title={left.title}
                       ><img src={iconUrl(coin.icon)} alt={coin.name} width="20" height="20" /><span
+                        class:reserved={left.reserved}
                         class:short={left.short}>{left.left}</span
                       ></span
                     >
@@ -1902,6 +1904,9 @@
       display: inline-flex
       align-items: center
       gap: 2px
+    // Less the cards reserved: blue, unless short (the user's of 2026-10-21).
+    .reserved:not(.short)
+      color: var(--c-accent)
     img
       object-fit: contain
 

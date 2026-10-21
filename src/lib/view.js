@@ -685,7 +685,10 @@ export const heldText = (held) => (held == null ? "—" : formatCount(held));
 
 /**
  * A month-end shop's coin: how many are left once the cards reserved are
- * paid (the held less what they take), below none short; and how that comes.
+ * paid (the held less what they take), below none short; whether any is
+ * reserved, which marks the count apart from the game's (the user's of
+ * 2026-10-21: 7,319 held less 3,600 reserved read as a misread 3,719); and
+ * how that comes.
  */
 export function planCoin(coin) {
   const held =
@@ -696,6 +699,7 @@ export function planCoin(coin) {
         : coin.held.exact;
   return {
     left: held == null ? "?" : exact.format(held - coin.need),
+    reserved: coin.need > 0,
     short: coin.short,
     title: `${coin.name}: 所持 ${coin.held == null ? "?" : formatCount(coin.held)} − 予約 ${exact.format(coin.need)}`,
   };
