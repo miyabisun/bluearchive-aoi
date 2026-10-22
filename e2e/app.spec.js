@@ -1369,7 +1369,7 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   await expect(page.locator(".raises tr.fewer strong")).toHaveCSS("color", red);
 });
 
-test("reserves a hard mission's eleph, the day's AP it takes red by the campaign's heading", async ({
+test("reserves a hard mission's eleph, the day's AP it takes red in the hard missions' heading", async ({
   page,
 }) => {
   const card = (id, name, more) => ({
@@ -1398,9 +1398,9 @@ test("reserves a hard mission's eleph, the day's AP it takes red by the campaign
   ];
   const snapshot = { status: reading("shops"), items, equipment, work, hard: hard([]) };
   await open(page, snapshot, "お仕事");
-  const heading = page.locator(".work .category-head");
-  await expect(heading).toHaveText("2倍キャンペーン");
-  await page.locator(".work summary", { hasText: "任務 Hard" }).click();
+  const heading = page.locator(".work summary", { hasText: "任務 Hard" });
+  await expect(heading).toHaveText("任務 Hard");
+  await heading.click();
   // A student's eleph a card: the missions dropping it in the place of "×5", the star
   // and the elephs short of 固有4 in the place of the price; 固有4 greyed, last.
   const cards = page.locator(".work details", { hasText: "任務 Hard" }).locator("li");
@@ -1414,8 +1414,9 @@ test("reserves a hard mission's eleph, the day's AP it takes red by the campaign
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([
     { card: { shop: "任務 Hard", id: 10000, coin: "AP" }, reserved: true },
   ]);
-  // The app answers reserved: ringed and marked, and the campaign's heading takes a
-  // day's AP for it in red; the fold stays open through the frames that keep coming.
+  // The app answers reserved: ringed and marked, and the hard missions' heading takes
+  // a day's AP for it in red (not the campaign's: one hard mission is asked a week, so a
+  // campaign's total means nothing); the fold stays open through the frames that keep coming.
   for (let frame = 0; frame < 3; frame++) {
     await page.evaluate((s) => window.__AOI_PUSH__(s), { ...snapshot, hard: hard([10000]) });
   }
@@ -1425,14 +1426,19 @@ test("reserves a hard mission's eleph, the day's AP it takes red by the campaign
   await expect(taken).toHaveText("-60");
   await expect(taken.getByRole("img", { name: "AP" })).toBeVisible();
   await expect(taken.locator(".short")).toHaveCSS("color", await colorOf(page, "--c-danger"));
+  // The only AP shown is the hard missions': none by the campaign's heading.
+  await expect(page.locator(".work .category").nth(1)).toHaveText("2倍キャンペーン");
+  await expect(
+    page.locator(".work .held", { has: page.getByRole("img", { name: "AP" }) }),
+  ).toHaveCount(1);
   await page.evaluate((s) => window.__AOI_PUSH__(s), {
     ...snapshot,
     hard: hard([10000, 13010]),
   });
   await expect(taken).toHaveText("-240");
-  // Taken back, the heading is the category's name alone again.
+  // Taken back, the heading is the hard missions' name alone again.
   await page.evaluate((s) => window.__AOI_PUSH__(s), snapshot);
-  await expect(heading).toHaveText("2倍キャンペーン");
+  await expect(heading).toHaveText("任務 Hard");
   await expect(page.locator(".work details", { hasText: "任務 Hard" })).toHaveAttribute("open", "");
   expect(await overflow(page)).toBe(0);
 });

@@ -903,18 +903,7 @@
               {/each}
             </details>
           {/each}
-          <!-- A day's AP the hard missions reserved take, red, while any is reserved: the
-               AP held is not read, so only what is taken shows. -->
-          <div class="category-head">
-            <h2 class="category">2倍キャンペーン</h2>
-            {#if hardAp > 0}
-              <span class="held" title="任務 Hard の予約: 1日 {hardAp.toLocaleString('ja-JP')} AP"
-                ><img src={iconUrl("currency_icon_ap")} alt="AP" width="20" height="20" /><span
-                  class="short">-{hardAp.toLocaleString("ja-JP")}</span
-                ></span
-              >
-            {/if}
-          </div>
+          <h2 class="category">2倍キャンペーン</h2>
           <details class="fold" open={opened.has("work:任務")}>
             <summary onclick={(event) => toggle(event, "work:任務")}
               >{@render chevron()}
@@ -1000,7 +989,17 @@
           <details class="fold" open={opened.has("work:任務 Hard")}>
             <summary onclick={(event) => toggle(event, "work:任務 Hard")}
               >{@render chevron()}
-              <h3>任務 Hard</h3></summary
+              <h3>任務 Hard</h3>
+              <!-- A day's AP the students reserved take, red, while any is reserved, as the
+                   month-end shops show their coins: here, not by the campaign, as one hard
+                   mission is asked a week (the user's of 2026-10-22). The AP held is not read. -->
+              {#if hardAp > 0}
+                <span class="held" title="任務 Hard の予約: 1日 {hardAp.toLocaleString('ja-JP')} AP"
+                  ><img src={iconUrl("currency_icon_ap")} alt="AP" width="20" height="20" /><span
+                    class="short">-{hardAp.toLocaleString("ja-JP")}</span
+                  ></span
+                >
+              {/if}</summary
             >
             <!-- A student's eleph a card, as the month-end shops show a good: how many missions
                  drop it, the student's star and the elephs short of 固有4; pressing one reserves
@@ -2295,13 +2294,6 @@
   // The work tab: the plays grouped by when they are played, a section a kind
   // of play, each count with its terms under it.
   .work
-    // A category's heading with what its reservations take at the right.
-    .category-head
-      display: flex
-      align-items: baseline
-      margin: var(--sp-5) 0 0
-      .category
-        margin: 0
     .category
       display: block
       margin: var(--sp-5) 0 0
