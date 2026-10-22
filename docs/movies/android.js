@@ -17,7 +17,7 @@
         col: 0,
         row: 0.5,
       },
-      { id: "menu", label: "Aoi の ≡", sub: "Androidとの通信", color: AOI, col: 1, row: 0.5 },
+      { id: "menu", label: "Aoi のメニュー", sub: "Androidとの通信", color: AOI, col: 1, row: 0.5 },
       { id: "usb", label: "USB", sub: "USB デバッグ", color: GAME, col: 2, row: 0 },
       { id: "wifi", label: "Wi-Fi", sub: "QR でペア設定", color: GAME, col: 2, row: 1 },
       { id: "recv", label: "Aoi", sub: "画面を受け取る", color: AOI, col: 3, row: 0.5 },
@@ -38,7 +38,7 @@
       },
       {
         kicker: "通信",
-        caption: "Aoi の ≡ から「Androidとの通信」を押す",
+        caption: "Aoi の右上のメニューから「Androidとの通信」を押す",
         flow: [["phone", "menu"]],
         token: "スマホ",
       },

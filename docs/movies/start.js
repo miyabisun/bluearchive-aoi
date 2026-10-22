@@ -1,4 +1,4 @@
-// トップ 1 本目「はじめる」。書式は dotfiles の animated-arch-diagram skill の SKILL.md
+// トップ 1 本目「起動方法」。書式は dotfiles の animated-arch-diagram skill の SKILL.md
 // 色の名前がほかの図とぶつからないよう、ブロックの中に置く
 {
   const GAME = "#d9668c"; // ゲーム・スマホの側
@@ -6,61 +6,68 @@
 
   window.SPECS = window.SPECS || {};
   window.SPECS.start = {
-    title: "はじめる",
+    title: "起動方法",
     grid: [3, 3],
     nodes: [
-      { id: "pc", label: "PC 版", sub: "Windows", color: GAME, col: 0, row: 0, w: 380 },
-      { id: "android", label: "Android", sub: "USB・Wi-Fi", color: GAME, col: 0, row: 1, w: 380 },
-      { id: "iphone", label: "iPhone", sub: "配信アプリ", color: GAME, col: 0, row: 2, w: 380 },
-      { id: "menu", label: "Aoi の ≡", sub: "受け取り方を選ぶ", color: AOI, col: 1, row: 1 },
-      { id: "start", label: "録画開始", sub: "画面を受け取る", color: AOI, col: 2, row: 1 },
+      { id: "aoi", label: "Aoi", sub: "起動する", color: AOI, col: 0, row: 1, w: 360 },
+      { id: "pc", label: "PC 版", sub: "ゲームを起動", color: GAME, col: 1, row: 0, w: 360 },
+      { id: "android", label: "Android", sub: "USB・Wi-Fi", color: GAME, col: 1, row: 1, w: 360 },
+      { id: "iphone", label: "iPhone", sub: "動画配信アプリ", color: GAME, col: 1, row: 2, w: 360 },
+      { id: "start", label: "録画開始", sub: "画面を受け取る", color: AOI, col: 2, row: 1, w: 360 },
     ],
     edges: [
-      { from: "pc", to: "menu" },
-      { from: "android", to: "menu" },
-      { from: "iphone", to: "menu" },
-      { from: "menu", to: "start" },
+      { from: "aoi", to: "pc" },
+      { from: "aoi", to: "android" },
+      { from: "aoi", to: "iphone" },
+      { from: "pc", to: "start" },
+      { from: "android", to: "start" },
+      { from: "iphone", to: "start" },
     ],
     steps: [
       {
-        kicker: "ゲーム",
-        caption: "PC 版・Android・iPhone のどれかで遊ぶ",
-        focus: ["pc", "android", "iphone"],
+        kicker: "起動",
+        caption: "まず Aoi を起動する",
+        focus: ["aoi"],
       },
       {
-        kicker: "接続",
-        caption: "Aoi の右上の ≡ から、受け取り方を選ぶ",
+        kicker: "PC 版",
+        caption: "PC 版は、ゲームを起動すれば自動で見つける",
         flow: [
-          ["pc", "menu"],
-          ["android", "menu"],
-          ["iphone", "menu"],
+          ["aoi", "pc"],
+          ["pc", "start"],
         ],
-        token: "ゲーム",
-        hop: 0.6,
+        token: "画面",
+        note: { node: "pc", side: "left", lines: ["メニューで選ばなくてよい"] },
+      },
+      {
+        kicker: "スマホ",
+        caption: "スマホは、Aoi の右上のメニューで受け取り方を選ぶ",
+        focus: ["aoi"],
         note: {
-          node: "menu",
-          side: "above",
-          lines: [
-            "PC 版: 選ばなくてよい",
-            "Android: Androidとの通信",
-            "iPhone: 配信アプリとの連携",
-          ],
+          node: "aoi",
+          side: "below",
+          lines: ["Android: Androidとの通信", "iPhone: 配信アプリとの連携"],
         },
       },
       {
-        kicker: "録画開始",
-        caption: "画面を送り始めると、Aoi が読み始める",
-        flow: [["menu", "start"]],
-        token: "画面",
-        note: {
-          node: "start",
-          side: "below",
-          lines: [
-            "PC 版: ゲームを起動するだけ",
-            "Android: USB か QR でつなぐ",
-            "iPhone: ブロードキャストを開始",
-          ],
-        },
+        kicker: "Android",
+        caption: "Android は USB か Wi-Fi でつなぐ",
+        flow: [
+          ["aoi", "android"],
+          ["android", "start"],
+        ],
+        token: "USB・Wi-Fi",
+        note: { node: "start", side: "above", lines: ["USB デバッグ、または QR でペア設定"] },
+      },
+      {
+        kicker: "iPhone",
+        caption: "iPhone は動画配信アプリで画面を送る",
+        flow: [
+          ["aoi", "iphone"],
+          ["iphone", "start"],
+        ],
+        token: "配信",
+        note: { node: "start", side: "below", lines: ["Moblin でブロードキャストを開始"] },
       },
     ],
     outro: { kicker: "準備完了", caption: "あとはゲームで一覧を開くだけ" },

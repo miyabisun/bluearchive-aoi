@@ -92,6 +92,26 @@
   }
 
   const fadeAt = (tl, t) => 1 - ease((t - (tl.total - FADE)) / FADE);
+  // 字幕の欄: ステップ前は図のタイトル、ステップ中は番号付きの小見出しと字幕、締めは締めの一言
+  function captionAt(spec, tl, t) {
+    const scn = sceneAt(tl, t);
+    const step = spec.steps[scn];
+    if (step) {
+      const local = t - tl.steps[scn].start;
+      return {
+        kicker: `${String(scn + 1).padStart(2, "0")}  ${step.kicker ?? ""}`,
+        text: typedAt(step.caption, local),
+      };
+    }
+    if (scn === spec.steps.length) {
+      return {
+        kicker: spec.outro?.kicker ?? "",
+        text: typedAt(spec.outro?.caption, t - tl.outro.start),
+      };
+    }
+    return { kicker: "", text: spec.title ?? "" };
+  }
+
   // 止めて始めるときの絵: ノードと線が出そろい、まだどのステップも始まっていない
   const stillAt = (tl) => Math.max(0, tl.introEnd - SETTLE / 2);
 
@@ -355,19 +375,7 @@
         note.lines.forEach((line, j) => line.setAttribute("opacity", lineAt(step, j, local)));
       });
 
-      if (step) {
-        return {
-          kicker: `${String(scn + 1).padStart(2, "0")}  ${step.kicker ?? ""}`,
-          text: typedAt(step.caption, local),
-        };
-      }
-      if (scn === spec.steps.length && spec.outro) {
-        return {
-          kicker: spec.outro.kicker ?? "",
-          text: typedAt(spec.outro.caption, t - tl.outro.start),
-        };
-      }
-      return { kicker: "", text: "" };
+      return captionAt(spec, tl, t);
     }
 
     return { render, tl };
@@ -467,6 +475,7 @@
     prevStart,
     fadeAt,
     stillAt,
+    captionAt,
     edgePath,
     notePos,
     mount,

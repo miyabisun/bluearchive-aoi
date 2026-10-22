@@ -9,7 +9,7 @@
     title: "iPhone から送る流れ",
     grid: [5, 2],
     nodes: [
-      { id: "qr", label: "Aoi の ≡", sub: "配信アプリとの連携", color: AOI, col: 0, row: 1 },
+      { id: "qr", label: "Aoi のメニュー", sub: "配信アプリとの連携", color: AOI, col: 0, row: 1 },
       { id: "moblin", label: "Moblin", sub: "QR から開く", color: GAME, col: 1, row: 0 },
       { id: "scene", label: "Scenes", sub: "Screen capture", color: GAME, col: 2, row: 0 },
       { id: "rec", label: "画面収録", sub: "ブロードキャスト", color: GAME, col: 3, row: 0 },
@@ -24,7 +24,7 @@
     steps: [
       {
         kicker: "QR",
-        caption: "Aoi の ≡ から「配信アプリとの連携」を押す",
+        caption: "Aoi の右上のメニューから「配信アプリとの連携」を押す",
         focus: ["qr"],
         note: { node: "qr", side: "above", lines: ["QR コードと", "rtmp:// の URL が出る"] },
       },
