@@ -179,12 +179,13 @@ pub fn ooparts<S: BuildHasher, T: BuildHasher>(
 
 /// The enhancement materials of the equipment list by their category, in the
 /// user's order of 2026-10-22: the orbs, then the unique weapons' springs,
-/// hammers and barrels.
-const ENHANCEMENTS: [&str; 4] = [
+/// hammers and barrels, and the pins every weapon takes.
+const ENHANCEMENTS: [&str; 5] = [
     "Exp",
     "WeaponExpGrowthA",
     "WeaponExpGrowthB",
     "WeaponExpGrowthC",
+    "WeaponExpGrowthZ",
 ];
 
 /// The enhancement materials of `equipment`, a kind's tiers a row, in the
@@ -435,7 +436,7 @@ mod tests {
     }
 
     #[test]
-    fn the_enhancement_materials_come_the_orbs_first_then_springs_hammers_and_barrels() {
+    fn the_enhancement_materials_come_the_orbs_first_then_springs_hammers_barrels_and_pins() {
         let entry = |id: i64, category: &str, rarity| Item {
             id,
             name: format!("{category}{id}"),
@@ -477,6 +478,7 @@ mod tests {
                 ],
                 vec![Some((20, None)), None, None, None],
                 vec![Some((30, None)), None, None, None],
+                vec![Some((40, None)), None, None, None],
             ]
         );
     }

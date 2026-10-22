@@ -66,7 +66,7 @@ fn each_oopart_comes_with_its_four_tiers() {
 }
 
 #[test]
-fn the_enhancement_materials_come_four_kinds_of_four_tiers() {
+fn the_enhancement_materials_come_five_kinds_of_four_tiers() {
     let kinds = recognizer().kinds(&[], &[row(4, 1383)]);
     let names: Vec<Vec<&str>> = kinds
         .enhancements
@@ -90,6 +90,7 @@ fn the_enhancement_materials_come_four_kinds_of_four_tiers() {
                 "チタンハンマー"
             ],
             ["錆びた銃身", "普通の銃身", "クロム銃身", "チタン銃身"],
+            ["錆びた撃針", "普通の撃針", "クロム撃針", "チタン撃針"],
         ]
     );
     let top = kinds.enhancements[0][3].as_ref().unwrap();
