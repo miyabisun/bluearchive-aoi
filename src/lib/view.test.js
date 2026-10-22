@@ -968,10 +968,11 @@ describe("hard missions", () => {
     expect(hardTile({ ...card, star: 8, done: true }).text).toBe("固有4 80文字");
   });
 
-  it("counts a day's AP of the students reserved, those at 固有4 left out", () => {
+  it("counts a day's AP of the students reserved, those at 固有4 too", () => {
     const reserved = (ap, done = false) => ({ ...card, ap, done, reserved: true });
     expect(hardCost([reserved(60), reserved(180), { ...card, ap: 120 }])).toBe(240);
-    expect(hardCost([reserved(60), reserved(120, true)])).toBe(60);
+    // Elephs farmed past 固有4 wait for a 固有5 the game hints at (the user's of 2026-10-22).
+    expect(hardCost([reserved(60), reserved(120, true)])).toBe(180);
     expect(hardCost([])).toBe(0);
   });
 });

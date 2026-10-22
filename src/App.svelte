@@ -1002,8 +1002,8 @@
               {/if}</summary
             >
             <!-- A student's eleph a card, as the month-end shops show a good: how many missions
-                 drop it, the student's star and the elephs short of 固有4; pressing one reserves
-                 it, again takes it back. Those at 固有4 greyed, last. -->
+                 drop it, the student's star and the elephs held; pressing one reserves it, again
+                 takes it back. Those at 固有4 greyed, last, yet reserved as the others. -->
             <ul class="tiles goods plan">
               {#each snapshot.hard ?? [] as card (card.id)}
                 {@const tile = hardTile(card)}

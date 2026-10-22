@@ -731,9 +731,12 @@ export function hardTile(card) {
   };
 }
 
-/** A day's AP the hard missions' cards reserved take, those at 固有4 left out. */
+/**
+ * A day's AP the hard missions' cards reserved take, those at 固有4 too: their
+ * elephs are farmed for a 固有5 the game hints at (the user's of 2026-10-22).
+ */
 export const hardCost = (cards) =>
-  cards.filter((c) => c.reserved && !c.done).reduce((sum, c) => sum + c.ap, 0);
+  cards.filter((c) => c.reserved).reduce((sum, c) => sum + c.ap, 0);
 
 /**
  * A month-end shop's coin: how many are left once the cards reserved are
