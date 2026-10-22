@@ -944,20 +944,28 @@ describe("hard missions", () => {
   };
   const lines = (...l) => l.join("\n");
 
-  it("tells a student's card: the missions it is dropped at, the star and the elephs short of 固有4", () => {
-    expect(hardTile(card)).toEqual({
+  it("tells a student's card: the missions it is dropped at, the star and the elephs held", () => {
+    // The user's アル: 148 held at 固有3 reads "固有3 148文字", never what 固有4 still takes (52).
+    const aru = { ...card, held: { exact: 148 } };
+    expect(hardTile(aru)).toEqual({
       amount: "1個所",
-      text: "固有3 120文字",
-      title: lines("アルの神名文字", "星: 固有3", "所持: 80", "任務 Hard: 18-3", "1日 60 AP"),
+      text: "固有3 148文字",
+      title: lines("アルの神名文字", "星: 固有3", "所持: 148", "任務 Hard: 18-3", "1日 60 AP"),
     });
-    const yuuka = { ...card, stages: ["1-1", "4-3", "12-2"], ap: 180, star: 2, left: 1280 };
+    const yuuka = {
+      ...card,
+      stages: ["1-1", "4-3", "12-2"],
+      ap: 180,
+      star: 2,
+      held: { exact: 1280 },
+    };
     expect(hardTile(yuuka)).toMatchObject({ amount: "3個所", text: "★2 1,280文字" });
     expect(hardTile(yuuka).title).toContain("任務 Hard: 1-1、4-3、12-2");
-    // A student never read; one at 固有4, who takes no more.
-    const unread = { ...card, star: null, left: null, held: null };
-    expect(hardTile(unread)).toMatchObject({ text: "未読み取り" });
-    expect(hardTile(unread).title).toContain("所持: ?");
-    expect(hardTile({ ...card, star: 8, left: 0, done: true }).text).toBe("固有4");
+    // A student never read, the item list never read; one at 固有4.
+    const unread = { ...card, star: null, held: null };
+    expect(hardTile(unread)).toMatchObject({ text: "? ?文字" });
+    expect(hardTile(unread).title).toContain("星: 未読み取り\n所持: ?");
+    expect(hardTile({ ...card, star: 8, done: true }).text).toBe("固有4 80文字");
   });
 
   it("counts a day's AP of the students reserved, those at 固有4 left out", () => {

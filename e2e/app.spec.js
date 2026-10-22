@@ -1379,7 +1379,6 @@ test("reserves a hard mission's eleph, the day's AP it takes red in the hard mis
     stages: ["18-3"],
     ap: 60,
     star: 7,
-    left: 120,
     held: { exact: 80 },
     done: false,
     reserved: false,
@@ -1391,10 +1390,9 @@ test("reserves a hard mission's eleph, the day's AP it takes red in the hard mis
       stages: ["1-1", "4-3", "12-2"],
       ap: 180,
       star: 2,
-      left: 1280,
       reserved: reserved.includes(13010),
     }),
-    card(16000, "ハルカの神名文字", { star: 8, left: 0, done: true }),
+    card(16000, "ハルカの神名文字", { star: 8, done: true }),
   ];
   const snapshot = { status: reading("shops"), items, equipment, work, hard: hard([]) };
   await open(page, snapshot, "お仕事");
@@ -1405,7 +1403,7 @@ test("reserves a hard mission's eleph, the day's AP it takes red in the hard mis
   // and the elephs short of 固有4 in the place of the price; 固有4 greyed, last.
   const cards = page.locator(".work details", { hasText: "任務 Hard" }).locator("li");
   await expect(cards.locator(".count")).toHaveText(["1個所", "3個所", "1個所"]);
-  await expect(cards.locator(".offer")).toHaveText(["固有3 120文字", "★2 1,280文字", "固有4"]);
+  await expect(cards.locator(".offer")).toHaveText(["固有3 80文字", "★2 80文字", "固有4 80文字"]);
   await expect(cards.last()).toHaveClass(/sold/);
   await expect(cards.first()).toHaveCSS("background-color", await colorOf(page, "--c-eleph"));
   const aru = page.getByRole("button", { name: /アルの神名文字/ });

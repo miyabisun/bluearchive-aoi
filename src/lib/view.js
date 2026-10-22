@@ -711,19 +711,20 @@ export const heldText = (held) => (held == null ? "—" : formatCount(held));
  * A hard missions' card (the user's of 2026-10-22), as a month-end card
  * shows a good: in the place of "×5" how many missions drop the student's
  * eleph ("3個所"), in the place of the price the student's star and the
- * elephs short of 固有4 ("固有3 120文字", "未読み取り" for a student never
- * read, "固有4" once there); and its hover: the eleph, the star, how many are
- * held, the missions and a day's AP playing them.
+ * elephs held ("固有3 148文字", "?" for what was never read: the count held,
+ * as the user corrected the same day, not what 固有4 still takes); and its
+ * hover: the eleph, the star, how many are held, the missions and a day's AP
+ * playing them.
  */
 export function hardTile(card) {
-  const star = card.star == null ? "未読み取り" : starName(card.star);
+  const held = card.held == null ? "?" : formatCount(card.held);
   return {
     amount: `${card.stages.length}個所`,
-    text: card.done ? "固有4" : card.star == null ? star : `${star} ${exact.format(card.left)}文字`,
+    text: `${card.star == null ? "?" : starName(card.star)} ${held}文字`,
     title: [
       card.name,
-      `星: ${star}`,
-      `所持: ${card.held == null ? "?" : formatCount(card.held)}`,
+      `星: ${card.star == null ? "未読み取り" : starName(card.star)}`,
+      `所持: ${held}`,
       `任務 Hard: ${card.stages.join("、")}`,
       `1日 ${exact.format(card.ap)} AP`,
     ].join("\n"),

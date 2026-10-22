@@ -20,8 +20,8 @@ fn each_students_eleph_shows_the_hard_missions_dropping_it() {
     assert_eq!(aru.ap, 20 * 3);
     // Those who come with three stars first: アリス, then アル by name.
     assert_eq!((cards[0].id, cards[1].id), (10015, 10000));
-    // Never read, a student's star and what it takes are unknown.
-    assert_eq!((aru.star, aru.left), (None, None));
+    // Never read, a student's star is unknown.
+    assert_eq!(aru.star, None);
 }
 
 #[test]

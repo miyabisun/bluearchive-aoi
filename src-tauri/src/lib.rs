@@ -460,7 +460,6 @@ impl Recognizer {
                     .find(|g| g.id == id)
                     .map_or(0, |g| g.star),
                 now,
-                to_top: now.map(|star| plan::elephs_to_top(star, &self.planner.growth)),
             }
         };
         let reserved = |id| {

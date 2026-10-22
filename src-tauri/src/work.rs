@@ -55,21 +55,19 @@ pub const AP: &str = "AP";
 /// How many times a day a hard mission may be played (the game's rule).
 pub const HARD_RUNS: u32 = 3;
 
-/// A student as the hard missions' cards order and count them: their name,
-/// the stars they come with (1 to 3), their star now (`plan::star_of`, `None`
-/// unread) and the elephs that star takes to the weapon's fourth.
+/// A student as the hard missions' cards order them: their name, the stars
+/// they come with (1 to 3) and their star now (`plan::star_of`, `None` unread).
 pub struct HardStudent {
     pub name: String,
     pub first: u8,
     pub now: Option<u8>,
-    pub to_top: Option<u64>,
 }
 
 /// A student's eleph the hard missions drop, as the work tab's card shows it:
 /// the eleph, the missions dropping it, a day's AP playing each of them
-/// `HARD_RUNS` times, the student's star now and the elephs short of the
-/// weapon's fourth past those held (`None` unread), how many are held,
-/// whether the weapon's fourth is reached and whether the card is reserved.
+/// `HARD_RUNS` times, the student's star now (`None` unread), how many are
+/// held, whether the weapon's fourth is reached and whether the card is
+/// reserved.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct HardCard {
     pub id: i64,
@@ -78,7 +76,6 @@ pub struct HardCard {
     pub stages: Vec<String>,
     pub ap: u32,
     pub star: Option<u8>,
-    pub left: Option<u64>,
     pub held: Option<Count>,
     pub done: bool,
     pub reserved: bool,
@@ -115,7 +112,6 @@ pub fn hard<'a, S: BuildHasher>(
                 stages: vec![mission.name.clone()],
                 ap: day,
                 star: who.now,
-                left: who.to_top.map(|top| top.saturating_sub(amount(count).0)),
                 held: count,
                 done,
                 reserved: reserved(entry.id),
@@ -1331,17 +1327,16 @@ mod tests {
         // アル comes with three stars and is at the weapon's third, with 80 elephs held;
         // ユウカ at ★2; ジュンコ never read; ハルカ done.
         let student = |id| {
-            let (name, first, now, to_top) = match id {
-                10000 => ("アル", 3, Some(7), Some(200)),
-                10010 => ("ユウカ", 1, Some(2), Some(800)),
-                13010 => ("ジュンコ", 2, None, None),
-                _ => ("ハルカ", 3, Some(8), Some(0)),
+            let (name, first, now) = match id {
+                10000 => ("アル", 3, Some(7)),
+                10010 => ("ユウカ", 1, Some(2)),
+                13010 => ("ジュンコ", 2, None),
+                _ => ("ハルカ", 3, Some(8)),
             };
             HardStudent {
                 name: name.into(),
                 first,
                 now,
-                to_top,
             }
         };
         let held = HashMap::from([(10000, Count::Exact(80))]);
@@ -1351,16 +1346,19 @@ mod tests {
         assert_eq!(order, [10000, 13010, 10010, 16000]);
         let aru = &cards[0];
         assert_eq!(
-            (aru.stages.clone(), aru.ap, aru.star, aru.left, aru.done),
-            (vec!["18-3".to_owned()], 60, Some(7), Some(120), false)
+            (aru.stages.clone(), aru.ap, aru.star, aru.held, aru.done),
+            (
+                vec!["18-3".to_owned()],
+                60,
+                Some(7),
+                Some(Count::Exact(80)),
+                false
+            )
         );
         let yuuka = &cards[2];
         assert_eq!(yuuka.stages, ["1-3", "4-2", "12-1"]);
-        assert_eq!(
-            (yuuka.ap, yuuka.left, yuuka.reserved),
-            (180, Some(800), true)
-        );
-        assert_eq!((cards[1].star, cards[1].left), (None, None));
+        assert_eq!((yuuka.ap, yuuka.held, yuuka.reserved), (180, None, true));
+        assert_eq!(cards[1].star, None);
         assert!(cards[3].done && !cards[0].reserved);
         assert_eq!(aru.icon, "icon_10000");
     }
