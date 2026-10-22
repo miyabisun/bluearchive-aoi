@@ -527,8 +527,8 @@ test("shows the students read from the student screen", async ({ page }) => {
   const student = page.locator("tbody tr").nth(1).getByRole("img", { name: "★3" });
   await expect(student.locator("svg.star")).toHaveCount(3);
   await expect(student.locator("use").first()).toHaveAttribute("href", "#star-student");
-  // Overlapping as the game's: left edges 0.833 of a star's ink apart for the student's,
-  // 1.032 for the weapon's (the ink 28/32 of the box drawn).
+  // Overlapping as the game's student's stars: left edges 0.833 of a star's ink apart,
+  // the weapon's alike (the user's of 2026-10-22; the ink 28/32 of the box drawn).
   const pitch = async (row) => {
     const [a, b] = await row
       .locator("svg.star")
@@ -536,7 +536,7 @@ test("shows the students read from the student screen", async ({ page }) => {
     return (b.left - a.left) / ((a.height * 28) / 32);
   };
   expect(await pitch(student)).toBeCloseTo(0.833, 2);
-  expect(await pitch(weapon)).toBeCloseTo(1.032, 2);
+  expect(await pitch(weapon)).toBeCloseTo(0.833, 2);
   // The colours are the game's, whatever the theme.
   const fill = (id) =>
     page.locator(`#${id} stop`).evaluateAll((s) => s.map((e) => e.getAttribute("stop-color")));
@@ -905,7 +905,9 @@ test("shows the targets and what they take against what is held", async ({ page 
   const row = page.locator("table.targets tbody tr");
   await expect(row.locator("td.name")).toHaveText("アカネ（バニーガール）");
   // The value read over each target, without an arrow.
-  await expect(row.locator(".now")).toHaveText(["?", "★3", "2", "3", "3", "6", "4", "?", "3"]);
+  await expect(row.locator(".now")).toHaveText(["?", "", "2", "3", "3", "6", "4", "?", "3"]);
+  // The star read drawn as the game's.
+  await expect(row.locator(".now").nth(1).getByRole("img", { name: "★3" })).toBeVisible();
   await expect(page.getByText("アカネ（バニーガール）: Lv・装備2 は数えられません")).toBeVisible();
   await expect(page.locator("table.plan tbody tr")).toHaveText([
     "クレジット1.5M244.7M足りる",
@@ -1154,11 +1156,33 @@ test("a star is chosen from the student's on, and kept while the game is read", 
   };
   await open(page, snapshot);
   await page.getByRole("tab", { name: "育成" }).click();
-  const star = page.getByLabel("アカネ（バニーガール）の星の目標");
-  // Never chosen, the target stays at the student's star; none below it.
-  await expect(star).toHaveValue("3");
-  await expect(star.locator("option:disabled")).toHaveText(["★1", "★2"]);
-  await star.selectOption({ label: "固有2" });
+  const star = page.getByRole("button", { name: "アカネ（バニーガール）の星の目標" });
+  // Never chosen, the target stays at the student's star, drawn as the game's.
+  await expect(star.getByRole("img", { name: "★3" })).toBeVisible();
+  await star.click();
+  const menu = page.getByRole("menu", { name: "アカネ（バニーガール）の星の目標" });
+  const choices = menu.getByRole("menuitemradio");
+  await expect(choices).toHaveCount(8);
+  // Every star drawn, none below the student's now; the target ticked.
+  const names = await choices.evaluateAll((b) => b.map((e) => e.ariaLabel));
+  expect(names).toEqual(["★1", "★2", "★3", "★4", "固有1", "固有2", "固有3", "固有4"]);
+  await expect(menu.locator("[role=menuitemradio]:disabled")).toHaveCount(2);
+  await expect(menu.getByRole("menuitemradio", { name: "★3" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await expect(menu.getByRole("menuitemradio", { name: "固有2" }).getByRole("img")).toHaveCount(1);
+  // Open through the frames that keep coming, and over the table rather than cut by it.
+  for (let frame = 0; frame < 3; frame++) {
+    await page.evaluate(
+      (s) => window.__AOI_PUSH__({ ...s, status: { ...s.status, fps: 9 } }),
+      snapshot,
+    );
+  }
+  await expect(menu).toBeVisible();
+  await expect(menu).toBeInViewport({ ratio: 1 });
+  await menu.getByRole("menuitemradio", { name: "固有2" }).click();
+  await expect(menu).toBeHidden();
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([
     { id: 20019, target: { ...target, star: 6 } },
   ]);
@@ -1179,7 +1203,18 @@ test("a star is chosen from the student's on, and kept while the game is read", 
       }),
     snapshot,
   );
-  await expect(star).toHaveValue("6");
+  await expect(star.getByRole("img", { name: "固有2" })).toBeVisible();
+  // From the keyboard: open on the target, Escape back to the button; a click outside closes.
+  await star.focus();
+  await page.keyboard.press("Enter");
+  await expect(menu.getByRole("menuitemradio", { name: "固有2" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(star).toBeFocused();
+  await star.click();
+  await expect(menu).toBeVisible();
+  await page.locator("h2", { hasText: "必要素材" }).click();
+  await expect(menu).toBeHidden();
 });
 
 test("guides to the student tab before any student is marked", async ({ page }) => {

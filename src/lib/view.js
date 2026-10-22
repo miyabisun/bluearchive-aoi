@@ -476,6 +476,26 @@ export function tierCell(row) {
  */
 export const starName = (star) => (star <= 4 ? `★${star}` : `固有${star - 4}`);
 
+/** The stars a target may be, ★1 to 固有4, none below the student's star `now` (`null`: any). */
+export const starChoices = (now) =>
+  [1, 2, 3, 4, 5, 6, 7, 8].map((star) => ({ star, disabled: now != null && star < now }));
+
+/**
+ * Where a menu (its `menu` width and height) opens by its button (`anchor`'s
+ * top, bottom and left) in the window (`viewport`'s width and height): under
+ * it, over it where the window ends first, and from the window's top where it
+ * fits neither; at the button's left, short of the window's right edge; 4 px
+ * off the button and the edges.
+ */
+export function menuPlace(anchor, viewport, menu) {
+  const gap = 4;
+  const left = Math.max(gap, Math.min(anchor.left, viewport.width - gap - menu.width));
+  const below = anchor.bottom + gap;
+  if (below + menu.height <= viewport.height) return { left, top: below };
+  const above = anchor.top - gap - menu.height;
+  return { left, top: above >= 0 ? above : gap };
+}
+
 /**
  * A star as the game draws it (the user's of 2026-10-22): the student's ★1 to
  * ★4 as so many yellow stars, 固有1 to 固有4 as so many of the unique weapon's

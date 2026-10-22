@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { fade } from "svelte/transition";
   import {
@@ -50,6 +50,8 @@
     step,
     shopStale,
     sortStudents,
+    menuPlace,
+    starChoices,
     starMarks,
     starName,
     starOf,
@@ -97,14 +99,43 @@
     setTarget(row.id, target);
   }
 
-  /** The stars a target can be: ★1 to ★5, then the unique weapon's 2 to 4. */
-  const STARS = [1, 2, 3, 4, 5, 6, 7, 8];
-
   /** Sets a target's star (kept as the student's while never chosen). */
   function restar(row, value) {
     const target = structuredClone($state.snapshot(row.target));
     target.star = Number(value);
     setTarget(row.id, target);
+  }
+
+  /**
+   * The star menu open by a target (its student's id) and where, none while
+   * closed: kept here, so the snapshots of every frame leave it open.
+   */
+  let starMenu = $state(/** @type {{ id: number, left: number, top: number } | null} */ (null));
+  /** The menu itself, and the button that opened it, given the focus back as it closes. */
+  let starList = $state(/** @type {HTMLElement | undefined} */ (undefined));
+  let starButton = /** @type {HTMLElement | null} */ (null);
+  /** The menu's size: eight stars a row 30 px tall with its padding and border, a tick and four stars wide. */
+  const STAR_MENU = { width: 100, height: 8 * 30 + 10 };
+
+  /** Opens the star menu by a target's button, the target's star in focus; again, closes it. */
+  async function openStars(event, row) {
+    if (starMenu?.id === row.id) return closeStars();
+    starButton = event.currentTarget;
+    const at = starButton.getBoundingClientRect();
+    const window = { width: innerWidth, height: innerHeight };
+    starMenu = { id: row.id, ...menuPlace(at, window, STAR_MENU) };
+    await tick();
+    // The target's star, else the first that may be chosen.
+    const into = (/** @type {string} */ selector) =>
+      /** @type {HTMLElement | null | undefined} */ (starList?.querySelector(selector));
+    (
+      into('[aria-checked="true"]:not(:disabled)') ?? into('[role="menuitemradio"]:not(:disabled)')
+    )?.focus();
+  }
+
+  function closeStars(refocus = false) {
+    starMenu = null;
+    if (refocus) starButton?.focus();
   }
 
   /** The student table's columns after the name, each sorting by its key. */
@@ -361,10 +392,13 @@
 
 <svelte:window
   onclick={(event) => {
-    if (menuOpen && !(/** @type {Element} */ (event.target).closest(".menu"))) menuOpen = false;
+    const at = /** @type {Element} */ (event.target);
+    if (menuOpen && !at.closest(".menu")) menuOpen = false;
+    if (starMenu && !at.closest(".star-menu, .star-pick")) closeStars();
   }}
   onkeydown={(event) => {
     if (menuOpen && event.key === "Escape") menuOpen = false;
+    if (starMenu && event.key === "Escape") closeStars(true);
   }}
 />
 
@@ -605,7 +639,8 @@
       {#if targetRows.length === 0}
         <p class="empty" data-state="empty">{EMPTY.plan}</p>
       {:else}
-        <div class="table-scroll">
+        <!-- Scrolled, the star menu would stay where its button was: closed instead. -->
+        <div class="table-scroll" onscroll={() => starMenu && closeStars()}>
           <!-- The plan counts from what was read when the app started or 再読込 was pressed. -->
           <div class="section-head">
             <h2 class="section">既存の生徒一覧</h2>
@@ -646,19 +681,25 @@
                     {#if column.star}
                       {@const now = row.training ? starOf(row.training) : null}
                       {@const to = row.target.star ?? now}
+                      <!-- The star read and the target's, drawn as the game's: the target a button
+                           opening the star menu (an <option> holds no picture). -->
                       <td>
-                        <span class="now">{now === null ? "?" : starName(now)}</span><select
-                          value={to ?? ""}
+                        <span class="now"
+                          >{#if now === null}?{:else}{@render stars(now)}{/if}</span
+                        ><button
+                          type="button"
+                          class="star-pick"
                           aria-label="{row.name}の星の目標"
-                          onchange={(event) => restar(row, event.currentTarget.value)}
+                          aria-haspopup="menu"
+                          aria-expanded={starMenu?.id === row.id}
+                          onclick={(event) => openStars(event, row)}
+                          >{#if to === null}?{:else}{@render stars(to)}{/if}<svg
+                            viewBox="0 0 12 12"
+                            width="10"
+                            height="10"
+                            aria-hidden="true"><path d="M2 4l4 5 4-5z" fill="currentColor" /></svg
+                          ></button
                         >
-                          {#if to === null}<option value="">?</option>{/if}
-                          {#each STARS as star (star)}
-                            <option value={star} disabled={now !== null && star < now}
-                              >{starName(star)}</option
-                            >
-                          {/each}
-                        </select>
                       </td>
                     {:else}
                       <td>
@@ -1475,6 +1516,38 @@
   </div>
 </main>
 
+<!-- The star menu of a target, over the page by its button so the table's box cuts none of
+     it: every star drawn as the game's, none below the student's now, the target ticked. -->
+{#if starMenu}
+  {@const row = targetRows.find((r) => r.id === starMenu?.id)}
+  {#if row}
+    {@const now = row.training ? starOf(row.training) : null}
+    {@const to = row.target.star ?? now}
+    <div
+      class="star-menu"
+      role="menu"
+      aria-label="{row.name}の星の目標"
+      bind:this={starList}
+      style:left="{starMenu.left}px"
+      style:top="{starMenu.top}px"
+    >
+      {#each starChoices(now) as choice (choice.star)}
+        <button
+          type="button"
+          role="menuitemradio"
+          aria-checked={to === choice.star}
+          aria-label={starName(choice.star)}
+          disabled={choice.disabled}
+          onclick={() => {
+            restar(row, choice.star);
+            closeStars(true);
+          }}>{@render stars(choice.star)}</button
+        >
+      {/each}
+    </div>
+  {/if}
+{/if}
+
 <!-- The link to a phone: paired by a QR code, then connected or not. -->
 <dialog class="phone" bind:this={phoneDialog} aria-labelledby="phone-heading">
   <h2 id="phone-heading">Androidとの通信</h2>
@@ -2148,7 +2221,7 @@
       color: var(--c-muted)
       font-size: var(--fs-caption)
       font-variant-numeric: tabular-nums
-    input, select
+    input
       box-sizing: border-box
       width: 3em
       padding: 2px var(--sp-1)
@@ -2160,9 +2233,58 @@
       font-variant-numeric: tabular-nums
       &:focus
         border-color: var(--c-accent)
-    // As wide as its longest star.
-    select
-      width: auto
+    // A target's star: its stars on a field's face, opening the star menu.
+    .star-pick
+      display: inline-flex
+      align-items: center
+      gap: var(--sp-1)
+      padding: 2px var(--sp-1)
+      border: 1px solid var(--c-border)
+      border-radius: var(--radius-sm)
+      background: var(--c-surface)
+      color: var(--c-muted)
+      font: inherit
+      font-size: var(--fs-sm)
+      white-space: nowrap
+      cursor: pointer
+      &:focus
+        border-color: var(--c-accent)
+
+  // The star menu: the header menu's face, over the page by its button; a star a row,
+  // the target ticked, those below the student's now dimmed.
+  .star-menu
+    position: fixed
+    z-index: 2
+    display: flex
+    flex-direction: column
+    padding: var(--sp-1) 0
+    border: 1px solid var(--c-border)
+    border-radius: var(--radius-sm)
+    background: var(--c-surface)
+    button
+      display: flex
+      align-items: center
+      height: 30px
+      padding: 0 var(--sp-3) 0 var(--sp-2)
+      border: 0
+      background: none
+      color: var(--c-on-surface)
+      font: inherit
+      font-size: var(--fs-sm)
+      text-align: left
+      cursor: pointer
+      &:hover:not(:disabled)
+        background: var(--c-wash-base)
+      &:disabled
+        opacity: 0.35
+        cursor: default
+      &::before
+        content: "✓"
+        display: inline-block
+        width: 1.4em
+        visibility: hidden
+      &[aria-checked="true"]::before
+        visibility: visible
 
   // Narrower than its numbers, the table scrolls sideways rather than squeeze the names.
   :is(.plan, .procure) :is(th, td):first-child
@@ -2474,9 +2596,10 @@
     white-space: nowrap
 
   // The game's stars in a row, a star's ink 1em square in a box 32/28 of it with
-  // room for the rim. They overlap as the game's: their left edges 0.833 of a star
-  // apart for the student's (23.3 px on 28), 1.032 for the weapon's (28.9 on 28),
-  // measured on 2026-10-22 at 1240 high.
+  // room for the rim. They overlap as the game's student's stars: their left edges
+  // 0.833 of a star apart (23.3 px on 28, measured on 2026-10-22 at 1240 high). The
+  // weapon's alike, though the game spaces them wider (1.032): in a table the user
+  // sees no point in telling them apart (the user's of 2026-10-22).
   .star-defs
     position: absolute
     width: 0
@@ -2490,10 +2613,8 @@
       flex: none
       width: calc(32em / 28)
       height: calc(32em / 28)
-    &[data-kind="student"] .star + .star
+    .star + .star
       margin-left: calc(0.833em - 32em / 28)
-    &[data-kind="weapon"] .star + .star
-      margin-left: calc(1.032em - 32em / 28)
 
   .tiles
     display: grid

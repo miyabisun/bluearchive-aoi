@@ -19,6 +19,8 @@ import {
   hardTile,
   hardCost,
   starMarks,
+  starChoices,
+  menuPlace,
   planCard,
   planCoin,
   planTitle,
@@ -453,6 +455,37 @@ describe("plan", () => {
     expect(starMarks(5)).toEqual({ kind: "weapon", places: [0], label: "固有1" });
     expect(starMarks(7)).toEqual({ kind: "weapon", places: [0, 1, 2], label: "固有3" });
     expect(starMarks(8).places).toHaveLength(4);
+  });
+
+  it("offers every star as a target, none below the student's now", () => {
+    expect(starChoices(3)).toEqual([
+      { star: 1, disabled: true },
+      { star: 2, disabled: true },
+      { star: 3, disabled: false },
+      { star: 4, disabled: false },
+      { star: 5, disabled: false },
+      { star: 6, disabled: false },
+      { star: 7, disabled: false },
+      { star: 8, disabled: false },
+    ]);
+    // A star never read takes any.
+    expect(starChoices(null).every((c) => !c.disabled)).toBe(true);
+  });
+
+  it("opens a menu under its button, over it where the window ends first", () => {
+    const window = { width: 720, height: 800 };
+    const menu = { width: 100, height: 250 };
+    const button = { top: 100, bottom: 130, left: 40 };
+    expect(menuPlace(button, window, menu)).toEqual({ left: 40, top: 134 });
+    // 310 + 4 + 250 runs past 400: above the button instead.
+    const low = { top: 280, bottom: 310, left: 40 };
+    expect(menuPlace(low, { ...window, height: 400 }, menu)).toEqual({ left: 40, top: 26 });
+    // Nowhere whole: below, from the window's top at the least.
+    const short = { width: 720, height: 200 };
+    expect(menuPlace({ top: 20, bottom: 50, left: 0 }, short, menu)).toEqual({ left: 4, top: 4 });
+    // A button by the window's right edge: the menu kept inside it.
+    const right = { top: 100, bottom: 130, left: 300 };
+    expect(menuPlace(right, { width: 360, height: 800 }, menu)).toEqual({ left: 256, top: 134 });
   });
 
   it("counts a student's star on into the unique weapon's", () => {
