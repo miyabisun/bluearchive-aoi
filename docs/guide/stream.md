@@ -1,13 +1,12 @@
 ---
 title: 配信アプリでスマホの画面を送る
-movie: stream
 ---
 
 # 配信アプリでスマホの画面を送る
 
 iPhone の画面を、配信アプリ [Moblin](https://apps.apple.com/app/moblin/id6466745933)（無料）から、同じ Wi-Fi の PC（Windows・Mac）の Aoi に送ります。
 
-<div class="movie"></div>
+<div class="movie" data-spec="stream"></div>
 
 ## iPhone（Moblin）で送る
 

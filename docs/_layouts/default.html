@@ -317,7 +317,7 @@
       addEventListener("hashchange", openTarget);
       openTarget();
     </script>
-    {% if page.movie %}
+    {% if content contains 'class="movie"' %}
     <template id="player">
       <figure class="player">
         <svg role="img" aria-label="動く図。クリックで再生と一時停止"></svg>
@@ -359,13 +359,29 @@
       </figure>
     </template>
     <script>
-      // 本文の印 (<div class="movie"></div>) の場所にプレイヤーを置く
-      document
-        .querySelector(".movie")
-        .replaceWith(document.getElementById("player").content.cloneNode(true));
+      // 本文の印 (<div class="movie" data-spec="名前"></div>) の場所ごとにプレイヤーを置き、
+      // それぞれの spec を読み込んでから、図を描くエンジンを読み込む
+      {
+        const movies = "{{ '/movies/' | relative_url }}";
+        const load = (src) =>
+          new Promise((onload, onerror) =>
+            document.body.append(
+              Object.assign(document.createElement("script"), { src, onload, onerror }),
+            ),
+          );
+        const names = [...document.querySelectorAll(".movie[data-spec]")].map((slot) => {
+          const figure = document
+            .getElementById("player")
+            .content.firstElementChild.cloneNode(true);
+          figure.dataset.spec = slot.dataset.spec;
+          slot.replaceWith(figure);
+          return slot.dataset.spec;
+        });
+        Promise.all(names.map((name) => load(`${movies}${name}.js`))).then(() =>
+          load(`${movies}arch.js`),
+        );
+      }
     </script>
-    <script src="{{ '/movies/' | append: page.movie | append: '.js' | relative_url }}"></script>
-    <script src="{{ '/movies/arch.js' | relative_url }}"></script>
     {% endif %}
   </body>
 </html>

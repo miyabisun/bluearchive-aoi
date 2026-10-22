@@ -1,13 +1,12 @@
 ---
 title: Android のスマホの画面を読む
-movie: android
 ---
 
 # Android のスマホの画面を読む
 
 Android 版の画面を、USB ケーブルか Wi-Fi で PC（Windows・Mac）の Aoi に送ります。スマホにアプリを入れたり、ターミナルを開いたりする必要はありません。
 
-<div class="movie"></div>
+<div class="movie" data-spec="android"></div>
 
 ## 初めてつなぐ
 

@@ -1,13 +1,12 @@
 ---
 title: ゲームの画面を読ませる
-movie: reading
 ---
 
 # ゲームの画面を読ませる
 
 ゲームで一覧を開いて、ゆっくりスクロールするだけです。読めたものから Aoi のタブに並びます。
 
-<div class="movie"></div>
+<div class="movie" data-spec="reading"></div>
 
 先に Aoi とブルーアーカイブを起動しておきます（Aoi の入手は [ダウンロードと起動](https://github.com/miyabisun/bluearchive-aoi#ダウンロードと起動)）。読めているかは、Aoi の右上の表示で分かります（「アイテムを集計中」など。[表示の意味](trouble.md#右上の表示の意味)）。スマホで遊ぶときは、先にスマホの画面を Aoi に送っておきます（[Android](android.md)、[iPhone](stream.md)）。
 
