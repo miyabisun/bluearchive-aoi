@@ -13,7 +13,7 @@ use crate::{
     Item,
     plan::{BLUEPRINTS, Piece},
     quantity::Count,
-    work::{HeldCell, by_tier, slot_data},
+    work::{HeldCell, Raise, by_tier, raise, slot_data},
 };
 
 /// What a tiered skill material or an oopart is.
@@ -56,8 +56,8 @@ pub struct Kinds {
     /// Each oopart's tiers.
     pub ooparts: Vec<[Option<HeldCell>; 4]>,
     pub blueprints: Vec<SlotPrints>,
-    /// The enhancement materials' tiers, kind by kind (see `ENHANCEMENTS`).
-    pub enhancements: Vec<[Option<HeldCell>; 4]>,
+    /// The enhancement materials, kind by kind (see `ENHANCEMENTS`).
+    pub enhancements: Vec<Enhancement>,
 }
 
 /// A school's skill materials by tier: its name, the icon of its emblem
@@ -188,12 +188,31 @@ const ENHANCEMENTS: [&str; 5] = [
     "WeaponExpGrowthZ",
 ];
 
-/// The enhancement materials of `equipment`, a kind's tiers a row, in the
-/// order of `ENHANCEMENTS`.
+/// A kind of enhancement material: its category, its tiers held, and how many
+/// students what is held raises, as the work tab counts the orbs and the
+/// scrimmages' parts (the user's of 2026-10-22: 「生徒何人分？」).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Enhancement {
+    pub category: String,
+    pub tiers: [Option<HeldCell>; 4],
+    pub raise: Raise,
+}
+
+/// What a kind of enhancement material feeds: the exp of one of each tier
+/// (`(id, exp)`), the rate it is taken at and what one student takes.
+pub struct Feed {
+    pub exp: Vec<(i64, u64)>,
+    pub rate: f64,
+    pub each: u64,
+}
+
+/// The enhancement materials of `equipment`, a kind a row, in the order of
+/// `ENHANCEMENTS`, each raising as its category's `feed` tells.
 pub fn enhancements<S: BuildHasher>(
     equipment: &[Item],
     held: &HashMap<i64, Count, S>,
-) -> Vec<[Option<HeldCell>; 4]> {
+    feed: impl Fn(&str) -> Feed,
+) -> Vec<Enhancement> {
     let none = HashMap::<i64, u64>::new();
     let mut rows = by_tier(
         equipment,
@@ -206,7 +225,16 @@ pub fn enhancements<S: BuildHasher>(
         &none,
     );
     rows.sort_by_key(|(kind, _)| ENHANCEMENTS.iter().position(|k| k == kind));
-    rows.into_iter().map(|(_, tiers)| tiers).collect()
+    rows.into_iter()
+        .map(|(category, tiers)| {
+            let feed = feed(&category);
+            Enhancement {
+                raise: raise(&feed.exp, feed.rate, feed.each, held),
+                category,
+                tiers,
+            }
+        })
+        .collect()
 }
 
 /// Each slot's T1 piece and blueprints (see `SlotPrints`), in the order of
@@ -457,10 +485,29 @@ mod tests {
             entry(4, "Exp", Rarity::SSR),
         ];
         let held = HashMap::from([(4, Count::Thousands(2)), (13, Count::Exact(7))]);
-        let rows: Vec<_> = enhancements(&equipment, &held)
+        // The orbs fed at 1,000 exp a top tier to students taking 500; the springs at
+        // 1,000 exp a titanium one, 1.5 times, to weapons taking 1,000.
+        let feed = |category: &str| match category {
+            "Exp" => Feed {
+                exp: vec![(1, 10), (4, 1000)],
+                rate: 1.0,
+                each: 500,
+            },
+            _ => Feed {
+                exp: vec![(10, 10), (13, 1000)],
+                rate: 1.5,
+                each: 1000,
+            },
+        };
+        let enhancements = enhancements(&equipment, &held, feed);
+        let raised: Vec<_> = enhancements
             .iter()
-            .map(|r| cells(r))
+            .map(|e| (e.category.as_str(), e.raise.students))
+            .take(2)
             .collect();
+        assert_eq!(raised, [("Exp", 4000.0), ("WeaponExpGrowthA", 10.5)]);
+        assert!(enhancements[0].raise.about);
+        let rows: Vec<_> = enhancements.iter().map(|e| cells(&e.tiers)).collect();
         assert_eq!(
             rows,
             [

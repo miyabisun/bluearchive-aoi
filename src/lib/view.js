@@ -617,6 +617,29 @@ export function commissionCells(c) {
 }
 
 /**
+ * How a raise (see `work::Raise`) comes: the exp held ("約" where it is
+ * about), times the rate it is taken at where that is not 1, over what one
+ * student takes, the counts written by `format`.
+ */
+function raiseDetail({ exp, about, rate = 1, exp_each }, format) {
+  const times = rate === 1 ? "" : ` × ${rate}`;
+  return `${about ? "約" : ""}${format(exp)} EXP${times} ÷ ${format(exp_each)} EXP`;
+}
+
+/**
+ * A kind of enhancement material in the equipment tab: how many students
+ * what is held raises ("6.6人分", the user's 「生徒何人分」 of 2026-10-22), and
+ * how, as the work tab counts it: the orbs in millions as its normal items
+ * shop, the parts as its scrimmages.
+ */
+export function enhancementCells({ category, raise }) {
+  return {
+    students: `${tenths.format(raise.students)}人分`,
+    detail: raiseDetail(raise, category === "Exp" ? millions : (n) => exact.format(n)),
+  };
+}
+
+/**
  * The normal items shop's daily buys against a student raised from Lv1: how
  * many students the credits and the enhancement orbs held raise (`orbs`,
  * their exp over a student's T1 to T10), and which raises fewer, none when
@@ -630,7 +653,7 @@ export function orbCells(c, orbs) {
     orbs: {
       name: "強化珠",
       students: `${tenths.format(raised)}人分`,
-      detail: `${orbs.about ? "約" : ""}${millions(orbs.exp)} EXP ÷ ${millions(orbs.exp_each)} EXP`,
+      detail: raiseDetail(orbs, millions),
     },
     fewer:
       c.credit_students == null || c.credit_students === raised
@@ -722,7 +745,7 @@ export function schoolCells(row) {
   if (row.first) why.push("最も少ないので先に回します");
   return {
     students,
-    detail: `${row.about ? "約" : ""}${exact.format(row.exp)} EXP × ${row.rate} ÷ ${exact.format(row.exp_each)} EXP`,
+    detail: raiseDetail(row, (n) => exact.format(n)),
     first: row.first,
     why: why.join(String.fromCharCode(10)),
   };

@@ -20,6 +20,7 @@
   import {
     LISTS,
     commissionCells,
+    enhancementCells,
     blueprintCells,
     castLine,
     castNote,
@@ -1141,13 +1142,31 @@
             {/each}
           </table>
         </div>
-      {:else if sub === "ooparts" || sub === "enhancements"}
-        <!-- An oopart, or a kind of enhancement material, a row, its tiers on their colours. -->
+      {:else if sub === "ooparts"}
+        <!-- An oopart a row, its tiers on their colours. -->
         <div class="table-scroll" data-state="success">
-          <table class="tiers stock {sub}">
+          <table class="tiers stock ooparts">
             <tbody>
-              {#each kinds[sub] as tiers, k (k)}
+              {#each kinds.ooparts as tiers, k (k)}
                 <tr>{@render heldTiers(tiers)}</tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {:else if sub === "enhancements"}
+        <!-- A kind of enhancement material a row: its tiers on their colours, then how many
+             students what is held raises, and how, as the work tab counts it. -->
+        <div class="table-scroll" data-state="success">
+          <table class="tiers stock enhancements">
+            <tbody>
+              {#each kinds.enhancements as row (row.category)}
+                {@const cells = enhancementCells(row)}
+                <tr>
+                  {@render heldTiers(row.tiers)}
+                  <td class="raise"
+                    ><strong>{cells.students}</strong><span class="detail">{cells.detail}</span></td
+                  >
+                </tr>
               {/each}
             </tbody>
           </table>
@@ -2167,6 +2186,20 @@
         filter: var(--emblem-filter)
     tbody:not(:last-child) :is(tr:last-child > td, .emblem)
       border-bottom-width: var(--sp-2)
+
+  // How many students a kind of enhancement material raises, its terms under it, at
+  // the row's right end.
+  .enhancements .raise
+    width: 1%
+    padding-left: var(--sp-3)
+    text-align: right
+    white-space: nowrap
+    font-variant-numeric: tabular-nums
+    strong, .detail
+      display: block
+    .detail
+      color: var(--c-muted)
+      font-size: var(--fs-caption)
 
   // A slot's T1 pieces and blueprints held: a tier a column, the counts at the right.
   .prints

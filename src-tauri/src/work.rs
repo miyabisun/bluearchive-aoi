@@ -63,7 +63,7 @@ pub struct WorkRows {
     pub bounties: Vec<PlaceRow>,
     pub scrimmages: Vec<PlaceRow>,
     pub commissions: CommissionRow,
-    pub orbs: OrbRow,
+    pub orbs: Raise,
     /// The scrimmages' schools, as `scrimmages` lists them.
     pub schools: Vec<SchoolRow>,
 }
@@ -722,13 +722,13 @@ pub fn school_rows<S: BuildHasher>(
                 .copied()
                 .filter(|(id, _)| school.drops.contains(id))
                 .collect();
-            let (exp, about) = exp_held(&dropped, held);
+            let raised = raise(&dropped, school.rate, each, held);
             SchoolRow {
-                exp,
-                about,
-                rate: school.rate,
-                exp_each: each,
-                students: per(exp, each) * school.rate,
+                exp: raised.exp,
+                about: raised.about,
+                rate: raised.rate,
+                exp_each: raised.exp_each,
+                students: raised.students,
                 share: school.share,
                 first: false,
             }
@@ -749,15 +749,34 @@ pub fn school_rows<S: BuildHasher>(
     rows
 }
 
-/// The enhancement orbs held against what one student's equipment takes:
-/// their exp, whether only about, the exp a student takes and how many
-/// students the orbs raise.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct OrbRow {
+/// Materials held against what one student takes of them: their exp, whether
+/// only about, the rate it is taken at, the exp a student takes and how many
+/// students the materials raise.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct Raise {
     pub exp: u64,
     pub about: bool,
+    pub rate: f64,
     pub exp_each: u64,
     pub students: f64,
+}
+
+/// The `materials` (`(id, exp of one)`) held as `Raise` tells, taken at
+/// `rate`, a student taking `each`.
+pub fn raise<S: BuildHasher>(
+    materials: &[(i64, u64)],
+    rate: f64,
+    each: u64,
+    held: &HashMap<i64, Count, S>,
+) -> Raise {
+    let (exp, about) = exp_held(materials, held);
+    Raise {
+        exp,
+        about,
+        rate,
+        exp_each: each,
+        students: per(exp, each) * rate,
+    }
 }
 
 /// The orb exp a student's three slots take from T1 to T10: every tier from
@@ -772,19 +791,13 @@ pub fn orbs_each(equipment_exp: &[Vec<u64>], tops: &[u8], orbs: &[(i64, u64)]) -
     3 * slot
 }
 
-/// The orbs (`(item, exp of one)`) as `OrbRow` tells, a student taking `each`.
+/// The orbs (`(item, exp of one)`) as `Raise` tells, a student taking `each`.
 pub fn orbs<S: BuildHasher>(
     orbs: &[(i64, u64)],
     each: u64,
     held: &HashMap<i64, Count, S>,
-) -> OrbRow {
-    let (exp, about) = exp_held(orbs, held);
-    OrbRow {
-        exp,
-        about,
-        exp_each: each,
-        students: per(exp, each),
-    }
+) -> Raise {
+    raise(orbs, 1.0, each, held)
 }
 
 #[cfg(test)]
@@ -1201,6 +1214,20 @@ mod tests {
 
     /// A student's three slots each level every tier from Lv1 to its top, fed
     /// in orbs; the orbs held count as so many students.
+    #[test]
+    fn a_raise_counts_the_students_the_exp_held_raises_at_its_rate() {
+        // Two titanium springs (1,000 exp each) and about 1,000 rusty ones (10 each),
+        // taken at 1.5 by a weapon that takes 4,000.
+        let held = HashMap::from([(13, Count::Exact(2)), (10, Count::Thousands(1))]);
+        let row = raise(&[(10, 10), (13, 1000)], 1.5, 4000, &held);
+        assert_eq!(
+            (row.exp, row.about, row.rate, row.exp_each),
+            (12_000, true, 1.5, 4000)
+        );
+        assert!((row.students - 4.5).abs() < 1e-9, "{}", row.students);
+        assert!(raise(&[(10, 10)], 1.5, 0, &held).students.abs() < 1e-9);
+    }
+
     #[test]
     fn the_orbs_count_the_students_whose_equipment_they_raise() {
         // Tier 1 takes 15 exp to its top, tier 2 50, fed 10 at a time.

@@ -169,12 +169,22 @@ const kinds = {
     ],
   ],
   enhancements: [
-    ["強化珠", "スプリング"].map((kind, k) =>
-      [0, 1, 2, 3].map((t) =>
-        heldCell(k * 10 + t + 1, `${kind}${t}`, `equipment_icon_exp_${t}`, { exact: 100 * k + t }),
-      ),
+    {
+      category: "Exp",
+      raise: { exp: 5700780, about: true, rate: 1, exp_each: 741690, students: 7.686 },
+    },
+    {
+      category: "WeaponExpGrowthA",
+      raise: { exp: 220280, about: false, rate: 1.5, exp_each: 49605, students: 6.661 },
+    },
+  ].map((row, k) => ({
+    ...row,
+    tiers: [0, 1, 2, 3].map((t) =>
+      heldCell(k * 10 + t + 1, `${["強化珠", "スプリング"][k]}${t}`, `equipment_icon_exp_${t}`, {
+        exact: 100 * k + t,
+      }),
     ),
-  ].flat(),
+  })),
   blueprints: [
     {
       name: "帽子",
@@ -293,13 +303,31 @@ test("the equipment tab's blueprints: a slot a row, its T1 pieces to T10 bluepri
   await page.setViewportSize({ width: 360, height: 640 });
   expect(await overflow(page)).toBe(0);
 
-  // The enhancement materials: a kind a row, its tiers on their colours, no search.
+  // The enhancement materials: a kind a row, its tiers on their colours, then how many
+  // students what is held raises and how; no search.
   await page.getByRole("tab", { name: "強化素材" }).click();
   await expect(page.getByLabel("名前で検索")).toHaveCount(0);
   const rows = page.locator("table.enhancements tr");
   await expect(rows).toHaveCount(2);
-  await expect(rows.nth(0).locator("td")).toHaveText(["0", "1", "2", "3"]);
-  await expect(rows.nth(1).locator("td")).toHaveText(["100", "101", "102", "103"]);
+  await expect(rows.nth(0).locator("td")).toHaveText([
+    "0",
+    "1",
+    "2",
+    "3",
+    "7.6人分約5.7M EXP ÷ 0.74M EXP",
+  ]);
+  await expect(rows.nth(1).locator("td")).toHaveText([
+    "100",
+    "101",
+    "102",
+    "103",
+    "6.6人分220,280 EXP × 1.5 ÷ 49,605 EXP",
+  ]);
+  // The count at the row's right end, its terms under it.
+  const raised = rows.nth(1).locator("td.raise");
+  const [count, terms] = [raised.locator("strong"), raised.locator(".detail")];
+  expect((await terms.boundingBox()).y).toBeGreaterThan((await count.boundingBox()).y);
+  await expect(raised).toHaveCSS("text-align", "right");
   await expect(rows.nth(1).getByRole("img").first()).toHaveAttribute("title", "スプリング0");
   for (let t = 0; t < 4; t++) {
     const face = await colorOf(page, `--c-tier-${t + 1}`);

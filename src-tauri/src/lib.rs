@@ -453,8 +453,53 @@ impl Recognizer {
                 self.equipment.entries(),
                 &equipment_held,
             ),
-            enhancements: kinds::enhancements(self.equipment.entries(), &equipment_held),
+            enhancements: kinds::enhancements(
+                self.equipment.entries(),
+                &equipment_held,
+                |category| self.feed(category),
+            ),
         }
+    }
+
+    /// What an enhancement material of `category` feeds, as the work tab counts
+    /// it: the orbs a student's equipment from T1 to T10, the parts a unique
+    /// weapon from Lv1 to its cap at the rate its weapon type takes them.
+    fn feed(&self, category: &str) -> kinds::Feed {
+        let growth = &self.planner.growth;
+        if category == "Exp" {
+            return kinds::Feed {
+                exp: growth.orbs.clone(),
+                rate: 1.0,
+                each: self.orbs_each(),
+            };
+        }
+        let of_kind = |id: &i64| {
+            self.equipment
+                .entries()
+                .iter()
+                .any(|e| e.id == *id && e.category == category)
+        };
+        kinds::Feed {
+            exp: growth
+                .weapon_parts
+                .iter()
+                .copied()
+                .filter(|(id, _)| of_kind(id))
+                .collect(),
+            rate: self.part_rate(Some(category)),
+            each: growth.weapon_exp.get(WEAPON_TOP - 1).copied().unwrap_or(0),
+        }
+    }
+
+    /// The rate the weapon types a kind of parts suits take them at (the game's
+    /// `CharacterWeaponExpBonus`); 1 for a kind no type takes more of.
+    fn part_rate(&self, kind: Option<&str>) -> f64 {
+        self.planner
+            .growth
+            .weapon_bonus
+            .iter()
+            .find(|(_, k, _)| Some(k.as_str()) == kind)
+            .map_or(1.0, |(_, _, rate)| f64::from(*rate) / 10_000.0)
     }
 
     /// The scrimmages' schools (see `work::School`): the parts each drops, of
@@ -488,11 +533,7 @@ impl Recognizer {
             .map(|place| {
                 let kind = place.drops.first().copied().and_then(kind_of);
                 let suited = |weapon: &str| suits(weapon).map(|(k, _)| k) == kind.as_deref();
-                let rate = growth
-                    .weapon_bonus
-                    .iter()
-                    .find(|(_, k, _)| Some(k) == kind.as_ref())
-                    .map_or(1.0, |(_, _, rate)| f64::from(*rate) / 10_000.0);
+                let rate = self.part_rate(kind.as_deref());
                 let share = if typed.is_empty() {
                     0.0
                 } else {

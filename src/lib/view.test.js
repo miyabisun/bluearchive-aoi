@@ -15,6 +15,7 @@ import {
   unknownText,
   commissionCells,
   orbCells,
+  enhancementCells,
   planCard,
   planCoin,
   planTitle,
@@ -924,6 +925,28 @@ describe("item tiles", () => {
     expect(heldText({ exact: 1234 })).toBe("1,234");
     expect(heldText({ thousands: 51 })).toBe("51K");
     expect(heldText(null)).toBe("—");
+  });
+});
+
+describe("enhancementCells", () => {
+  it("tells how many students a kind of enhancement material raises, as the work tab counts it", () => {
+    const raise = { exp: 5700780, about: true, rate: 1, exp_each: 741690, students: 7.686 };
+    // The orbs in millions, as the work tab's normal items shop.
+    expect(enhancementCells({ category: "Exp", raise })).toEqual({
+      students: "7.6人分",
+      detail: "約5.7M EXP ÷ 0.74M EXP",
+    });
+    // A kind of parts at its weapons' rate, as the scrimmages.
+    const parts = { exp: 220280, about: false, rate: 1.5, exp_each: 49605, students: 6.661 };
+    expect(enhancementCells({ category: "WeaponExpGrowthA", raise: parts })).toEqual({
+      students: "6.6人分",
+      detail: "220,280 EXP × 1.5 ÷ 49,605 EXP",
+    });
+    // The pins, which no weapon takes more of, with no rate written.
+    const pins = { ...parts, rate: 1, students: 4.44 };
+    expect(enhancementCells({ category: "WeaponExpGrowthZ", raise: pins }).detail).toBe(
+      "220,280 EXP ÷ 49,605 EXP",
+    );
   });
 });
 
