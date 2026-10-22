@@ -45,5 +45,5 @@ fn a_hard_card_reserved_is_marked_and_counts_its_elephs_held() {
     let aru = cards.iter().find(|c| c.id == 10000).unwrap();
     assert!(aru.reserved);
     assert_eq!(aru.held, Some(Count::Exact(80)));
-    assert!(cards.iter().filter(|c| c.reserved).count() == 1);
+    assert_eq!(cards.iter().filter(|c| c.reserved).count(), 1);
 }
