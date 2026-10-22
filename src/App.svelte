@@ -31,6 +31,8 @@
     goodTile,
     goodFace,
     goldenTitle,
+    hardCost,
+    hardTile,
     heldText,
     heldTone,
     groupPlan,
@@ -147,6 +149,8 @@
     work: /** @type {any} */ (null),
     /** The month-end shops' purchase plan, card by card. */
     month_end: /** @type {any[]} */ ([]),
+    /** The students' elephs the hard missions drop, card by card. */
+    hard: /** @type {any[]} */ ([]),
     /** The item and equipment tabs' tables by kind (none before the app sends them). */
     kinds: /** @type {any} */ (null),
     credits: /** @type {number | null} */ (null),
@@ -842,6 +846,7 @@
         {@const work = snapshot.work}
         {@const commission = commissionCells(work.commissions)}
         {@const orb = orbCells(work.commissions, work.orbs)}
+        {@const hardAp = hardCost(snapshot.hard ?? [])}
         <div class="table-scroll work" data-state="success">
           <!-- The plays by when they are played: each day, in a doubled-drop campaign, at the month's end. -->
           <h2 class="category">日課</h2>
@@ -898,7 +903,18 @@
               {/each}
             </details>
           {/each}
-          <h2 class="category">2倍キャンペーン</h2>
+          <!-- A day's AP the hard missions reserved take, red, while any is reserved: the
+               AP held is not read, so only what is taken shows. -->
+          <div class="category-head">
+            <h2 class="category">2倍キャンペーン</h2>
+            {#if hardAp > 0}
+              <span class="held" title="任務 Hard の予約: 1日 {hardAp.toLocaleString('ja-JP')} AP"
+                ><img src={iconUrl("currency_icon_ap")} alt="AP" width="20" height="20" /><span
+                  class="short">-{hardAp.toLocaleString("ja-JP")}</span
+                ></span
+              >
+            {/if}
+          </div>
           <details class="fold" open={opened.has("work:任務")}>
             <summary onclick={(event) => toggle(event, "work:任務")}
               >{@render chevron()}
@@ -980,6 +996,41 @@
                 </table>
               {/if}
             {/if}
+          </details>
+          <details class="fold" open={opened.has("work:任務 Hard")}>
+            <summary onclick={(event) => toggle(event, "work:任務 Hard")}
+              >{@render chevron()}
+              <h3>任務 Hard</h3></summary
+            >
+            <!-- A student's eleph a card, as the month-end shops show a good: how many missions
+                 drop it, the student's star and the elephs short of 固有4; pressing one reserves
+                 it, again takes it back. Those at 固有4 greyed, last. -->
+            <ul class="tiles goods plan">
+              {#each snapshot.hard ?? [] as card (card.id)}
+                {@const tile = hardTile(card)}
+                <li class:sold={card.done} class:reserved={card.reserved} data-face="eleph">
+                  <button
+                    type="button"
+                    title={tile.title}
+                    aria-pressed={card.reserved}
+                    onclick={() =>
+                      setReserved({ shop: "任務 Hard", id: card.id, coin: "AP" }, !card.reserved)}
+                  >
+                    <span class="item"
+                      ><img
+                        src={iconUrl(card.icon)}
+                        alt={card.name}
+                        width="64"
+                        height="64"
+                        loading="lazy"
+                      /><span class="count">{tile.amount}</span></span
+                    >
+                    <span class="offer">{tile.text}</span>
+                    {#if card.reserved}<span class="booked">予約中</span>{/if}
+                  </button>
+                </li>
+              {/each}
+            </ul>
           </details>
           <details class="fold" open={opened.has("work:特別依頼")}>
             <summary onclick={(event) => toggle(event, "work:特別依頼")}
@@ -2244,6 +2295,13 @@
   // The work tab: the plays grouped by when they are played, a section a kind
   // of play, each count with its terms under it.
   .work
+    // A category's heading with what its reservations take at the right.
+    .category-head
+      display: flex
+      align-items: baseline
+      margin: var(--sp-5) 0 0
+      .category
+        margin: 0
     .category
       display: block
       margin: var(--sp-5) 0 0

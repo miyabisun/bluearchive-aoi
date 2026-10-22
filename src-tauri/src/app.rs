@@ -24,7 +24,7 @@ use crate::{
     tally::Tally,
     update,
     watch::{self, Status, StudentRow, Update},
-    work::WorkRows,
+    work::{HardCard, WorkRows},
 };
 
 /// Everything the window shows; sent whole on every change.
@@ -56,6 +56,8 @@ pub struct Snapshot {
     kinds: Kinds,
     /// The daily plays against what is held.
     work: WorkRows,
+    /// The students' elephs the hard missions drop, those reserved marked.
+    hard: Vec<HardCard>,
     /// The month-end shops' purchase plan.
     month_end: Vec<PlanShop>,
     /// The cards reserved in it.
@@ -120,6 +122,7 @@ impl Snapshot {
             ground: Ground::default(),
             kinds: Kinds::default(),
             work: recognizer.work_rows(&[], &[], None),
+            hard: Vec::new(),
             month_end: Vec::new(),
             reserved: kept.reserved.clone(),
             read_at: kept.read_at.clone(),
@@ -194,6 +197,7 @@ impl Snapshot {
     fn rework(&mut self, recognizer: &Recognizer) {
         self.kinds = recognizer.kinds(&self.items, &self.equipment);
         self.work = recognizer.work_rows(&self.items, &self.equipment, self.credits);
+        self.hard = recognizer.hard(&self.items, &self.students, &self.reserved);
         let held = |id| crate::good_held(id, &self.items, &self.equipment, self.credits);
         self.month_end = recognizer.month_end(&self.shops, &self.students, held, &self.reserved);
     }

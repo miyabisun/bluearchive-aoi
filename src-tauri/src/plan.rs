@@ -62,6 +62,9 @@ pub struct Grower {
     /// The weapon type (SG, SMG, AR, ...), which the unique weapon's parts suit.
     #[serde(default)]
     pub weapon: Option<String>,
+    /// The stars the student comes with (1 to 3).
+    #[serde(default)]
+    pub star: u8,
 }
 
 /// A piece of equipment of the snapshot: what it is made from (blueprints and
@@ -342,6 +345,27 @@ pub fn star_of(now: &Training) -> Option<u8> {
     }
 }
 
+/// What the star `step` (2 to 8, see `star_of`) takes from the one below it:
+/// the student's elephs and the credits.
+fn step_cost(step: u8, growth: &Growth) -> (u64, u64) {
+    if step <= 5 {
+        growth.star_up[usize::from(step) - 2]
+    } else {
+        growth.weapon_up[usize::from(step) - 6]
+    }
+}
+
+/// The unique weapon's fourth, the top of `star_of`'s scale.
+pub const TOP_STAR: u8 = 8;
+
+/// The elephs a student at `star` (see `star_of`) takes to the unique
+/// weapon's fourth (`TOP_STAR`).
+pub fn elephs_to_top(star: u8, growth: &Growth) -> u64 {
+    (star + 1..=TOP_STAR)
+        .map(|step| step_cost(step, growth).0)
+        .sum()
+}
+
 /// What the student `id` takes from `now` to `target`; `grower` is `None` for
 /// a student the snapshot lacks, whose skills and equipment are unknown.
 pub fn needs(
@@ -379,11 +403,7 @@ pub fn needs(
             // A student's elephs are the item of their id.
             Some(star) if id >= 0 => {
                 for step in star + 1..=to {
-                    let (elephs, credits) = if step <= 5 {
-                        growth.star_up[usize::from(step) - 2]
-                    } else {
-                        growth.weapon_up[usize::from(step) - 6]
-                    };
+                    let (elephs, credits) = step_cost(step, growth);
                     *n.items.entry(id).or_default() += elephs;
                     n.credits += credits;
                 }
@@ -508,6 +528,7 @@ pub(crate) mod tests {
             skills: (2..=9).map(|lv| vec![(4030, lv)]).collect(),
             potential: None,
             weapon: None,
+            star: 3,
         }
     }
 
@@ -548,6 +569,17 @@ pub(crate) mod tests {
             equipment: t.equipment.map(|g| g.map_or(1, |g| g.tier)),
             star: None,
         }
+    }
+
+    #[test]
+    fn a_student_takes_the_elephs_of_every_star_left_to_the_weapons_fourth() {
+        let growth = growth();
+        assert_eq!(elephs_to_top(7, &growth), 200);
+        assert_eq!(
+            elephs_to_top(1, &growth),
+            30 + 80 + 100 + 120 + 120 + 180 + 200
+        );
+        assert_eq!(elephs_to_top(8, &growth), 0);
     }
 
     #[test]

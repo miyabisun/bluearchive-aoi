@@ -708,6 +708,33 @@ export function tileTitle(good, students) {
 export const heldText = (held) => (held == null ? "—" : formatCount(held));
 
 /**
+ * A hard missions' card (the user's of 2026-10-22), as a month-end card
+ * shows a good: in the place of "×5" how many missions drop the student's
+ * eleph ("3個所"), in the place of the price the student's star and the
+ * elephs short of 固有4 ("固有3 120文字", "未読み取り" for a student never
+ * read, "固有4" once there); and its hover: the eleph, the star, how many are
+ * held, the missions and a day's AP playing them.
+ */
+export function hardTile(card) {
+  const star = card.star == null ? "未読み取り" : starName(card.star);
+  return {
+    amount: `${card.stages.length}個所`,
+    text: card.done ? "固有4" : card.star == null ? star : `${star} ${exact.format(card.left)}文字`,
+    title: [
+      card.name,
+      `星: ${star}`,
+      `所持: ${card.held == null ? "?" : formatCount(card.held)}`,
+      `任務 Hard: ${card.stages.join("、")}`,
+      `1日 ${exact.format(card.ap)} AP`,
+    ].join("\n"),
+  };
+}
+
+/** A day's AP the hard missions' cards reserved take, those at 固有4 left out. */
+export const hardCost = (cards) =>
+  cards.filter((c) => c.reserved && !c.done).reduce((sum, c) => sum + c.ap, 0);
+
+/**
  * A month-end shop's coin: how many are left once the cards reserved are
  * paid (the held less what they take), below none short; whether any is
  * reserved, which marks the count apart from the game's (the user's of

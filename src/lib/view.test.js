@@ -16,6 +16,8 @@ import {
   commissionCells,
   orbCells,
   enhancementCells,
+  hardTile,
+  hardCost,
   planCard,
   planCoin,
   planTitle,
@@ -925,6 +927,44 @@ describe("item tiles", () => {
     expect(heldText({ exact: 1234 })).toBe("1,234");
     expect(heldText({ thousands: 51 })).toBe("51K");
     expect(heldText(null)).toBe("—");
+  });
+});
+
+describe("hard missions", () => {
+  const card = {
+    id: 10000,
+    name: "アルの神名文字",
+    stages: ["18-3"],
+    ap: 60,
+    star: 7,
+    left: 120,
+    held: { exact: 80 },
+    done: false,
+    reserved: false,
+  };
+  const lines = (...l) => l.join("\n");
+
+  it("tells a student's card: the missions it is dropped at, the star and the elephs short of 固有4", () => {
+    expect(hardTile(card)).toEqual({
+      amount: "1個所",
+      text: "固有3 120文字",
+      title: lines("アルの神名文字", "星: 固有3", "所持: 80", "任務 Hard: 18-3", "1日 60 AP"),
+    });
+    const yuuka = { ...card, stages: ["1-1", "4-3", "12-2"], ap: 180, star: 2, left: 1280 };
+    expect(hardTile(yuuka)).toMatchObject({ amount: "3個所", text: "★2 1,280文字" });
+    expect(hardTile(yuuka).title).toContain("任務 Hard: 1-1、4-3、12-2");
+    // A student never read; one at 固有4, who takes no more.
+    const unread = { ...card, star: null, left: null, held: null };
+    expect(hardTile(unread)).toMatchObject({ text: "未読み取り" });
+    expect(hardTile(unread).title).toContain("所持: ?");
+    expect(hardTile({ ...card, star: 8, left: 0, done: true }).text).toBe("固有4");
+  });
+
+  it("counts a day's AP of the students reserved, those at 固有4 left out", () => {
+    const reserved = (ap, done = false) => ({ ...card, ap, done, reserved: true });
+    expect(hardCost([reserved(60), reserved(180), { ...card, ap: 120 }])).toBe(240);
+    expect(hardCost([reserved(60), reserved(120, true)])).toBe(60);
+    expect(hardCost([])).toBe(0);
   });
 });
 

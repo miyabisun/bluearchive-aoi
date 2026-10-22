@@ -22,6 +22,8 @@ use crate::{
 #[derive(Debug, Clone, Deserialize)]
 pub struct Stages {
     pub missions: Vec<Mission>,
+    #[serde(default)]
+    pub hard: Vec<HardMission>,
     pub bounties: Vec<Place>,
     pub scrimmages: Vec<Place>,
     pub commissions: Commissions,
@@ -34,6 +36,95 @@ pub struct Mission {
     pub name: String,
     pub ap: u32,
     pub drops: Vec<(i64, f64)>,
+}
+
+/// A hard mission: its name ("18-3"), its AP and the items a run may drop,
+/// a student's eleph among them.
+#[derive(Debug, Clone, Deserialize)]
+pub struct HardMission {
+    pub name: String,
+    pub ap: u32,
+    pub drops: Vec<i64>,
+}
+
+/// The hard missions' reservations as `strategy::Reserve` keeps them: their
+/// shop and their coin (the user's of 2026-10-22: 「予約中情報をYAMLに追加」).
+pub const HARD: &str = "任務 Hard";
+pub const AP: &str = "AP";
+
+/// How many times a day a hard mission may be played (the game's rule).
+pub const HARD_RUNS: u32 = 3;
+
+/// A student as the hard missions' cards order and count them: their name,
+/// the stars they come with (1 to 3), their star now (`plan::star_of`, `None`
+/// unread) and the elephs that star takes to the weapon's fourth.
+pub struct HardStudent {
+    pub name: String,
+    pub first: u8,
+    pub now: Option<u8>,
+    pub to_top: Option<u64>,
+}
+
+/// A student's eleph the hard missions drop, as the work tab's card shows it:
+/// the eleph, the missions dropping it, a day's AP playing each of them
+/// `HARD_RUNS` times, the student's star now and the elephs short of the
+/// weapon's fourth past those held (`None` unread), how many are held,
+/// whether the weapon's fourth is reached and whether the card is reserved.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct HardCard {
+    pub id: i64,
+    pub name: String,
+    pub icon: String,
+    pub stages: Vec<String>,
+    pub ap: u32,
+    pub star: Option<u8>,
+    pub left: Option<u64>,
+    pub held: Option<Count>,
+    pub done: bool,
+    pub reserved: bool,
+}
+
+/// The `elephs` the hard `missions` drop, a card a student (`student` by the
+/// eleph's id, which is the student's), in the user's order of 2026-10-22:
+/// those who come with three stars first, those with one or two after, each by
+/// name, and those at the weapon's fourth last, greyed.
+pub fn hard<'a, S: BuildHasher>(
+    missions: &[HardMission],
+    eleph: impl Fn(i64) -> Option<&'a Item>,
+    student: impl Fn(i64) -> HardStudent,
+    held: &HashMap<i64, Count, S>,
+    reserved: impl Fn(i64) -> bool,
+) -> Vec<HardCard> {
+    // Each card with what orders it: done, not of three stars, the name.
+    let mut cards: Vec<(HardCard, (bool, bool, String))> = Vec::new();
+    for mission in missions {
+        let day = mission.ap * HARD_RUNS;
+        for entry in mission.drops.iter().filter_map(|&id| eleph(id)) {
+            if let Some((card, _)) = cards.iter_mut().find(|(c, _)| c.id == entry.id) {
+                card.stages.push(mission.name.clone());
+                card.ap += day;
+                continue;
+            }
+            let who = student(entry.id);
+            let count = held.get(&entry.id).copied();
+            let done = who.now == Some(crate::plan::TOP_STAR);
+            let card = HardCard {
+                id: entry.id,
+                name: entry.name.clone(),
+                icon: entry.icon.clone(),
+                stages: vec![mission.name.clone()],
+                ap: day,
+                star: who.now,
+                left: who.to_top.map(|top| top.saturating_sub(amount(count).0)),
+                held: count,
+                done,
+                reserved: reserved(entry.id),
+            };
+            cards.push((card, (done, who.first != 3, who.name)));
+        }
+    }
+    cards.sort_by(|a, b| a.1.cmp(&b.1));
+    cards.into_iter().map(|(card, _)| card).collect()
 }
 
 /// A bounty or a scrimmage: its kind (`ChaserA`), its name and what any of
@@ -1048,6 +1139,7 @@ mod tests {
             skills: Vec::new(),
             potential: None,
             weapon: None,
+            star: 3,
         };
         let growers: Vec<Grower> = [
             [["Hat", "Shoes", "Watch"]; 5].to_vec(),
@@ -1084,6 +1176,7 @@ mod tests {
             skills: vec![skills],
             potential,
             weapon: None,
+            star: 3,
         };
         let growth = Growth {
             potential: vec![(0, 10), (1, 6)],
@@ -1214,6 +1307,64 @@ mod tests {
 
     /// A student's three slots each level every tier from Lv1 to its top, fed
     /// in orbs; the orbs held count as so many students.
+    #[test]
+    fn the_hard_missions_show_each_students_eleph_three_stars_first_and_the_done_last() {
+        let mission = |name: &str, drops: &[i64]| HardMission {
+            name: name.into(),
+            ap: 20,
+            drops: drops.to_vec(),
+        };
+        let missions = [
+            mission("1-1", &[2, 13010]),
+            mission("1-3", &[10010]),
+            mission("4-2", &[10010]),
+            mission("12-1", &[10010]),
+            mission("18-3", &[10000]),
+            mission("20-1", &[16000]),
+        ];
+        let elephs = [
+            item(10000, "アルの神名文字", Rarity::N),
+            item(10010, "ユウカの神名文字", Rarity::N),
+            item(13010, "ジュンコの神名文字", Rarity::N),
+            item(16000, "ハルカの神名文字", Rarity::N),
+        ];
+        // アル comes with three stars and is at the weapon's third, with 80 elephs held;
+        // ユウカ at ★2; ジュンコ never read; ハルカ done.
+        let student = |id| {
+            let (name, first, now, to_top) = match id {
+                10000 => ("アル", 3, Some(7), Some(200)),
+                10010 => ("ユウカ", 1, Some(2), Some(800)),
+                13010 => ("ジュンコ", 2, None, None),
+                _ => ("ハルカ", 3, Some(8), Some(0)),
+            };
+            HardStudent {
+                name: name.into(),
+                first,
+                now,
+                to_top,
+            }
+        };
+        let held = HashMap::from([(10000, Count::Exact(80))]);
+        let eleph = |id| elephs.iter().find(|e| e.id == id);
+        let cards = hard(&missions, eleph, student, &held, |id| id == 10010);
+        let order: Vec<i64> = cards.iter().map(|c| c.id).collect();
+        assert_eq!(order, [10000, 13010, 10010, 16000]);
+        let aru = &cards[0];
+        assert_eq!(
+            (aru.stages.clone(), aru.ap, aru.star, aru.left, aru.done),
+            (vec!["18-3".to_owned()], 60, Some(7), Some(120), false)
+        );
+        let yuuka = &cards[2];
+        assert_eq!(yuuka.stages, ["1-3", "4-2", "12-1"]);
+        assert_eq!(
+            (yuuka.ap, yuuka.left, yuuka.reserved),
+            (180, Some(800), true)
+        );
+        assert_eq!((cards[1].star, cards[1].left), (None, None));
+        assert!(cards[3].done && !cards[0].reserved);
+        assert_eq!(aru.icon, "icon_10000");
+    }
+
     #[test]
     fn a_raise_counts_the_students_the_exp_held_raises_at_its_rate() {
         // Two titanium springs (1,000 exp each) and about 1,000 rusty ones (10 each),

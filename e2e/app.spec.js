@@ -1274,9 +1274,10 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
     "指名手配",
     "学園交流会",
     "任務 Normal",
+    "任務 Hard",
     "特別依頼",
   ]);
-  await expect(page.locator(".work summary .chevron")).toHaveCount(5);
+  await expect(page.locator(".work summary .chevron")).toHaveCount(6);
   await expect(page.locator(".slots")).toBeHidden();
   for (const section of await sections.all()) await section.click();
   // A slot: how many pieces its T10 blueprints and its universal ones make,
@@ -1366,6 +1367,74 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   ]);
   await expect(page.locator(".raises tr.fewer")).toContainText("クレジット");
   await expect(page.locator(".raises tr.fewer strong")).toHaveCSS("color", red);
+});
+
+test("reserves a hard mission's eleph, the day's AP it takes red by the campaign's heading", async ({
+  page,
+}) => {
+  const card = (id, name, more) => ({
+    id,
+    name,
+    icon: "item_icon_secretstone_azusa",
+    stages: ["18-3"],
+    ap: 60,
+    star: 7,
+    left: 120,
+    held: { exact: 80 },
+    done: false,
+    reserved: false,
+    ...more,
+  });
+  const hard = (reserved) => [
+    card(10000, "アルの神名文字", { reserved: reserved.includes(10000) }),
+    card(13010, "ユウカの神名文字", {
+      stages: ["1-1", "4-3", "12-2"],
+      ap: 180,
+      star: 2,
+      left: 1280,
+      reserved: reserved.includes(13010),
+    }),
+    card(16000, "ハルカの神名文字", { star: 8, left: 0, done: true }),
+  ];
+  const snapshot = { status: reading("shops"), items, equipment, work, hard: hard([]) };
+  await open(page, snapshot, "お仕事");
+  const heading = page.locator(".work .category-head");
+  await expect(heading).toHaveText("2倍キャンペーン");
+  await page.locator(".work summary", { hasText: "任務 Hard" }).click();
+  // A student's eleph a card: the missions dropping it in the place of "×5", the star
+  // and the elephs short of 固有4 in the place of the price; 固有4 greyed, last.
+  const cards = page.locator(".work details", { hasText: "任務 Hard" }).locator("li");
+  await expect(cards.locator(".count")).toHaveText(["1個所", "3個所", "1個所"]);
+  await expect(cards.locator(".offer")).toHaveText(["固有3 120文字", "★2 1,280文字", "固有4"]);
+  await expect(cards.last()).toHaveClass(/sold/);
+  await expect(cards.first()).toHaveCSS("background-color", await colorOf(page, "--c-eleph"));
+  const aru = page.getByRole("button", { name: /アルの神名文字/ });
+  await expect(aru).toHaveAttribute("title", /任務 Hard: 18-3\n1日 60 AP$/);
+  await aru.click();
+  expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([
+    { card: { shop: "任務 Hard", id: 10000, coin: "AP" }, reserved: true },
+  ]);
+  // The app answers reserved: ringed and marked, and the campaign's heading takes a
+  // day's AP for it in red; the fold stays open through the frames that keep coming.
+  for (let frame = 0; frame < 3; frame++) {
+    await page.evaluate((s) => window.__AOI_PUSH__(s), { ...snapshot, hard: hard([10000]) });
+  }
+  await expect(aru).toHaveAttribute("aria-pressed", "true");
+  await expect(aru).toContainText("予約中");
+  const taken = heading.locator(".held");
+  await expect(taken).toHaveText("-60");
+  await expect(taken.getByRole("img", { name: "AP" })).toBeVisible();
+  await expect(taken.locator(".short")).toHaveCSS("color", await colorOf(page, "--c-danger"));
+  await page.evaluate((s) => window.__AOI_PUSH__(s), {
+    ...snapshot,
+    hard: hard([10000, 13010]),
+  });
+  await expect(taken).toHaveText("-240");
+  // Taken back, the heading is the category's name alone again.
+  await page.evaluate((s) => window.__AOI_PUSH__(s), snapshot);
+  await expect(heading).toHaveText("2倍キャンペーン");
+  await expect(page.locator(".work details", { hasText: "任務 Hard" })).toHaveAttribute("open", "");
+  expect(await overflow(page)).toBe(0);
 });
 
 test("reserves a month-end card by pressing it, kept as new frames come", async ({ page }) => {

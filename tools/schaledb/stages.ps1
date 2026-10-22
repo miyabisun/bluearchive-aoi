@@ -1,5 +1,6 @@
 # Writes `stages.json`: what the daily stages drop, for the work tab. Normal
-# missions with the blueprints each run gives on average and its AP; each
+# missions with the blueprints each run gives on average and its AP; hard
+# missions with the items they drop (a student's eleph each) and their AP; each
 # bounty with the items it drops; each scrimmage with the equipment it drops;
 # and the stages' names. Called by update.ps1.
 #   powershell -File tools/schaledb/stages.ps1
@@ -55,6 +56,14 @@ $missions = foreach ($s in ($stages | Where-Object { $_['Category'] -eq 'Campaig
   [ordered]@{ name = "$($s['Area'])-$($s['Stage'])"; ap = [int]$ap; drops = $pairs }
 }
 
+# Hard missions: the items a run may drop, which the app reads the elephs from.
+$hard = foreach ($s in ($stages | Where-Object { $_['Category'] -eq 'Campaign' -and $_['Difficulty'] -eq 1 } |
+    Sort-Object { [int64]$_['Id'] })) {
+  $ap = ($s['EntryCost'] | Where-Object { $_[0] -eq 5 } | Select-Object -First 1)[1]
+  $items = @((Drops $s 'Item').Keys | ForEach-Object { [int64]$_ } | Sort-Object)
+  [ordered]@{ name = "$($s['Area'])-$($s['Stage'])"; ap = [int]$ap; drops = $items }
+}
+
 # Each bounty and scrimmage: what any of its stages drops of a kind.
 function Places($category, $type) {
   $byType = [ordered]@{}
@@ -70,10 +79,11 @@ function Places($category, $type) {
 
 $out = [ordered]@{
   missions = @($missions)
+  hard = @($hard)
   bounties = @(Places 'Bounty' 'Item')
   scrimmages = @(Places 'SchoolDungeon' 'Equipment')
   commissions = [ordered]@{ FindGift = $names['FindGift']; Blood = $names['Blood'] }
 }
 $text = $out | ConvertTo-Json -Depth 6 -Compress
 [IO.File]::WriteAllText((Join-Path $root 'stages.json'), $text + "`n", (New-Object Text.UTF8Encoding($false)))
-Write-Host "stages: $(@($missions).Count) missions"
+Write-Host "stages: $(@($missions).Count) missions, $(@($hard).Count) hard"

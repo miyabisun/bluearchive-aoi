@@ -425,6 +425,60 @@ impl Recognizer {
         }
     }
 
+    /// The students' elephs the hard missions drop (see `work::hard`), counted
+    /// against the `items` held and the `students` read, those `reserved` marked.
+    pub fn hard(
+        &self,
+        items: &[Row],
+        students: &[watch::StudentRow],
+        reserved: &std::collections::BTreeSet<strategy::Reserve>,
+    ) -> Vec<work::HardCard> {
+        let held: HashMap<i64, Count> = items.iter().map(|r| (r.id, r.count)).collect();
+        let elephs: HashMap<i64, &Item> = self
+            .items
+            .entries()
+            .iter()
+            .filter(|e| e.category == "SecretStone")
+            .map(|e| (e.id, e))
+            .collect();
+        let student = |id: i64| {
+            let now = students
+                .iter()
+                .find(|s| s.id == id)
+                .and_then(|s| plan::star_of(&s.training));
+            work::HardStudent {
+                name: self
+                    .students
+                    .iter()
+                    .find(|(i, _)| *i == id)
+                    .map(|(_, name)| name.clone())
+                    .unwrap_or_default(),
+                first: self
+                    .planner
+                    .growers
+                    .iter()
+                    .find(|g| g.id == id)
+                    .map_or(0, |g| g.star),
+                now,
+                to_top: now.map(|star| plan::elephs_to_top(star, &self.planner.growth)),
+            }
+        };
+        let reserved = |id| {
+            reserved.contains(&strategy::Reserve {
+                shop: work::HARD.to_owned(),
+                id,
+                coin: work::AP.to_owned(),
+            })
+        };
+        work::hard(
+            &self.stages.hard,
+            |id| elephs.get(&id).copied(),
+            student,
+            &held,
+            reserved,
+        )
+    }
+
     /// The item and equipment tabs' tables by kind (see `kinds::Kinds`), with
     /// how many `items` and `equipment` are held and, for the skill materials
     /// and the ooparts, what one student takes.

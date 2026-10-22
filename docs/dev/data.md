@@ -14,7 +14,9 @@ The training plan counts with the students' skill materials and the equipment re
 from the same snapshot, and with the level tables of the game (`growth.json`, from
 [electricgoat/ba-data](https://github.com/electricgoat/ba-data)) and the skill credits the
 archived SchaleDB site listed. The choice boxes (`boxes.json`) and the daily stages
-(`stages.json`) come from SchaleDB too, and so do the schools' emblems the item tab's
+(`stages.json`: normal and hard missions, bounties, scrimmages) come from SchaleDB too, as
+do the stars each student comes with (`students.json`'s `star`, which orders the hard
+missions' elephs), and so do the schools' emblems the item tab's
 skill materials show (`school-icons`, white, drawn in the theme's text colour by a
 filter). `tools/schaledb/update.ps1` refreshes the
 snapshot and the tables (it runs `stages.ps1` and `boxes.ps1`). New students come with

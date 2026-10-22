@@ -124,6 +124,8 @@ $students = Update-List 'students' $null $null {
     weapon = $student.WeaponType
     # How the student is had in JP: 0 always, 1 limited, 2 an event's, 3 fest.
     limited = [int]$student.IsLimited[0]
+    # The stars the student comes with (1 to 3), which orders the hard missions' elephs.
+    star = [int]$student.StarGrade
     ex = Pairs $student.SkillExMaterial $student.SkillExMaterialAmount
     skills = Pairs $student.SkillMaterial $student.SkillMaterialAmount
     # The ooparts (their first tier) the student's potential takes.
