@@ -1,0 +1,6 @@
+# GitHub Pages (main の /docs) の設定。利用者向けの使い方だけを公開する
+title: Aoi の使い方
+lang: ja
+baseurl: /bluearchive-aoi
+exclude:
+  - dev

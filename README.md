@@ -22,10 +22,10 @@ English: [README.en.md](README.en.md)
 - PC 版ブルーアーカイブ（日本版）を読むとき: Windows 11
 - Android 版ブルーアーカイブ（日本版）を読むとき: Android 11 以降のスマホと、Windows 11 の PC か
   Mac。USB ケーブルか同じ Wi-Fi でつなぎます。Mac での動作はまだ確かめていません。つなぎ方は
-  [Android のスマホの画面を読む](docs/guide/android.md) にあります。
+  [Android のスマホの画面を読む](https://miyabisun.github.io/bluearchive-aoi/guide/android.html) にあります。
 - iPhone 版ブルーアーカイブ（日本版）を読むとき: 配信アプリ（Moblin）を入れた iPhone と、同じ Wi-Fi の
   Windows 11 の PC か Mac。iPhone での動作はまだ確かめていません。送り方は
-  [配信アプリでスマホの画面を送る](docs/guide/stream.md) にあります。
+  [配信アプリでスマホの画面を送る](https://miyabisun.github.io/bluearchive-aoi/guide/stream.html) にあります。
 
 ## ダウンロードと起動
 
@@ -43,24 +43,26 @@ English: [README.en.md](README.en.md)
 あれば「更新して再起動」のボタンが出るので、押すと入れ替わって起動し直します。
 
 macOS 版（`bluearchive-aoi-universal-apple-darwin.dmg`）もあります。入れ方と初めて開く手順は
-[macOS で初めて開く](docs/guide/mac.md) にあります。ブルーアーカイブの PC 版は Windows 専用なので、
+[macOS で初めて開く](https://miyabisun.github.io/bluearchive-aoi/guide/mac.html) にあります。ブルーアーカイブの PC 版は Windows 専用なので、
 macOS 版はスマホ（Android・iPhone）から送った画面を読みます。
 
 ## 使い方
 
+動く図つきの使い方を [Aoi の使い方](https://miyabisun.github.io/bluearchive-aoi/) にまとめています。
+
 1. Aoi とブルーアーカイブを起動します。どちらが先でも構いません。
 2. ゲームで次の画面を開いて、ゆっくりスクロールしたり送ったりします。読めたものから
    Aoi のタブに並んでいきます。
-   - [アイテムと装備の一覧](docs/guide/reading.md#アイテムと装備)
-   - [生徒の詳細画面](docs/guide/reading.md#生徒)
-   - [ショップ](docs/guide/reading.md#ショップ)
+   - [アイテムと装備の一覧](https://miyabisun.github.io/bluearchive-aoi/guide/reading.html#アイテムと装備)
+   - [生徒の詳細画面](https://miyabisun.github.io/bluearchive-aoi/guide/reading.html#生徒)
+   - [ショップ](https://miyabisun.github.io/bluearchive-aoi/guide/reading.html#ショップ)
 3. 生徒タブで、育てたい生徒の「育成」に印を付けます。育成タブに、必要な素材、足りない数、
-   その補い方が出ます。→ [育成タブの使い方](docs/guide/plan.md)
+   その補い方が出ます。→ [育成タブの使い方](https://miyabisun.github.io/bluearchive-aoi/guide/plan.html)
 4. お仕事タブで、任務や指名手配などで何を集めるとよいかの目安と、月末に買っておくショップの品を見られます。
-   → [お仕事タブの見方](docs/guide/work.md)
+   → [お仕事タブの見方](https://miyabisun.github.io/bluearchive-aoi/guide/work.html)
 
 うまく読めないときや、右上の表示の意味が分からないときは、
-[困ったとき](docs/guide/trouble.md) を見てください。
+[困ったとき](https://miyabisun.github.io/bluearchive-aoi/guide/trouble.html) を見てください。
 
 ## 開発者の方へ
 

@@ -21,15 +21,15 @@ goes online only to look for and download a newer version when you ask it to.
 
 Aoi also reads the Android version of the game: the phone sends its screen over a USB cable
 or Wi-Fi, with no app on the phone (USB or wireless debugging, Android 11 or later; steps in
-Japanese: [docs/guide/android.md](docs/guide/android.md)). An iPhone sends its screen
+Japanese: [Android](https://miyabisun.github.io/bluearchive-aoi/guide/android.html)). An iPhone sends its screen
 through a streaming app (Moblin) over RTMP on the same Wi-Fi, as any phone can; this is not
-tried on an iPhone yet (steps in Japanese: [docs/guide/stream.md](docs/guide/stream.md)).
+tried on an iPhone yet (steps in Japanese: [iPhone](https://miyabisun.github.io/bluearchive-aoi/guide/stream.html)).
 
 There is a macOS version too, which reads a phone's screen only: the PC version of Blue
 Archive runs on Windows only. It is `bluearchive-aoi-universal-apple-darwin.dmg` in the same release,
 for Apple silicon and Intel Macs. The app is not notarized, so macOS blocks its first
 start: open it once, then choose Open Anyway in System Settings → Privacy & Security
-(steps in Japanese: [docs/guide/mac.md](docs/guide/mac.md)). Its update check opens the
+(steps in Japanese: [macOS](https://miyabisun.github.io/bluearchive-aoi/guide/mac.html)). Its update check opens the
 release page instead of replacing the app.
 
 ## Download and run
@@ -46,10 +46,10 @@ Later versions come through the app: ☰ → アップデートを確認, then �
 
 Start Aoi and the game, in either order. In the game, open the item or equipment list
 sorted by デフォルト ascending, a student's 基本情報 tab, or a shop, and scroll or step
-through it slowly. The step-by-step guides are in Japanese, under
-[docs/guide](docs/guide): [reading the game](docs/guide/reading.md),
-[the 育成 tab](docs/guide/plan.md), [the お仕事 tab](docs/guide/work.md) and
-[troubleshooting](docs/guide/trouble.md).
+through it slowly. The step-by-step guides, with animated diagrams, are in Japanese at
+[the Aoi guide](https://miyabisun.github.io/bluearchive-aoi/): [reading the game](https://miyabisun.github.io/bluearchive-aoi/guide/reading.html),
+[the 育成 tab](https://miyabisun.github.io/bluearchive-aoi/guide/plan.html), [the お仕事 tab](https://miyabisun.github.io/bluearchive-aoi/guide/work.html) and
+[troubleshooting](https://miyabisun.github.io/bluearchive-aoi/guide/trouble.html).
 
 ## For developers
 
