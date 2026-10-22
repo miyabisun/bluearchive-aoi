@@ -965,16 +965,16 @@ describe("schoolCells", () => {
       first: true,
     };
     expect(schoolCells(row)).toEqual({
-      students: "6.6人前",
+      students: "6.6人分",
       detail: "220,280 EXP × 1.5 ÷ 49,605 EXP",
       first: true,
       // Why it is red, on hover: the students its parts suit, and per them.
-      why: lines("素材が合う生徒: 46%", "6.6人前 ÷ 46% = 14.5", "最も少ないので先に回します"),
+      why: lines("素材が合う生徒: 46%", "6.6人分 ÷ 46% = 14.5", "最も少ないので先に回します"),
     });
     expect(schoolCells({ ...row, about: true, first: false })).toMatchObject({
       detail: "約220,280 EXP × 1.5 ÷ 49,605 EXP",
       first: false,
-      why: lines("素材が合う生徒: 46%", "6.6人前 ÷ 46% = 14.5"),
+      why: lines("素材が合う生徒: 46%", "6.6人分 ÷ 46% = 14.5"),
     });
   });
 });

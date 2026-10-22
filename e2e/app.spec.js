@@ -1332,13 +1332,13 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
     return rgb;
   });
   const school = page.locator(".work .school");
-  await expect(school).toHaveText("トリニティ 6.6人前220,280 EXP × 1.5 ÷ 49,605 EXP");
+  await expect(school).toHaveText("トリニティ 6.6人分220,280 EXP × 1.5 ÷ 49,605 EXP");
   await expect(school.locator("strong")).toHaveCSS("color", red);
   await expect(school.locator("h4")).toHaveCSS("color", red);
   // Why, on hover alone: the students its parts suit and the weapons per them.
   await expect(school).toHaveAttribute(
     "title",
-    ["素材が合う生徒: 46%", "6.6人前 ÷ 46% = 14.5", "最も少ないので先に回します"].join(
+    ["素材が合う生徒: 46%", "6.6人分 ÷ 46% = 14.5", "最も少ないので先に回します"].join(
       String.fromCharCode(10),
     ),
   );
