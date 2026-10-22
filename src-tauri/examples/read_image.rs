@@ -10,8 +10,8 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let path = args.next().expect("screenshot path");
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let recognizer = aoi::Recognizer::load(&root.join("data")).unwrap();
-    let image = image::open(&path).unwrap().to_rgb8();
+    let recognizer = aoi::Recognizer::load(&root.join("data")).expect("the recognizer loads data/");
+    let image = image::open(&path).expect("the image opens").to_rgb8();
     let (list, cells) = match args.next().as_deref() {
         Some("items") => (List::Items, recognizer.read(&image, List::Items)),
         Some("equipment") => (List::Equipment, recognizer.read(&image, List::Equipment)),

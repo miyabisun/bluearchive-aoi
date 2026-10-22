@@ -121,7 +121,7 @@ fn main() {
             "usage: mask_fixture <screenshot.png> <fixture.png> [level|credit|shop|list|name]"
         ),
     };
-    let image = image::open(from).unwrap().to_rgb8();
+    let image = image::open(from).expect("the image opens").to_rgb8();
     let kept = kept(&image, only);
     let masked = image::RgbImage::from_fn(image.width(), image.height(), |px, py| {
         let (fx, fy) = (px as f32, py as f32);
@@ -141,7 +141,7 @@ fn main() {
         screen::normalize(&masked).into_owned(),
     );
     if only == Some("level") {
-        let fonts = Bank::load(&data).unwrap().fonts();
+        let fonts = Bank::load(&data).expect("the glyph bank loads").fonts();
         let (whole, part) = (
             student::level(&image, &fonts),
             student::level(&read, &fonts),
@@ -155,7 +155,7 @@ fn main() {
         assert_eq!(whole, part, "{from} reads otherwise once masked");
         return save(&masked, to);
     }
-    let recognizer = Recognizer::load(&data).unwrap();
+    let recognizer = Recognizer::load(&data).expect("the recognizer loads data/");
     if only == Some("list") {
         let (list, _, _) = recognizer.read_list(&image).expect("no list");
         let (whole, part) = (recognizer.read(&image, list), recognizer.read(&read, list));
@@ -187,7 +187,8 @@ fn main() {
 
 /// Writes `image` with the best compression: a fixture is written once and kept for good.
 fn save(image: &image::RgbImage, to: &str) {
-    let file = std::io::BufWriter::new(std::fs::File::create(to).unwrap());
+    let file =
+        std::io::BufWriter::new(std::fs::File::create(to).expect("the output file is created"));
     let png = PngEncoder::new_with_quality(file, CompressionType::Best, FilterType::Adaptive);
-    image.write_with_encoder(png).unwrap();
+    image.write_with_encoder(png).expect("the PNG encodes");
 }

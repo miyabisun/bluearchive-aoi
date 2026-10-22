@@ -288,7 +288,7 @@ fn style_of(name: &str) -> Style {
         .iter()
         .find(|(s, _)| *s == name)
         .map(|&(_, s)| s)
-        .unwrap()
+        .expect("every style name the readers ask for is in STYLES")
 }
 
 /// The text of `style` in `area`.

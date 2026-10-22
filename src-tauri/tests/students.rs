@@ -13,9 +13,10 @@ fn root() -> &'static Path {
 
 fn labels() -> Vec<Label> {
     serde_json::from_str(
-        &std::fs::read_to_string(root().join("tests/fixtures/students.json")).unwrap(),
+        &std::fs::read_to_string(root().join("tests/fixtures/students.json"))
+            .expect("the file reads"),
     )
-    .unwrap()
+    .expect("the JSON parses")
 }
 
 /// The fields of a training, named, each `None` when unknown.
@@ -123,7 +124,7 @@ fn a_smaller_screen_reads_fields_right_or_not_at_all() {
 }
 
 fn recognizer() -> aoi::Recognizer {
-    aoi::Recognizer::load(&root().join("data")).unwrap()
+    aoi::Recognizer::load(&root().join("data")).expect("the recognizer loads data/")
 }
 
 /// Every student screen is told as such, its student named right or not at
@@ -161,9 +162,9 @@ fn plates() -> Vec<(String, i64)> {
         id: i64,
     }
     let alone: Vec<Plate> = serde_json::from_str(
-        &std::fs::read_to_string(root().join("tests/fixtures/names.json")).unwrap(),
+        &std::fs::read_to_string(root().join("tests/fixtures/names.json")).expect("the file reads"),
     )
-    .unwrap();
+    .expect("the JSON parses");
     labels()
         .into_iter()
         .map(|l| (l.image, l.id))

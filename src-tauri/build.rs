@@ -6,7 +6,7 @@ use std::{fmt::Write, path::Path};
 fn files(dir: &Path, base: &Path, out: &mut Vec<String>) {
     let mut entries: Vec<_> = std::fs::read_dir(dir)
         .unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
-        .map(|e| e.unwrap().path())
+        .map(|e| e.expect("the folder entry reads").path())
         .collect();
     entries.sort();
     for path in entries {
@@ -15,7 +15,7 @@ fn files(dir: &Path, base: &Path, out: &mut Vec<String>) {
         } else {
             let name = path
                 .strip_prefix(base)
-                .unwrap()
+                .expect("every file found lies under data/")
                 .to_string_lossy()
                 .replace('\\', "/");
             out.push(name);
@@ -31,11 +31,13 @@ fn main() {
     let mut code = String::from("pub static FILES: &[(&str, &[u8])] = &[\n");
     for name in &names {
         let path = data.join(name).to_string_lossy().replace('\\', "/");
-        writeln!(code, "    ({name:?}, include_bytes!({path:?})),").unwrap();
+        writeln!(code, "    ({name:?}, include_bytes!({path:?})),")
+            .expect("writing to a String cannot fail");
     }
     code.push_str("];\n");
-    let out = Path::new(&std::env::var("OUT_DIR").unwrap()).join("embedded.rs");
-    std::fs::write(out, code).unwrap();
+    let out = Path::new(&std::env::var("OUT_DIR").expect("cargo sets OUT_DIR for build scripts"))
+        .join("embedded.rs");
+    std::fs::write(out, code).expect("the file is written");
     println!("cargo:rerun-if-changed=data");
     tauri_build::build();
 }

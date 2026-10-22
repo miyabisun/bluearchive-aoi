@@ -296,7 +296,8 @@ fn round(value: f32) -> f32 {
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> T {
-    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+    serde_json::from_str(&std::fs::read_to_string(path).expect("the file reads"))
+        .expect("the JSON parses")
 }
 
 /// A card of a tuning shop: its fixture, the style of the digits (`"bar"` or
@@ -480,14 +481,14 @@ fn font_card_digits(cuts: &mut Cuts, weights: &[FontVec]) {
 fn names(bank: &mut Bank, font: &FontVec) {
     // A name two ids share is one word, under the lower id.
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let students = aoi::student_names(&root.join("data")).unwrap();
+    let students = aoi::student_names(&root.join("data")).expect("data/ lists the students");
     let mut lowest: BTreeMap<&str, i64> = BTreeMap::new();
     for (id, name) in &students {
         let at = lowest.entry(name).or_insert(*id);
         *at = (*at).min(*id);
     }
     for (text, id) in lowest {
-        let word = word(bank, font, id, text).unwrap();
+        let word = word(bank, font, id, text).expect("every student's name draws some ink");
         bank.index.names.push(word);
     }
 }
@@ -501,7 +502,7 @@ fn letters(
     open: &dyn Fn(&str) -> RgbImage,
 ) {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let students = aoi::student_names(&root.join("data")).unwrap();
+    let students = aoi::student_names(&root.join("data")).expect("data/ lists the students");
     let tuned = labels
         .iter()
         .filter(|l| l.role == "tune")
@@ -513,9 +514,17 @@ fn letters(
                 .map(|p| (&p.image, p.id)),
         );
     for (image, id) in tuned {
-        let name = &students.iter().find(|s| s.0 == id).unwrap().1;
+        let name = &students
+            .iter()
+            .find(|s| s.0 == id)
+            .expect("a tune label names a student in data/")
+            .1;
         let words = &bank.index.names;
-        let word = words.iter().find(|w| w.text == *name).cloned().unwrap();
+        let word = words
+            .iter()
+            .find(|w| w.text == *name)
+            .cloned()
+            .expect("names() added a word for every student's name");
         let Some(ink) = student::name::plate(&open(image)) else {
             continue;
         };
@@ -578,11 +587,32 @@ fn dark_digits_and_shops(
             };
             add(cuts, &label.image, "digits", shapes, &held.to_string());
         }
-        let id = shop::SHOPS.iter().position(|s| *s == label.shop).unwrap() as i64;
+        let id = shop::SHOPS
+            .iter()
+            .position(|s| *s == label.shop)
+            .expect("a shop label names one of shop::SHOPS") as i64;
         if let Some(word) =
             shop::menu_ink(&image).and_then(|ink| entry(bank, id, &label.shop, &ink))
         {
             bank.index.shops.push(word);
+        }
+    }
+}
+
+/// Drops the shop bar's letters as near a digit as `APART`: no reference, as a digit
+/// told as one would leave the number short.
+fn drop_bar_letters_near_digits(cuts: &mut Cuts) {
+    if let Some(bar) = cuts.get_mut("bar") {
+        let digits: Vec<Vec<f32>> = bar
+            .iter()
+            .filter(|(c, _)| **c != shop::BAR_LETTER)
+            .flat_map(|(_, gs)| gs.iter().map(Group::mean))
+            .collect();
+        if let Some(letters) = bar.get_mut(&shop::BAR_LETTER) {
+            letters.retain(|g| {
+                let mean = g.mean();
+                digits.iter().all(|d| glyph::distance(d, &mean) > APART)
+            });
         }
     }
 }
@@ -596,7 +626,7 @@ fn main() {
     let weight = |name: &str| {
         let path = fonts.join(format!("NotoSansJP-{name}.otf"));
         let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-        FontVec::try_from_vec(bytes).unwrap()
+        FontVec::try_from_vec(bytes).expect("the Noto Sans JP file is a font")
     };
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let dir = root.join("tests/fixtures");
@@ -609,7 +639,11 @@ fn main() {
     // The fixtures' cards at their own size, and where their values were
     // found among their shapes.
     let at_window: Vec<(Card, Option<(String, usize)>)> = {
-        let open = |path: &str| image::open(dir.join(path)).unwrap().to_rgb8();
+        let open = |path: &str| {
+            image::open(dir.join(path))
+                .expect("the image opens")
+                .to_rgb8()
+        };
         let (mut cuts, mut bank) = (Cuts::new(), Bank::default());
         dark_digits_and_shops(&mut cuts, &mut bank, &credits, &shops, &open);
         font_card_digits(&mut cuts, &weights);
@@ -628,7 +662,9 @@ fn main() {
         let drawn = |at: u32| {
             let dir = &dir;
             move |path: &str| {
-                let image = image::open(dir.join(path)).unwrap().to_rgb8();
+                let image = image::open(dir.join(path))
+                    .expect("the image opens")
+                    .to_rgb8();
                 let scale = at as f32 / screen::drawn_width(&image);
                 let (w, h) = (image.width() as f32 * scale, image.height() as f32 * scale);
                 let image = resize(
@@ -656,21 +692,7 @@ fn main() {
             take_scaled_card_digits(&mut cuts, &at_window, &cards(&shops, &open));
         }
         font_card_digits(&mut cuts, &weights);
-        // A letter as near a digit as `APART` is no reference: a digit told
-        // as it would leave the number short.
-        if let Some(bar) = cuts.get_mut("bar") {
-            let digits: Vec<Vec<f32>> = bar
-                .iter()
-                .filter(|(c, _)| **c != shop::BAR_LETTER)
-                .flat_map(|(_, gs)| gs.iter().map(Group::mean))
-                .collect();
-            if let Some(letters) = bar.get_mut(&shop::BAR_LETTER) {
-                letters.retain(|g| {
-                    let mean = g.mean();
-                    digits.iter().all(|d| glyph::distance(d, &mean) > APART)
-                });
-            }
-        }
+        drop_bar_letters_near_digits(&mut cuts);
         for (style, chars) in &cuts {
             let counts: Vec<String> = chars
                 .iter()
@@ -685,10 +707,11 @@ fn main() {
             }
         }
         letters(&mut bank, &labels, &plates, &open);
-        let (png, index) = bank.encode().unwrap();
+        let (png, index) = bank.encode().expect("the glyph bank encodes");
         let (picture, index_file) = glyph::bank::files(width);
-        std::fs::write(root.join("data").join(picture), png).unwrap();
-        std::fs::write(root.join("data").join(index_file), index + "\n").unwrap();
+        std::fs::write(root.join("data").join(picture), png).expect("the file is written");
+        std::fs::write(root.join("data").join(index_file), index + "\n")
+            .expect("the file is written");
         println!(
             "{width}: {} tiles: {} names, {} letters of the game, {} shops",
             bank.tiles.len(),

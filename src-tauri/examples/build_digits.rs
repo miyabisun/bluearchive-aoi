@@ -62,7 +62,9 @@ fn add(sums: &mut Sums, image: &RgbImage, card: &grid::Card, text: &str) {
         return;
     }
     for (c, g) in std::iter::once('x').zip([x]).chain(text.chars().zip(found)) {
-        let (sum, n) = sums.get_mut(&c).unwrap();
+        let (sum, n) = sums
+            .get_mut(&c)
+            .expect("sums() holds every character a count is labeled with");
         sum.iter_mut().zip(g).for_each(|(s, v)| *s += v);
         *n += 1;
     }
@@ -82,7 +84,10 @@ fn keep(
         let mean = sum
             .into_iter()
             .map(|v| (v / n as f32 * 1000.0).round() / 1000.0);
-        glyphs.get_mut(&c).unwrap().push(mean.collect());
+        glyphs
+            .get_mut(&c)
+            .expect("the glyph map holds every character sums() does")
+            .push(mean.collect());
         samples.push(format!("{c}@{source}:{n}"));
     }
 }
@@ -102,7 +107,7 @@ fn places(image: &RgbImage) -> Vec<(f32, f32)> {
 
 /// The even-numbered stops of the tablet's collection (see the top).
 fn tablet(dir: &Path, glyphs: &mut BTreeMap<char, Vec<Vec<f32>>>, samples: &mut Vec<String>) {
-    let recognizer = Recognizer::embedded().unwrap();
+    let recognizer = Recognizer::embedded().expect("the recognizer loads its embedded data");
     let even = |name: &str| {
         name.rsplit('-')
             .next()
@@ -110,9 +115,13 @@ fn tablet(dir: &Path, glyphs: &mut BTreeMap<char, Vec<Vec<f32>>>, samples: &mut 
             .is_some_and(|k| k % 2 == 0)
     };
     let mut stops: Vec<String> = std::fs::read_dir(dir)
-        .unwrap()
+        .expect("the folder lists")
         .filter_map(|e| {
-            let name = e.unwrap().file_name().to_string_lossy().into_owned();
+            let name = e
+                .expect("the folder entry reads")
+                .file_name()
+                .to_string_lossy()
+                .into_owned();
             name.strip_suffix("-native.png").map(str::to_owned)
         })
         .filter(|n| (n.starts_with("items-") || n.starts_with("equip-")) && even(n))
@@ -124,7 +133,8 @@ fn tablet(dir: &Path, glyphs: &mut BTreeMap<char, Vec<Vec<f32>>>, samples: &mut 
         Some(screen::normalize(&image).into_owned())
     };
     for stop in &stops {
-        let native = open(format!("{stop}-native.png")).unwrap();
+        let native =
+            open(format!("{stop}-native.png")).expect("each stop has its native screencap");
         let Some((_, labels, _)) = recognizer.read_list(&native) else {
             continue;
         };
@@ -161,8 +171,10 @@ fn main() {
         .expect("usage: build_digits <collection of the tablet's screens>");
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let dir = root.join("tests/fixtures");
-    let labels: Vec<ItemFixture> =
-        serde_json::from_str(&std::fs::read_to_string(dir.join("labels.json")).unwrap()).unwrap();
+    let labels: Vec<ItemFixture> = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("labels.json")).expect("the file reads"),
+    )
+    .expect("the JSON parses");
     let tuning: Vec<ItemFixture> = labels.into_iter().filter(|f| f.role == "tune").collect();
 
     let mut glyphs: BTreeMap<char, Vec<Vec<f32>>> =
@@ -171,7 +183,9 @@ fn main() {
     for width in WIDTHS {
         let mut sums = sums();
         for fixture in &tuning {
-            let image = image::open(dir.join(&fixture.image)).unwrap().to_rgb8();
+            let image = image::open(dir.join(&fixture.image))
+                .expect("the image opens")
+                .to_rgb8();
             let height = image.height() * width / image.width();
             let image = resize(&image, width, height, FilterType::Triangle);
             for (card, label) in grid::find_cards(&image).iter().zip(&fixture.cells) {
@@ -189,7 +203,8 @@ fn main() {
         .map(|(c, _)| *c)
         .collect();
     assert!(missing.is_empty(), "no samples for {missing:?}");
-    let json = serde_json::to_string(&quantity::Digits { glyphs }).unwrap();
-    std::fs::write(root.join("data/digits.json"), json + "\n").unwrap();
+    let json =
+        serde_json::to_string(&quantity::Digits { glyphs }).expect("the value serializes to JSON");
+    std::fs::write(root.join("data/digits.json"), json + "\n").expect("the file is written");
     println!("samples: {}", samples.join(" "));
 }

@@ -1,1 +1,2 @@
 doc-valid-idents = ["SchaleDB", ".."]
+allow-unwrap-in-tests = true

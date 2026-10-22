@@ -17,7 +17,7 @@ fn root() -> &'static Path {
 }
 
 fn recognizer() -> aoi::Recognizer {
-    aoi::Recognizer::load(&root().join("data")).unwrap()
+    aoi::Recognizer::load(&root().join("data")).expect("the recognizer loads data/")
 }
 
 /// Every screen's credits read, right, as Aoi reads them (scaled down to Full

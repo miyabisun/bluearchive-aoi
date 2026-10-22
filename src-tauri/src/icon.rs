@@ -351,7 +351,11 @@ impl IconMatcher {
             .into_iter()
             .map(|(i, _)| {
                 let t = &self.fine[i];
-                debug_assert_eq!(t.width + 2 * SEARCH, samples[1].width());
+                debug_assert_eq!(
+                    t.width + 2 * SEARCH,
+                    samples[1].width(),
+                    "the measured-size sample spans the template and the search margin"
+                );
                 // The whole position search at the measured size, then the other sizes
                 // only around the best position.
                 let mut best = (f32::MIN, &samples[1], (0, 0));

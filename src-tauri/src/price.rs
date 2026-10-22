@@ -231,7 +231,10 @@ const ORDER: [&str; 13] = [
     "装備設計図選択ボックス",
 ];
 const OTHERS: usize = 7;
-const _: () = assert!(ORDER[OTHERS].is_empty());
+const _: () = assert!(
+    ORDER[OTHERS].is_empty(),
+    "OTHERS is the index of the empty entry in ORDER"
+);
 
 /// Whether `good` is the item or of the kind a rule (or `ORDER`) names.
 fn is(good: &Good, item: &str) -> bool {

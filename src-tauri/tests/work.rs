@@ -6,7 +6,8 @@ use std::path::Path;
 use aoi::{Recognizer, Row, quantity::Count, work::Stages};
 
 fn recognizer() -> Recognizer {
-    Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap()
+    Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data"))
+        .expect("the recognizer loads data/")
 }
 
 fn row(id: i64, count: u32) -> Row {

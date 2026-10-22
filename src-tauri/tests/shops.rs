@@ -71,15 +71,17 @@ fn a_smaller_screen_reads_offers_right_or_not_at_all() {
 /// What the shop fixtures read, scaled to `width` if given: what was read
 /// wrong, how many offers were read right, and how many are labeled.
 fn offers_read(width: Option<u32>) -> (Vec<String>, usize, usize) {
-    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data"))
+        .expect("the recognizer loads data/");
     let items = recognizer.shop_goods();
-    let fixtures: Vec<Fixture> =
-        serde_json::from_str(&std::fs::read_to_string(fixtures_dir().join("shops.json")).unwrap())
-            .unwrap();
+    let fixtures: Vec<Fixture> = serde_json::from_str(
+        &std::fs::read_to_string(fixtures_dir().join("shops.json")).expect("the file reads"),
+    )
+    .expect("the JSON parses");
     let (mut wrong, mut read, mut labeled) = (Vec::new(), 0, 0);
     for fixture in fixtures {
         let image = image::open(fixtures_dir().join(&fixture.image))
-            .unwrap()
+            .expect("the image opens")
             .to_rgb8();
         let image = match width {
             Some(width) => common::drawn_at(&image, width),

@@ -13,7 +13,8 @@ fn main() {
         .and_then(|s| s.parse().ok())
         .unwrap_or(60);
     let wait = std::env::args().nth(2).as_deref() == Some("wait");
-    let recognizer = Arc::new(Recognizer::embedded().unwrap());
+    let recognizer =
+        Arc::new(Recognizer::embedded().expect("the recognizer loads its embedded data"));
     let started = Instant::now();
     let watcher = watch::start(
         recognizer,
@@ -41,15 +42,24 @@ fn main() {
                     println!("{at:6.1}s shops {}", sizes.join(" / "));
                 }
                 Some(aoi::watch::Update::Phone(link)) => {
-                    println!("{at:6.1}s phone {}", serde_json::to_string(&link).unwrap());
+                    println!(
+                        "{at:6.1}s phone {}",
+                        serde_json::to_string(&link).expect("the value serializes to JSON")
+                    );
                 }
                 Some(aoi::watch::Update::Cast(Cast::Waiting { url, problem, .. })) => {
                     println!("{at:6.1}s waiting at {url} {problem:?}");
                 }
                 Some(aoi::watch::Update::Cast(cast)) => {
-                    println!("{at:6.1}s cast {}", serde_json::to_string(&cast).unwrap());
+                    println!(
+                        "{at:6.1}s cast {}",
+                        serde_json::to_string(&cast).expect("the value serializes to JSON")
+                    );
                 }
-                None => println!("{at:6.1}s {}", serde_json::to_string(status).unwrap()),
+                None => println!(
+                    "{at:6.1}s {}",
+                    serde_json::to_string(status).expect("the value serializes to JSON")
+                ),
             }
         },
     );

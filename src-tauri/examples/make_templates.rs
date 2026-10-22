@@ -21,13 +21,13 @@ fn main() {
     let student = args.next().expect("student screen");
     let other_tab = args.next().expect("student screen on another tab");
     let open = |path: &str| {
-        let image = image::open(path).unwrap().to_rgb8();
+        let image = image::open(path).expect("the image opens").to_rgb8();
         let unit = grid::find_panel(&image).expect("a list").card_height;
         (image, unit)
     };
     let (image, unit) = open(&items);
     let save = |name: &str, picture: image::RgbImage| {
-        picture.save(data.join(name)).unwrap();
+        picture.save(data.join(name)).expect("the image saves");
         println!("{name}: {}x{}", picture.width(), picture.height());
     };
     save(
@@ -64,7 +64,7 @@ fn main() {
         )
         .expect("title"),
     );
-    let image = image::open(&student).unwrap().to_rgb8();
+    let image = image::open(&student).expect("the image opens").to_rgb8();
     let unit = (screen::unit(image.width(), image.height()) * screen::STUDENT_UNIT).round() as u32;
     save(
         "title-students.png",
@@ -88,7 +88,7 @@ fn main() {
         )
         .expect("tab"),
     );
-    let image = image::open(&other_tab).unwrap().to_rgb8();
+    let image = image::open(&other_tab).expect("the image opens").to_rgb8();
     let unit = (screen::unit(image.width(), image.height()) * screen::STUDENT_UNIT).round() as u32;
     save(
         "student-tab-other.png",

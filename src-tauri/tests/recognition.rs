@@ -46,16 +46,19 @@ fn fixtures_dir() -> PathBuf {
 }
 
 fn fixtures() -> Vec<Fixture> {
-    let json = std::fs::read_to_string(fixtures_dir().join("labels.json")).unwrap();
-    serde_json::from_str(&json).unwrap()
+    let json = std::fs::read_to_string(fixtures_dir().join("labels.json")).expect("the file reads");
+    serde_json::from_str(&json).expect("the JSON parses")
 }
 
 fn recognizer() -> Recognizer {
-    Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap()
+    Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data"))
+        .expect("the recognizer loads data/")
 }
 
 fn open(name: &str) -> image::RgbImage {
-    image::open(fixtures_dir().join(name)).unwrap().to_rgb8()
+    image::open(fixtures_dir().join(name))
+        .expect("the image opens")
+        .to_rgb8()
 }
 
 const OTHER_SCREENS: [&str; 3] = [

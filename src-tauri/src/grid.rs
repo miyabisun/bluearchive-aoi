@@ -109,7 +109,7 @@ fn spans(flags: &[bool]) -> Vec<(u32, u32)> {
     let mut out = Vec::new();
     let mut start = None;
     for (i, &f) in flags.iter().chain(std::iter::once(&false)).enumerate() {
-        let i = u32::try_from(i).unwrap();
+        let i = u32::try_from(i).expect("a flag per pixel column or row, so the index fits in u32");
         match (f, start) {
             (true, None) => start = Some(i),
             (false, Some(s)) => {

@@ -19,8 +19,10 @@ const BACKGROUND_STEP: u32 = 30;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let image = image::open(&args[1]).unwrap().to_rgb8();
-    let cell: usize = args[2].parse().unwrap();
+    let image = image::open(&args[1]).expect("the image opens").to_rgb8();
+    let cell: usize = args[2]
+        .parse()
+        .expect("usage: make_icon <image> <card number> <out> [shape] [seed=x,y...]");
     let card = grid::find_cards(&image)[cell];
     let canvas = IconMatcher::canvas(&image, &card);
     let (width, height) = canvas.dimensions();
@@ -33,14 +35,17 @@ fn main() {
         .filter_map(|a| a.strip_prefix("seed="))
         .map(|s| {
             let (x, y) = s.split_once(',').expect("seed=x,y");
-            (x.parse().unwrap(), y.parse().unwrap())
+            (
+                x.parse().expect("seed=x,y takes whole numbers"),
+                y.parse().expect("seed=x,y takes whole numbers"),
+            )
         })
         .collect();
     if let Some(shape) = args.get(4).filter(|a| !a.starts_with("seed=")) {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("data/schaledb/icons")
             .join(format!("{shape}.webp"));
-        let shape = image::open(path).unwrap().to_rgba8();
+        let shape = image::open(path).expect("the image opens").to_rgba8();
         for (x, y, p) in icon.enumerate_pixels_mut() {
             p.0[3] = shape.get_pixel(x, y).0[3];
         }
@@ -110,5 +115,5 @@ fn main() {
             }
         }
     }
-    icon.save(&args[3]).unwrap();
+    icon.save(&args[3]).expect("the image saves");
 }
