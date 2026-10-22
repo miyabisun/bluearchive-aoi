@@ -56,6 +56,8 @@ pub struct Kinds {
     /// Each oopart's tiers.
     pub ooparts: Vec<[Option<HeldCell>; 4]>,
     pub blueprints: Vec<SlotPrints>,
+    /// The enhancement materials' tiers, kind by kind (see `ENHANCEMENTS`).
+    pub enhancements: Vec<[Option<HeldCell>; 4]>,
 }
 
 /// A school's skill materials by tier: its name, the icon of its emblem
@@ -173,6 +175,37 @@ pub fn ooparts<S: BuildHasher, T: BuildHasher>(
     .into_iter()
     .map(|(_, tiers)| tiers)
     .collect()
+}
+
+/// The enhancement materials of the equipment list by their category, in the
+/// user's order of 2026-10-22: the orbs, then the unique weapons' springs,
+/// hammers and barrels.
+const ENHANCEMENTS: [&str; 4] = [
+    "Exp",
+    "WeaponExpGrowthA",
+    "WeaponExpGrowthB",
+    "WeaponExpGrowthC",
+];
+
+/// The enhancement materials of `equipment`, a kind's tiers a row, in the
+/// order of `ENHANCEMENTS`.
+pub fn enhancements<S: BuildHasher>(
+    equipment: &[Item],
+    held: &HashMap<i64, Count, S>,
+) -> Vec<[Option<HeldCell>; 4]> {
+    let none = HashMap::<i64, u64>::new();
+    let mut rows = by_tier(
+        equipment,
+        |e| {
+            ENHANCEMENTS
+                .contains(&e.category.as_str())
+                .then(|| e.category.clone())
+        },
+        held,
+        &none,
+    );
+    rows.sort_by_key(|(kind, _)| ENHANCEMENTS.iter().position(|k| k == kind));
+    rows.into_iter().map(|(_, tiers)| tiers).collect()
 }
 
 /// Each slot's T1 piece and blueprints (see `SlotPrints`), in the order of
@@ -397,6 +430,53 @@ mod tests {
                     Some((103, Some(Count::Exact(2))))
                 ],
                 vec![Some((110, None)), None, None, None],
+            ]
+        );
+    }
+
+    #[test]
+    fn the_enhancement_materials_come_the_orbs_first_then_springs_hammers_and_barrels() {
+        let entry = |id: i64, category: &str, rarity| Item {
+            id,
+            name: format!("{category}{id}"),
+            icon: String::new(),
+            category: category.into(),
+            tier: 0,
+            rarity: Some(rarity),
+        };
+        // As the equipment list holds them: the parts by id, the orbs apart, a piece.
+        let equipment = [
+            entry(10, "WeaponExpGrowthA", Rarity::N),
+            entry(13, "WeaponExpGrowthA", Rarity::SSR),
+            entry(20, "WeaponExpGrowthB", Rarity::N),
+            entry(30, "WeaponExpGrowthC", Rarity::N),
+            entry(40, "WeaponExpGrowthZ", Rarity::N),
+            entry(1000, "Hat", Rarity::N),
+            entry(1, "Exp", Rarity::N),
+            entry(4, "Exp", Rarity::SSR),
+        ];
+        let held = HashMap::from([(4, Count::Thousands(2)), (13, Count::Exact(7))]);
+        let rows: Vec<_> = enhancements(&equipment, &held)
+            .iter()
+            .map(|r| cells(r))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                vec![
+                    Some((1, None)),
+                    None,
+                    None,
+                    Some((4, Some(Count::Thousands(2))))
+                ],
+                vec![
+                    Some((10, None)),
+                    None,
+                    None,
+                    Some((13, Some(Count::Exact(7))))
+                ],
+                vec![Some((20, None)), None, None, None],
+                vec![Some((30, None)), None, None, None],
             ]
         );
     }

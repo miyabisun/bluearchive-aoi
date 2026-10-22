@@ -453,6 +453,7 @@ impl Recognizer {
                 self.equipment.entries(),
                 &equipment_held,
             ),
+            enhancements: kinds::enhancements(self.equipment.entries(), &equipment_held),
         }
     }
 

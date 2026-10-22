@@ -66,6 +66,37 @@ fn each_oopart_comes_with_its_four_tiers() {
 }
 
 #[test]
+fn the_enhancement_materials_come_four_kinds_of_four_tiers() {
+    let kinds = recognizer().kinds(&[], &[row(4, 1383)]);
+    let names: Vec<Vec<&str>> = kinds
+        .enhancements
+        .iter()
+        .map(|r| r.iter().flatten().map(|c| c.name.as_str()).collect())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ["初級強化珠", "中級強化珠", "上級強化珠", "最上級強化珠"],
+            [
+                "錆びたスプリング",
+                "普通のスプリング",
+                "クロムスプリング",
+                "チタンスプリング"
+            ],
+            [
+                "錆びたハンマー",
+                "普通のハンマー",
+                "クロムハンマー",
+                "チタンハンマー"
+            ],
+            ["錆びた銃身", "普通の銃身", "クロム銃身", "チタン銃身"],
+        ]
+    );
+    let top = kinds.enhancements[0][3].as_ref().unwrap();
+    assert_eq!(top.held, Some(Count::Exact(1383)));
+}
+
+#[test]
 fn each_slot_shows_its_t1_piece_and_blueprints_to_t10_and_its_universal_ones() {
     let kinds = recognizer().kinds(&[], &[row(1000, 249), row(501_000, 51)]);
     let slots: Vec<_> = kinds.blueprints.iter().map(|s| s.name.as_str()).collect();

@@ -168,6 +168,13 @@ const kinds = {
       null,
     ],
   ],
+  enhancements: [
+    ["強化珠", "スプリング"].map((kind, k) =>
+      [0, 1, 2, 3].map((t) =>
+        heldCell(k * 10 + t + 1, `${kind}${t}`, `equipment_icon_exp_${t}`, { exact: 100 * k + t }),
+      ),
+    ),
+  ].flat(),
   blueprints: [
     {
       name: "帽子",
@@ -285,6 +292,20 @@ test("the equipment tab's blueprints: a slot a row, its T1 pieces to T10 bluepri
   await expect(hat.last()).toHaveAttribute("title", "帽子の万能設計図");
   await page.setViewportSize({ width: 360, height: 640 });
   expect(await overflow(page)).toBe(0);
+
+  // The enhancement materials: a kind a row, its tiers on their colours, no search.
+  await page.getByRole("tab", { name: "強化素材" }).click();
+  await expect(page.getByLabel("名前で検索")).toHaveCount(0);
+  const rows = page.locator("table.enhancements tr");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0).locator("td")).toHaveText(["0", "1", "2", "3"]);
+  await expect(rows.nth(1).locator("td")).toHaveText(["100", "101", "102", "103"]);
+  await expect(rows.nth(1).getByRole("img").first()).toHaveAttribute("title", "スプリング0");
+  for (let t = 0; t < 4; t++) {
+    const face = await colorOf(page, `--c-tier-${t + 1}`);
+    await expect(rows.nth(0).locator("td").nth(t)).toHaveCSS("background-color", face);
+  }
+  expect(await overflow(page)).toBe(0);
 });
 
 test("the status pauses the reading when pressed, and resumes it", async ({ page }) => {
@@ -398,7 +419,7 @@ test("the tabs and the search field take focus from the keyboard", async ({ page
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "メニュー" })).toBeFocused();
   // Then the sub-tabs, and the search over everything.
-  for (const name of ["全体", "設計図"]) {
+  for (const name of ["全体", "設計図", "強化素材"]) {
     await page.keyboard.press("Tab");
     await expect(page.getByRole("tab", { name })).toBeFocused();
   }

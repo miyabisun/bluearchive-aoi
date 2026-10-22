@@ -160,7 +160,7 @@
   let view = $state({ tab: "items", sub: { items: "all", equipment: "all" } });
   const sub = $derived(view.sub[view.tab] ?? "all");
   const kinds = $derived(
-    snapshot.kinds ?? { secret: [], schools: [], ooparts: [], blueprints: [] },
+    snapshot.kinds ?? { secret: [], schools: [], ooparts: [], blueprints: [], enhancements: [] },
   );
   /** The tiers a slot's blueprints are counted at: its T1 piece's, then T2 to T10. */
   const PRINT_TIERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -1141,12 +1141,12 @@
             {/each}
           </table>
         </div>
-      {:else if sub === "ooparts"}
-        <!-- An oopart a row, its tiers on their colours. -->
+      {:else if sub === "ooparts" || sub === "enhancements"}
+        <!-- An oopart, or a kind of enhancement material, a row, its tiers on their colours. -->
         <div class="table-scroll" data-state="success">
-          <table class="tiers stock ooparts">
+          <table class="tiers stock {sub}">
             <tbody>
-              {#each kinds.ooparts as tiers, k (k)}
+              {#each kinds[sub] as tiers, k (k)}
                 <tr>{@render heldTiers(tiers)}</tr>
               {/each}
             </tbody>
@@ -2151,7 +2151,7 @@
 
   // The skill materials: the secret notes, then a school's BDs over its notes,
   // its emblem at the left; a wider gap between schools.
-  .tiers:is(.skills, .ooparts)
+  .tiers:is(.skills, .ooparts, .enhancements)
     margin-top: 0
   .skills
     .emblem

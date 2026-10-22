@@ -40,6 +40,7 @@ export const SUBTABS = {
   equipment: [
     { id: "all", name: "全体" },
     { id: "blueprints", name: "設計図" },
+    { id: "enhancements", name: "強化素材" },
   ],
 };
 
