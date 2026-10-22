@@ -18,6 +18,7 @@ import {
   enhancementCells,
   hardTile,
   hardCost,
+  starMarks,
   planCard,
   planCoin,
   planTitle,
@@ -159,7 +160,7 @@ describe("studentCells", () => {
   it("writes a student's training the way timeline-arona does", () => {
     expect(studentCells(known)).toEqual({
       level: "90",
-      star: "固有4",
+      star: 8,
       weapon: "固有武器 Lv60",
       skills: "5M7M",
       equipment: "T10/9/8",
@@ -182,15 +183,15 @@ describe("studentCells", () => {
     expect(cells.level).toBe("?");
     // Under ★5 the weapon is locked; at ★5 its stars must be read.
     expect(studentCells({ ...known, rarity: 3, weapon: null })).toMatchObject({
-      star: "★3",
+      star: 3,
       weapon: "",
     });
-    expect(studentCells({ ...known, rarity: null }).star).toBe("?");
+    expect(studentCells({ ...known, rarity: null }).star).toBe(null);
     expect(cells.skills).toBe("3?11");
     expect(cells.equipment).toBe("T1/?/1");
     expect(cells.gear).toBe("—");
     expect(cells.ability).toBe("0/?/0");
-    expect(studentCells({ ...known, weapon: undefined })).toMatchObject({ star: "?", weapon: "" });
+    expect(studentCells({ ...known, weapon: undefined })).toMatchObject({ star: null, weapon: "" });
   });
 });
 
@@ -443,6 +444,15 @@ describe("plan", () => {
   it("names a star: the student's 1 to 5, then the unique weapon's", () => {
     // A teacher calls ★5 by its weapon's first star.
     expect([1, 4, 5, 6, 8].map(starName)).toEqual(["★1", "★4", "固有1", "固有2", "固有4"]);
+  });
+
+  it("draws a star as the game does: the student's in yellow, the unique weapon's in blue", () => {
+    expect(starMarks(3)).toEqual({ kind: "student", places: [0, 1, 2], label: "★3" });
+    expect(starMarks(4)).toMatchObject({ kind: "student", places: [0, 1, 2, 3] });
+    // 固有1 (the student's ★5) to 固有4 as the weapon's stars.
+    expect(starMarks(5)).toEqual({ kind: "weapon", places: [0], label: "固有1" });
+    expect(starMarks(7)).toEqual({ kind: "weapon", places: [0, 1, 2], label: "固有3" });
+    expect(starMarks(8).places).toHaveLength(4);
   });
 
   it("counts a student's star on into the unique weapon's", () => {
@@ -847,15 +857,18 @@ describe("month-end and daily shops", () => {
 
   it("tells a card's times left at its price, bought up, or its student done", () => {
     const card = { left: 16, price: 50, amount: 5, barred: false };
-    expect(planCard(card)).toEqual({ amount: "×5", text: "16回@50" });
+    expect(planCard(card)).toEqual({ amount: "×5", text: "16回@50", star: null });
     expect(planCard({ ...card, price: null, amount: null })).toEqual({
       amount: "",
       text: "16回@?",
+      star: null,
     });
-    expect(planCard({ ...card, left: 0 })).toEqual({ amount: "×5", text: "売切れ" });
+    expect(planCard({ ...card, left: 0 })).toEqual({ amount: "×5", text: "売切れ", star: null });
+    // The student at 固有4: the weapon's four stars in the place of the times left.
     expect(planCard({ ...card, left: 0, barred: true })).toEqual({
       amount: "×5",
-      text: "固有4",
+      text: "",
+      star: 8,
     });
   });
 
@@ -949,7 +962,8 @@ describe("hard missions", () => {
     const aru = { ...card, held: { exact: 148 } };
     expect(hardTile(aru)).toEqual({
       amount: "1個所",
-      text: "固有3 148文字",
+      star: 7,
+      held: "148文字",
       title: lines("アルの神名文字", "星: 固有3", "所持: 148", "任務 Hard: 18-3", "1日 60 AP"),
     });
     const yuuka = {
@@ -959,13 +973,13 @@ describe("hard missions", () => {
       star: 2,
       held: { exact: 1280 },
     };
-    expect(hardTile(yuuka)).toMatchObject({ amount: "3個所", text: "★2 1,280文字" });
+    expect(hardTile(yuuka)).toMatchObject({ amount: "3個所", star: 2, held: "1,280文字" });
     expect(hardTile(yuuka).title).toContain("任務 Hard: 1-1、4-3、12-2");
     // A student never read, the item list never read; one at 固有4.
     const unread = { ...card, star: null, held: null };
-    expect(hardTile(unread)).toMatchObject({ text: "? ?文字" });
+    expect(hardTile(unread)).toMatchObject({ star: null, held: "?文字" });
     expect(hardTile(unread).title).toContain("星: 未読み取り\n所持: ?");
-    expect(hardTile({ ...card, star: 8, done: true }).text).toBe("固有4 80文字");
+    expect(hardTile({ ...card, star: 8, done: true })).toMatchObject({ star: 8, held: "80文字" });
   });
 
   it("counts a day's AP of the students reserved, those at 固有4 too", () => {

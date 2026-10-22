@@ -50,6 +50,7 @@
     step,
     shopStale,
     sortStudents,
+    starMarks,
     starName,
     starOf,
     statusView,
@@ -383,6 +384,17 @@
   {/each}
 {/snippet}
 
+<!-- A star as the game draws it (the user's of 2026-10-22): the student's yellow, the
+     unique weapon's blue, overlapping as there, its name to read it by. -->
+{#snippet stars(/** @type {number} */ star)}
+  {@const marks = starMarks(star)}
+  <span class="stars" data-kind={marks.kind} role="img" aria-label={marks.label}
+    >{#each marks.places as place (place)}<svg class="star" aria-hidden="true"
+        ><use href="#star-{marks.kind}" /></svg
+      >{/each}</span
+  >
+{/snippet}
+
 {#snippet chevron()}
   <svg class="chevron" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"
     ><path d="M4 2l5 4-5 4z" fill="currentColor" /></svg
@@ -418,6 +430,60 @@
     <span class="lamp dot" aria-hidden="true"></span>
   {/if}
 {/snippet}
+
+<!-- The stars the game draws, cut from its student screen by the reading's own inks
+     (`student.rs`'s STAR and WEAPON_STAR, 2026-10-22 at 1240 high): a star's ink 28 px
+     square, a five-pointed star with its rim and faces lit and shaded; the student's
+     gold #fcc63a to #fed92c in an orange rim, the weapon's cyan #6ce3fe to #79e4fc in
+     #6489a3. In the units of that ink box, with room for the rim. -->
+<svg class="star-defs" aria-hidden="true">
+  <defs>
+    <linearGradient id="star-student-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fcc63a" /><stop offset="1" stop-color="#fed92c" />
+    </linearGradient>
+    <linearGradient id="star-weapon-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6ce3fe" /><stop offset="1" stop-color="#79e4fc" />
+    </linearGradient>
+    <symbol id="star-student" viewBox="-2 -2 32 32">
+      <path
+        d="M14 0.69L18.33 9.45L28 10.86L21 17.68L22.65 27.31L14 22.77L5.35 27.31L7 17.68L0 10.86L9.67 9.45Z"
+        fill="url(#star-student-fill)"
+        stroke="#e8890c"
+        stroke-width="2"
+        stroke-linejoin="round"
+      />
+      <path
+        d="M14 15.41L9.67 9.45L14 0.69ZM14 15.41L18.33 9.45L28 10.86ZM14 15.41L21 17.68L22.65 27.31ZM14 15.41L14 22.77L5.35 27.31ZM14 15.41L7 17.68L0 10.86Z"
+        fill="#fff"
+        opacity="0.45"
+      />
+      <path
+        d="M14 15.41L14 0.69L18.33 9.45ZM14 15.41L28 10.86L21 17.68ZM14 15.41L22.65 27.31L14 22.77ZM14 15.41L5.35 27.31L7 17.68ZM14 15.41L0 10.86L9.67 9.45Z"
+        fill="#d98a00"
+        opacity="0.18"
+      />
+    </symbol>
+    <symbol id="star-weapon" viewBox="-2 -2 32 32">
+      <path
+        d="M14 0.69L18.33 9.45L28 10.86L21 17.68L22.65 27.31L14 22.77L5.35 27.31L7 17.68L0 10.86L9.67 9.45Z"
+        fill="url(#star-weapon-fill)"
+        stroke="#6489a3"
+        stroke-width="2"
+        stroke-linejoin="round"
+      />
+      <path
+        d="M14 15.41L9.67 9.45L14 0.69ZM14 15.41L18.33 9.45L28 10.86ZM14 15.41L21 17.68L22.65 27.31ZM14 15.41L14 22.77L5.35 27.31ZM14 15.41L7 17.68L0 10.86Z"
+        fill="#fff"
+        opacity="0.5"
+      />
+      <path
+        d="M14 15.41L14 0.69L18.33 9.45ZM14 15.41L28 10.86L21 17.68ZM14 15.41L22.65 27.31L14 22.77ZM14 15.41L5.35 27.31L7 17.68ZM14 15.41L0 10.86L9.67 9.45Z"
+        fill="#2a9cc8"
+        opacity="0.2"
+      />
+    </symbol>
+  </defs>
+</svg>
 
 <!-- One row: the tabs, then the status and the menu at the right end. The window's
      title bar names the app. -->
@@ -1024,7 +1090,10 @@
                         loading="lazy"
                       /><span class="count">{tile.amount}</span></span
                     >
-                    <span class="offer">{tile.text}</span>
+                    <span class="offer"
+                      >{#if tile.star == null}?{:else}{@render stars(tile.star)}{/if}
+                      {tile.held}</span
+                    >
                     {#if card.reserved}<span class="booked">予約中</span>{/if}
                   </button>
                 </li>
@@ -1118,7 +1187,7 @@
                             title={coin.name}
                             width="18"
                             height="18"
-                          />{tile.text}</span
+                          />{#if tile.star}{@render stars(tile.star)}{:else}{tile.text}{/if}</span
                         >
                         {#if card.reserved}<span class="booked">予約中</span>{/if}
                       </button>
@@ -1365,7 +1434,9 @@
                     </td>
                     <td class="name">{row.name}</td>
                     <td class="num">{cells.level}</td>
-                    <td title={cells.weapon || undefined}>{cells.star}</td>
+                    <td title={cells.weapon || undefined}
+                      >{#if cells.star == null}?{:else}{@render stars(cells.star)}{/if}</td
+                    >
                     <td class="code">{cells.skills}</td>
                     <td class="code">{cells.equipment}</td>
                     <td>{cells.gear}</td>
@@ -2401,6 +2472,28 @@
     text-align: right
     font-variant-numeric: tabular-nums
     white-space: nowrap
+
+  // The game's stars in a row, a star's ink 1em square in a box 32/28 of it with
+  // room for the rim. They overlap as the game's: their left edges 0.833 of a star
+  // apart for the student's (23.3 px on 28), 1.032 for the weapon's (28.9 on 28),
+  // measured on 2026-10-22 at 1240 high.
+  .star-defs
+    position: absolute
+    width: 0
+    height: 0
+    overflow: hidden
+  .stars
+    display: inline-flex
+    align-items: center
+    vertical-align: middle
+    .star
+      flex: none
+      width: calc(32em / 28)
+      height: calc(32em / 28)
+    &[data-kind="student"] .star + .star
+      margin-left: calc(0.833em - 32em / 28)
+    &[data-kind="weapon"] .star + .star
+      margin-left: calc(1.032em - 32em / 28)
 
   .tiles
     display: grid

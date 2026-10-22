@@ -499,7 +499,7 @@ test("shows the students read from the student screen", async ({ page }) => {
     "",
     "ホシノ",
     "90",
-    "固有4",
+    "",
     "5MMM",
     "T10/10/10",
     "T2",
@@ -510,18 +510,41 @@ test("shows the students read from the student screen", async ({ page }) => {
     "",
     "アカネ（バニーガール）",
     "?",
-    "★3",
+    "",
     "2336",
     "T4/?/3",
     "—",
     "0/0/0",
     "20",
   ]);
-  // The star counts on into the unique weapon's, its level on hover.
-  await expect(page.locator("tbody tr").first().locator("td").nth(3)).toHaveAttribute(
-    "title",
-    "固有武器 Lv60",
-  );
+  // The star counts on into the unique weapon's, its level on hover; drawn as the
+  // game's stars: the weapon's in blue, the student's in yellow, named to read by.
+  const hoshino = page.locator("tbody tr").first().locator("td").nth(3);
+  await expect(hoshino).toHaveAttribute("title", "固有武器 Lv60");
+  const weapon = hoshino.getByRole("img", { name: "固有4" });
+  await expect(weapon.locator("svg.star")).toHaveCount(4);
+  await expect(weapon.locator("use").first()).toHaveAttribute("href", "#star-weapon");
+  const student = page.locator("tbody tr").nth(1).getByRole("img", { name: "★3" });
+  await expect(student.locator("svg.star")).toHaveCount(3);
+  await expect(student.locator("use").first()).toHaveAttribute("href", "#star-student");
+  // Overlapping as the game's: left edges 0.833 of a star's ink apart for the student's,
+  // 1.032 for the weapon's (the ink 28/32 of the box drawn).
+  const pitch = async (row) => {
+    const [a, b] = await row
+      .locator("svg.star")
+      .evaluateAll((s) => s.slice(0, 2).map((e) => e.getBoundingClientRect()));
+    return (b.left - a.left) / ((a.height * 28) / 32);
+  };
+  expect(await pitch(student)).toBeCloseTo(0.833, 2);
+  expect(await pitch(weapon)).toBeCloseTo(1.032, 2);
+  // The colours are the game's, whatever the theme.
+  const fill = (id) =>
+    page.locator(`#${id} stop`).evaluateAll((s) => s.map((e) => e.getAttribute("stop-color")));
+  expect(await fill("star-student-fill")).toEqual(["#fcc63a", "#fed92c"]);
+  expect(await fill("star-weapon-fill")).toEqual(["#6ce3fe", "#79e4fc"]);
+  // The stars are drawn: a box of the size asked for, painted.
+  const box = await student.locator("svg.star").first().boundingBox();
+  expect(box.width).toBeGreaterThan(10);
   await page.getByLabel("名前で検索").fill("ｱｶﾈ");
   await expect(page.locator("tbody tr")).toHaveCount(1);
 });
@@ -1403,7 +1426,12 @@ test("reserves a hard mission's eleph, the day's AP it takes red in the hard mis
   // and the elephs short of 固有4 in the place of the price; 固有4 greyed, last.
   const cards = page.locator(".work details", { hasText: "任務 Hard" }).locator("li");
   await expect(cards.locator(".count")).toHaveText(["1個所", "3個所", "1個所"]);
-  await expect(cards.locator(".offer")).toHaveText(["固有3 80文字", "★2 80文字", "固有4 80文字"]);
+  await expect(cards.locator(".offer")).toHaveText([/^\s*80文字$/, /^\s*80文字$/, /^\s*80文字$/]);
+  // The star as the game draws it, before the elephs held.
+  const named = await cards
+    .locator(".offer [role=img]")
+    .evaluateAll((s) => s.map((e) => e.ariaLabel));
+  expect(named).toEqual(["固有3", "★2", "固有4"]);
   await expect(cards.last()).toHaveClass(/sold/);
   await expect(cards.first()).toHaveCSS("background-color", await colorOf(page, "--c-eleph"));
   const aru = page.getByRole("button", { name: /アルの神名文字/ });
@@ -1488,7 +1516,9 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
   await page.locator(".work summary", { hasText: "ショップ: 総力戦" }).click();
   // A card a good and a coin: the times left at the price, bought up, or its student done.
   const cards = page.locator(".plan li");
-  await expect(cards).toHaveText(["×5 16回@50", "×5 売切れ", "×5 固有4"]);
+  await expect(cards).toHaveText(["×5 16回@50", "×5 売切れ", /^×5\s*$/]);
+  // The student at 固有4: the weapon's four stars in the place of the times left.
+  await expect(cards.last().getByRole("img", { name: "固有4" }).locator("svg.star")).toHaveCount(4);
   // The elephs on pink, as the shop tab paints them, though their rarity is 初級.
   for (let i = 0; i < 3; i++) {
     await expect(cards.nth(i)).toHaveCSS("background-color", await colorOf(page, "--c-eleph"));

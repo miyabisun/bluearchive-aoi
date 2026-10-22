@@ -117,7 +117,7 @@ export function studentCells(t) {
   const star = starOf(t);
   return {
     level: show(t.level),
-    star: star === null ? "?" : starName(star),
+    star,
     weapon: t.weapon ? `固有武器 Lv${t.weapon.level}` : "",
     skills: show(ex) + others.map((s) => (s === 10 ? "M" : show(s))).join(""),
     equipment: "T" + t.equipment.map((e) => (known(e) ? String(e.tier) : "?")).join("/"),
@@ -477,6 +477,21 @@ export function tierCell(row) {
 export const starName = (star) => (star <= 4 ? `★${star}` : `固有${star - 4}`);
 
 /**
+ * A star as the game draws it (the user's of 2026-10-22): the student's ★1 to
+ * ★4 as so many yellow stars, 固有1 to 固有4 as so many of the unique weapon's
+ * blue ones; a place a star, and its name to read it by.
+ */
+export function starMarks(star) {
+  const weapon = star > 4;
+  const count = weapon ? star - 4 : star;
+  return {
+    kind: weapon ? "weapon" : "student",
+    places: Array.from({ length: count }, (_, i) => i),
+    label: starName(star),
+  };
+}
+
+/**
  * A student's star counted on into the unique weapon's (★5 with the weapon at
  * ★2 is 6), `null` unread: the weapon is had from ★5, so a ★5 needs it read.
  */
@@ -666,18 +681,15 @@ export function orbCells(c, orbs) {
 
 /**
  * A month-end shop's card: how many one buy gives ("×5"), and the times left
- * at the price ("16回@50", "@?" without terms), "売切れ" bought up, or "固有4"
- * where its student takes no more.
+ * at the price ("16回@50", "@?" without terms) or "売切れ" bought up; where
+ * its student takes no more, the star 固有4 (`star`, see `starMarks`) instead.
  */
 export function planCard(card) {
   const price = card.price == null ? "?" : exact.format(card.price);
   return {
     amount: card.amount ? `×${exact.format(card.amount)}` : "",
-    text: card.barred
-      ? "固有4"
-      : card.left === 0
-        ? "売切れ"
-        : `${exact.format(card.left)}回@${price}`,
+    text: card.barred ? "" : card.left === 0 ? "売切れ" : `${exact.format(card.left)}回@${price}`,
+    star: card.barred ? 8 : null,
   };
 }
 
@@ -710,9 +722,10 @@ export const heldText = (held) => (held == null ? "—" : formatCount(held));
 /**
  * A hard missions' card (the user's of 2026-10-22), as a month-end card
  * shows a good: in the place of "×5" how many missions drop the student's
- * eleph ("3個所"), in the place of the price the student's star and the
- * elephs held ("固有3 148文字", "?" for what was never read: the count held,
- * as the user corrected the same day, not what 固有4 still takes); and its
+ * eleph ("3個所"), in the place of the price the student's star (`star`, drawn
+ * as `starMarks` tells) and the elephs held ("148文字", "?" for what was never
+ * read: the count held, as the user corrected the same day, not what 固有4
+ * still takes); and its
  * hover: the eleph, the star, how many are held, the missions and a day's AP
  * playing them.
  */
@@ -720,7 +733,8 @@ export function hardTile(card) {
   const held = card.held == null ? "?" : formatCount(card.held);
   return {
     amount: `${card.stages.length}個所`,
-    text: `${card.star == null ? "?" : starName(card.star)} ${held}文字`,
+    star: card.star,
+    held: `${held}文字`,
     title: [
       card.name,
       `星: ${card.star == null ? "未読み取り" : starName(card.star)}`,
