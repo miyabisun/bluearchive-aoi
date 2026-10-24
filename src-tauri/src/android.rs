@@ -38,6 +38,20 @@ pub fn model(banner: &[u8]) -> Option<String> {
     rest.split(';').next().map(str::to_owned)
 }
 
+/// The display's size in use (`wm size`: the override, where one is set).
+fn display_size(wm_size: &str) -> Option<(u32, u32)> {
+    let (_, size) = wm_size.lines().rev().find_map(|l| l.split_once("size: "))?;
+    let (w, h) = size.trim().split_once('x')?;
+    Some((w.parse().ok()?, h.parse().ok()?)).filter(|&(w, h)| w > 0 && h > 0)
+}
+
+/// The longer side of the frames for a display `size`: as long as keeps
+/// `LINES` on its shorter side, and `MAX_SIZE` at least.
+fn max_size(size: (u32, u32)) -> u32 {
+    let (short, long) = (size.0.min(size.1), size.0.max(size.1));
+    (long * LINES).div_ceil(short).max(MAX_SIZE)
+}
+
 /// The instance an mDNS service's full name names
 /// ("adb-XXX._adb-tls-connect._tcp.local." is "adb-XXX").
 pub fn instance<'a>(fullname: &'a str, service: &str) -> &'a str {
@@ -74,9 +88,16 @@ const SCRCPY_VERSION: &str = "5.0.1";
 const SCRCPY_PATH: &str = "/data/local/tmp/aoi-scrcpy.jar";
 /// Frames a second at most: the game plays on as the phone encodes them.
 const MAX_FPS: u32 = 5;
-/// The longer side of the frames at most: a phone of less power encodes them
-/// lightly, and they read right at this size (1080 lines; see `screen::WIDTHS`).
+/// The longer side of the frames at least, where the display's size is not
+/// known: a phone of less power encodes them lightly.
 const MAX_SIZE: u32 = 1920;
+/// The lines the frames keep on their shorter side, which they read right at
+/// (see `screen::WIDTHS`): a phone wider than 16:9 is sent longer than
+/// `MAX_SIZE` (measured on 2026-10-24 on a Pixel 9, 2424 by 1080, over 12
+/// student screens: sent 1920 long, 854 lines, its bond read in 3 and its
+/// weapon in 2; at its own size in 8 and 5 of 11, and in all 11 scaled
+/// smoothly, see `screen::SMOOTH_FROM`).
+const LINES: u32 = 1080;
 /// The bit rate the encoder shares among the display's frames, of which
 /// `MAX_FPS` come: high, for small letters to read as they are drawn
 /// (measured on 2026-10-14 on a Legion Tab Y700: at 8 Mbps the student
@@ -520,11 +541,16 @@ where
             .map_err(|e| e.to_string())?;
         sync.quit().await.map_err(|e| e.to_string())?;
     }
+    let max_size = libadb::shell::v1::exec(conn, "wm size", &mut buf)
+        .await
+        .ok()
+        .and_then(|n| display_size(&String::from_utf8_lossy(&buf[..n])))
+        .map_or(MAX_SIZE, max_size);
     let scid = OsRng.next_u32() & 0x7fff_ffff;
     let start = format!(
         "exec:CLASSPATH={SCRCPY_PATH} app_process / com.genymobile.scrcpy.Server \
          {SCRCPY_VERSION} scid={scid:08x} log_level=warn video_codec=h264 max_fps={MAX_FPS} \
-         max_size={MAX_SIZE} video_bit_rate={BIT_RATE} audio=false control=false \
+         max_size={max_size} video_bit_rate={BIT_RATE} audio=false control=false \
          tunnel_forward=true raw_stream=true\0"
     );
     // The server runs while its channel stays open, and listens for the video.
@@ -575,7 +601,31 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{instance, model, pairing_qr};
+    use super::{display_size, instance, max_size, model, pairing_qr};
+
+    #[test]
+    fn the_display_size_is_the_one_in_use() {
+        assert_eq!(
+            display_size("Physical size: 1080x2424\n"),
+            Some((1080, 2424))
+        );
+        assert_eq!(
+            display_size("Physical size: 1440x3120\nOverride size: 1080x2340\n"),
+            Some((1080, 2340))
+        );
+        assert_eq!(display_size("cmd: Can't find service: window\n"), None);
+        assert_eq!(display_size("Physical size: 0x0\n"), None);
+    }
+
+    /// A phone wider than 16:9 keeps its 1080 lines (a Pixel 9 at 1920 long
+    /// sent 854, see `LINES`); a tablet stays at 1920.
+    #[test]
+    fn the_frames_keep_1080_lines() {
+        assert_eq!(max_size((1080, 2424)), 2424);
+        assert_eq!(max_size((2424, 1080)), 2424);
+        assert_eq!(max_size((1904, 3040)), 1920);
+        assert_eq!(max_size((720, 1600)), 2400);
+    }
 
     #[test]
     fn the_pairing_qr_carries_the_name_and_the_password() {

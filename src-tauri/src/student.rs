@@ -184,8 +184,11 @@ fn luminance(c: [u8; 3]) -> f32 {
 /// 2026-10-12 over the level samples: above 150 "21" reads as nothing, above
 /// 220 no character is cut out at all; 200 reads every sample.
 const LIGHT: Ink = |c| c.iter().all(|&v| v > 200);
-/// The dark digits in the bond heart.
-const DARK: Ink = |c| luminance(c) < 100.0;
+/// The dark digits in the bond heart, greyer than the navy plate around it,
+/// which a phone's safe area found a pixel or two off brings into `BOND`
+/// (measured on 2026-10-24 on a Pixel 9's stream: the digits' blue exceeds
+/// their red by 20 to 50, the plate's by 90 to 110).
+const DARK: Ink = |c| luminance(c) < 100.0 && i32::from(c[2]) - i32::from(c[0]) < 60;
 /// The navy skill levels ("Lv.7").
 const NAVY: Ink = |c| luminance(c) < 130.0 && c[2] >= c[0];
 /// The white fill of the weapon's italic level, whose outlines touch, by its

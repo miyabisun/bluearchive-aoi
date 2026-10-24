@@ -328,9 +328,11 @@ pub fn width_read_at(width: f32) -> u32 {
 /// one in three went unread between the widths read and a level "55" read
 /// "5"; scaled down, none read wrong and at most a field in seven unread.
 /// Near a width read the screen is scaled sharply (Catmull-Rom; smoothly, a
-/// bond "34" read "31" from 1550), farther down smoothly (`SMOOTH_FROM`, as
-/// the references are drawn; sharply, 8 of the 42 student fixtures were not
-/// named from 2222, 1 smoothly).
+/// bond "34" read "31" from 1550, "42" "12" from 1520), farther down smoothly
+/// (`SMOOTH_FROM`, as the references are drawn; sharply, 8 of the 42 student
+/// fixtures were not named from 2222, 1 smoothly, and a Pixel 9's stream
+/// drawing the game 2080 wide read its weapon's level in 5 of 11 screens, 11
+/// smoothly).
 pub fn normalize(image: &RgbImage) -> Cow<'_, RgbImage> {
     let (left, right) = safe_area(image);
     let width = width_read_at((right - left) as f32);
@@ -348,8 +350,10 @@ pub fn normalize(image: &RgbImage) -> Cow<'_, RgbImage> {
 }
 
 /// A screen this many times as wide as the width it is read at, or more, is
-/// scaled down smoothly (see `normalize`).
-const SMOOTH_FROM: f32 = 1.1;
+/// scaled down smoothly (see `normalize`): a Pixel 9's 2080 to 2086 columns
+/// to 1920 are 1.083 times or more, while a shop drawn 1700 wide (1.0625
+/// times 1600) read 70 of its 106 offers smoothly.
+const SMOOTH_FROM: f32 = 1.075;
 
 /// Normalized cross-correlation of the template's columns `columns` with the
 /// image placed at `(ox, oy)`.

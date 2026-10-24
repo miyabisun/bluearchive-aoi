@@ -82,6 +82,33 @@ fn every_field_reads_right_or_unknown() {
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
 }
 
+/// A phone's stream reads every field of the student screen right: a Pixel
+/// 9's (2424 by 1080), H.264 as Aoi records it at its own size, its smallest
+/// digits (the bond's, the weapon's level) among them. (Its stream 1920 long,
+/// a phone sending fewer lines, reads right or not at all, see
+/// `every_field_reads_right_or_unknown`.)
+#[test]
+fn a_phone_stream_reads_every_field() {
+    let recognizer = recognizer();
+    let mut wrong = Vec::new();
+    for label in labels()
+        .into_iter()
+        .filter(|l| l.image.starts_with("android/pixel9-") && l.image.ends_with("-2424.png"))
+    {
+        let image = image::open(root().join("tests/fixtures").join(&label.image))
+            .unwrap()
+            .to_rgb8();
+        let image = aoi::screen::normalize(&image).into_owned();
+        let read = fields(&student::read(&image, recognizer.references(&image).1));
+        for ((name, got), (_, want)) in read.into_iter().zip(fields(&label.training())) {
+            if got != want {
+                wrong.push(format!("{} {name}: read {got:?}, is {want:?}", label.image));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
+}
+
 /// A screen of any width read, and any between them (a window as it was
 /// resized), reads every field of the student screen right or not at all,
 /// and at each width at least `LEAST` of them right. Measured on 2026-10-16
