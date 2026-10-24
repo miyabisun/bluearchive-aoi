@@ -177,6 +177,11 @@ fn on_baseline(blobs: Vec<Blob>, tallest: u32) -> Option<Vec<Blob>> {
         return Some(blobs);
     };
     let on = |b: &Blob| b.bottom.abs_diff(line) as f32 <= tallest as f32 * BASELINE;
+    // A streak off the line no wider than a speck is the light edge of an
+    // outline (a weapon's level on a phone's stream, scaled down sharply),
+    // left out.
+    let sliver = |b: &Blob| (b.right - b.left + 1) as f32 <= tallest as f32 * SPECK;
+    let blobs: Vec<Blob> = blobs.into_iter().filter(|b| on(b) || !sliver(b)).collect();
     let first = blobs.iter().filter(|b| on(b)).map(|b| b.left).min()?;
     let last = blobs.iter().filter(|b| on(b)).map(|b| b.right).max()?;
     if blobs
@@ -577,8 +582,10 @@ impl Fonts {
                 }
             }
         }
+        // Two characters' references alike (a speck both were cut as) tell
+        // neither.
         let (c, d) = nearest?;
-        (d <= MAX_DISTANCE && d <= LEAD * next).then_some(c)
+        (d <= MAX_DISTANCE && d <= LEAD * next && d < next).then_some(c)
     }
 }
 
@@ -724,6 +731,51 @@ mod tests {
         let mut broken = line;
         broken.insert(2, blob(33, 38, 9, 17));
         assert_eq!(on_baseline(broken, 15), None);
+    }
+
+    /// The "Lv.60" of a weapon on a Pixel 9's stream 1920 long, read at
+    /// 1600 (characters 17 px high): a light streak of an outline, a pixel
+    /// wide, stands off the line between the "L" and the "v". It is no piece
+    /// of a character; a broken piece as wide as a stroke still is.
+    #[test]
+    fn a_streak_off_the_line_is_no_piece() {
+        let line = vec![
+            blob(6, 16, 7, 23),
+            blob(22, 33, 12, 23),
+            blob(41, 53, 7, 23),
+            blob(55, 65, 7, 23),
+        ];
+        let mut streaked = line.clone();
+        streaked.insert(1, blob(19, 19, 10, 18));
+        assert_eq!(on_baseline(streaked, 17), Some(line.clone()));
+        let mut broken = line;
+        broken.insert(2, blob(35, 39, 9, 17));
+        assert_eq!(on_baseline(broken, 17), None);
+    }
+
+    /// A shape as near one character's reference as another's, both alike
+    /// (a speck cut out as a "3" and as a "5"), reads as neither.
+    #[test]
+    fn references_alike_of_two_characters_tell_neither() {
+        let n = GLYPH.0 * GLYPH.1;
+        let speck: Vec<f32> = (0..n)
+            .map(|i| if i >= n - 60 { 1.0 } else { 0.0 })
+            .collect();
+        let full = vec![1.0; n];
+        let fonts = Fonts(
+            [(
+                "bond".to_owned(),
+                [
+                    ('3', vec![speck.clone(), full.clone()]),
+                    ('5', vec![speck.clone()]),
+                ]
+                .into_iter()
+                .collect(),
+            )]
+            .into(),
+        );
+        assert_eq!(fonts.character("bond", &speck), None);
+        assert_eq!(fonts.character("bond", &full), Some('3'));
     }
 
     /// A pair as near as the bound measures as `distance` measures it; a

@@ -182,13 +182,17 @@ fn luminance(c: [u8; 3]) -> f32 {
 /// The light text on the dark name plate ("Lv.65"). Its soft edges are left
 /// out, or neighbours of the italic font touch more ("21", "22"). Measured on
 /// 2026-10-12 over the level samples: above 150 "21" reads as nothing, above
-/// 220 no character is cut out at all; 200 reads every sample.
-const LIGHT: Ink = |c| c.iter().all(|&v| v > 200);
+/// 220 no character is cut out at all; 200 reads every sample. On a Pixel 9's
+/// stream 1920 long, read at 1600, the thin "9" of "90" lay as near a "0"
+/// above 200 (its own 15, the "0" 22); above 170 its own 4, the "0" 16
+/// (measured on 2026-10-24).
+const LIGHT: Ink = |c| c.iter().all(|&v| v > 170);
 /// The dark digits in the bond heart, greyer than the navy plate around it,
 /// which a phone's safe area found a pixel or two off brings into `BOND`
 /// (measured on 2026-10-24 on a Pixel 9's stream: the digits' blue exceeds
-/// their red by 20 to 50, the plate's by 90 to 110).
-const DARK: Ink = |c| luminance(c) < 100.0 && i32::from(c[2]) - i32::from(c[0]) < 60;
+/// their red by 20 to 50, the plate's by 90 to 110). Below 125, not 100: on
+/// its stream 1920 long the strokes thin and a "5" broke its bar off.
+const DARK: Ink = |c| luminance(c) < 125.0 && i32::from(c[2]) - i32::from(c[0]) < 60;
 /// The navy skill levels ("Lv.7").
 const NAVY: Ink = |c| luminance(c) < 130.0 && c[2] >= c[0];
 /// The white fill of the weapon's italic level, whose outlines touch, by its
@@ -212,8 +216,12 @@ const SLATE: Ink =
 /// The ability release's yellow text ("Lv.25") by its brightness on the badge
 /// (on a tablet's stream 1920 wide, 180 to 227 against the badge's 96).
 const ON_SLATE: Ink = |c| luminance(c) > 160.0;
-/// The gold "MAX" of a skill at its highest level.
-const GOLD: Ink = |c| c[0] > 200 && c[1] > 150 && c[2] < 120;
+/// The gold "MAX" of a skill at its highest level, yellower than it is
+/// blue by a margin a video keeps where it halves the colour: on a Pixel 9's
+/// stream 1920 long, its blue rises past 120 (measured on 2026-10-24 over the
+/// student fixtures drawn 1500 to 2220 wide: "MAX" 0.0126 of the label or
+/// more, by blue under 120 0.0026; every "Lv.N" none).
+const GOLD: Ink = |c| c[0] > 180 && c[1] > 150 && i32::from(c[0]) - i32::from(c[2]) > 80;
 /// The rarity stars.
 const STAR: Ink = |c| c[0] > 220 && c[1] > 150 && c[2] < 100;
 /// The unique weapon's stars.
@@ -262,7 +270,9 @@ pub const STYLES: &[(&str, Style)] = &[
     ),
     (
         "bond",
-        style(DARK, 0.5, WHOLE, 1.3, false, Ground::Free, 0.0),
+        // Its digits touch where a stream thickens them ("34" one part):
+        // cut by width.
+        style(DARK, 0.5, 0.62, 1.3, false, Ground::Free, 0.0),
     ),
     (
         "skill",

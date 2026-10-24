@@ -29,7 +29,11 @@ scaled to it (`data/glyphs-*.png`, `data/digits.json`; `examples/build_glyphs.rs
 them too: right or not at all. A stream blurs the counts and the student screen's texts beyond any
 scaling, so their references also come from a tablet's own stream at 1920 (and 1600) wide, and
 the tests read a few of its frames (`tests/fixtures/tablet.json`, the `android/tablet-stu-*`
-student screens). A tablet's lossless student screens of a whole roster give references too
+student screens). A phone sending fewer lines (a Pixel 9 1920 by 854, the game 1646 wide, read
+at 1600) thins them further: the 1600 references of the student screen are also drawn from the
+tuning fixtures as such a stream shows them, scaled down on the phone and their colour halved
+(`build_glyphs`'s `STREAMS`), and the tests read a Pixel 9's frames sent so
+(`android/pixel9-*-1920`). A tablet's lossless student screens of a whole roster give references too
 (`android/tablet-roster-*`, and the name plates `names/roster-*`). A screen drawn narrower than 1500 is not read
 (`screen::too_small`).
 

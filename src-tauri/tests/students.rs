@@ -84,16 +84,15 @@ fn every_field_reads_right_or_unknown() {
 
 /// A phone's stream reads every field of the student screen right: a Pixel
 /// 9's (2424 by 1080), H.264 as Aoi records it at its own size, its smallest
-/// digits (the bond's, the weapon's level) among them. (Its stream 1920 long,
-/// a phone sending fewer lines, reads right or not at all, see
-/// `every_field_reads_right_or_unknown`.)
+/// digits (the bond's, the weapon's level) among them; and the same sent 1920
+/// by 854, as a phone sending fewer lines does, read at 1600.
 #[test]
 fn a_phone_stream_reads_every_field() {
     let recognizer = recognizer();
     let mut wrong = Vec::new();
     for label in labels()
         .into_iter()
-        .filter(|l| l.image.starts_with("android/pixel9-") && l.image.ends_with("-2424.png"))
+        .filter(|l| l.image.starts_with("android/pixel9-"))
     {
         let image = image::open(root().join("tests/fixtures").join(&label.image))
             .unwrap()

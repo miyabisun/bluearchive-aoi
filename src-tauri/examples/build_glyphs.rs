@@ -69,6 +69,30 @@ const BETWEEN: [(u32, &[u32]); 4] = [
     (1600, &[1620, 1640, 1660, 1680, 1700, 1720, 1740]),
     (1500, &[1520, 1540, 1560, 1580]),
 ];
+/// Widths a phone's stream draws the game at, which a bank also draws its
+/// student screen's references from, as such a stream shows them (see
+/// `streamed`), and how much the phone scales its screen down for it: a
+/// Pixel 9 sending 1920 by 854 (its 2424 columns to 1920) draws it 1646
+/// wide, read at 1600, its bonds' and levels' thin digits farther from the
+/// window's than they may lie; sending 2424 by 1080 it draws it 2082 wide,
+/// read at 1920, a bond's "6" at 0.6 of the way to a "5" (measured on
+/// 2026-10-24).
+const STREAMS: [(u32, f32, &[u32]); 2] = [
+    (1600, 1920.0 / 2424.0, &[1620, 1660, 1700, 1740]),
+    (1920, 1.0, &[2000, 2080, 2160]),
+];
+/// Where a stream's pixels fall on the screen's, in the screen's pixels,
+/// across and down: a character a pixel taller cuts out narrower (a bond's
+/// "6" 26 from its references, measured on 2026-10-24), so each is drawn
+/// at these offsets too.
+const PHASES: [(f32, f32); 6] = [
+    (0.0, 0.0),
+    (0.0, 0.33),
+    (0.0, 0.67),
+    (0.5, 0.0),
+    (0.5, 0.33),
+    (0.5, 0.67),
+];
 /// A bar's letter reference lies farther than this from every digit's.
 const APART: f32 = 20.0;
 /// A digit of a smaller screen's card lies at most this far from the
@@ -558,6 +582,105 @@ fn student_styles(
     }
 }
 
+/// `image` as a phone streams it `width` wide: each pixel sampled between its
+/// four nearest (the phone's GPU scales it so, unlike `resize`, which
+/// averages all it covers), its colour then halved (H.264's 4:2:0). Of the
+/// ways tried, nearest a Pixel 9's stream of its own screens (measured on
+/// 2026-10-24: 3.7 to 5.5 off per channel, scaled smoothly 4.5 to 6.0).
+fn streamed(image: &RgbImage, width: u32, (dx, dy): (f32, f32)) -> RgbImage {
+    let height = (image.height() as f32 * width as f32 / image.width() as f32).round() as u32;
+    let (sx, sy) = (
+        image.width() as f32 / width as f32,
+        image.height() as f32 / height as f32,
+    );
+    let sampled = RgbImage::from_fn(width, height, |x, y| {
+        let fx = ((x as f32 + 0.5) * sx - 0.5 + dx).max(0.0);
+        let fy = ((y as f32 + 0.5) * sy - 0.5 + dy).max(0.0);
+        let (x0, y0) = (
+            (fx as u32).min(image.width() - 1),
+            (fy as u32).min(image.height() - 1),
+        );
+        let (x1, y1) = (
+            (x0 + 1).min(image.width() - 1),
+            (y0 + 1).min(image.height() - 1),
+        );
+        let (ax, ay) = (fx - x0 as f32, fy - y0 as f32);
+        Rgb(std::array::from_fn(|c| {
+            let p = |x, y| f32::from(image.get_pixel(x, y).0[c]);
+            let top = p(x0, y0) * (1.0 - ax) + p(x1, y0) * ax;
+            let bottom = p(x0, y1) * (1.0 - ax) + p(x1, y1) * ax;
+            (top * (1.0 - ay) + bottom * ay).round() as u8
+        }))
+    });
+    chroma_halved(&sampled)
+}
+
+/// Adds the student screen's texts as a phone's stream shows them (see
+/// `STREAMS`), for the bank of `width`.
+fn stream_styles(cuts: &mut Cuts, labels: &[Label], levels: &[LevelLabel], dir: &Path, width: u32) {
+    let (scale_down, streams) = STREAMS
+        .iter()
+        .find(|(w, _, _)| *w == width)
+        .map_or((1.0, &[][..]), |s| (s.1, s.2));
+    for (&at, &phase) in streams
+        .iter()
+        .flat_map(|at| PHASES.iter().map(move |p| (at, p)))
+    {
+        let open = move |path: &str| {
+            let image = image::open(dir.join(path))
+                .expect("the image opens")
+                .to_rgb8();
+            let screen = (at as f32 / scale_down).round() as u32;
+            let scale = screen as f32 / screen::drawn_width(&image);
+            let (w, h) = (image.width() as f32 * scale, image.height() as f32 * scale);
+            let image = resize(
+                &image,
+                w.round() as u32,
+                h.round() as u32,
+                FilterType::Triangle,
+            );
+            let width = (image.width() as f32 * scale_down).round() as u32;
+            let image = streamed(&image, width, phase);
+            screen::normalize(&image).into_owned()
+        };
+        student_styles(cuts, labels, levels, &open);
+    }
+}
+
+/// `image` with each 2 by 2 block's colour (Cb, Cr) averaged, its
+/// brightness kept.
+fn chroma_halved(image: &RgbImage) -> RgbImage {
+    let (width, height) = image.dimensions();
+    let ycc = |p: &Rgb<u8>| {
+        let [red, green, blue] = p.0.map(f32::from);
+        let luma = 0.299 * red + 0.587 * green + 0.114 * blue;
+        (luma, blue - luma, red - luma)
+    };
+    let mut out = image.clone();
+    for by in (0..height).step_by(2) {
+        for bx in (0..width).step_by(2) {
+            let block: Vec<(u32, u32)> = [(0, 0), (1, 0), (0, 1), (1, 1)]
+                .iter()
+                .map(|(dx, dy)| (bx + dx, by + dy))
+                .filter(|&(x, y)| x < width && y < height)
+                .collect();
+            let n = block.len() as f32;
+            let (cb, cr) = block.iter().fold((0.0, 0.0), |(cb, cr), &(x, y)| {
+                let (_, blue, red) = ycc(image.get_pixel(x, y));
+                (cb + blue / n, cr + red / n)
+            });
+            for &(x, y) in &block {
+                let (luma, _, _) = ycc(image.get_pixel(x, y));
+                let (red, blue) = (luma + cr, luma + cb);
+                let green = (luma - 0.299 * red - 0.114 * blue) / 0.587;
+                let rgb = [red, green, blue].map(|v| v.round().clamp(0.0, 255.0) as u8);
+                out.put_pixel(x, y, Rgb(rgb));
+            }
+        }
+    }
+    out
+}
+
 /// Adds the dark digits: the credits, and the coins held over the tuning
 /// shops; and the shops' names as their menu entries draw them.
 fn dark_digits_and_shops(
@@ -691,6 +814,7 @@ fn main() {
             dark_digits_and_shops(&mut cuts, names_to, &credits, &shops, &open);
             take_scaled_card_digits(&mut cuts, &at_window, &cards(&shops, &open));
         }
+        stream_styles(&mut cuts, &labels, &levels, &dir, width);
         font_card_digits(&mut cuts, &weights);
         drop_bar_letters_near_digits(&mut cuts);
         for (style, chars) in &cuts {
