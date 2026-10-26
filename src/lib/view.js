@@ -168,12 +168,26 @@ export function sortStudents(rows, column = "level") {
   );
 }
 
-/** The year and month of a time as "2026-10". */
-const month = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+/** The hour of the 1st the shops reset at (as `shop::period` in the backend). */
+const RESET_HOUR = 4;
+
+/** The month a time falls in for the shops as "2026-10": the 1st's first hours are the month before's. */
+function shopMonth(date) {
+  const shifted = new Date(date.getTime() - RESET_HOUR * 60 * 60 * 1000);
+  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** A local time as the backend writes it ("2026-10-26 11:06:37"). */
+function localTime(text) {
+  const [date, time = "0:0:0"] = text.split(" ");
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute, second] = time.split(":").map(Number);
+  return new Date(year, month - 1, day, hour, minute, second);
+}
 
 /** Whether `shop` resets as the month changes and was read in a month before `now`'s. */
 export function shopStale(shop, now = new Date()) {
-  return shop.resets && shop.read_at.slice(0, 7) < month(now);
+  return shop.resets && shopMonth(localTime(shop.read_at)) < shopMonth(now);
 }
 
 /**

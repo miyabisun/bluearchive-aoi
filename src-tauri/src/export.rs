@@ -37,7 +37,7 @@ pub fn yaml(
     out += "# count の K は千単位（51K は 50,500〜51,499）。\n";
     out += "# id: null の生徒は SchaleDB に未登録（名前だけで照合）。\n";
     out += "# shops の left はあと何回買えるか。held は各コインの所持数。price・amount・limit は 1 回の価格・個数と回数の上限（ショップの決まり、カケラ(文字) の price はカードの値、無ければ null）。\n";
-    out += "# カケラ(文字) 以外のショップは月が替わると戻る（read_at が前の月なら前の月の値）。\n";
+    out += "# shops の read_at はコイン数か品目が最後に変わった時刻。カケラ(文字) 以外のショップは毎月 1 日 4:00 に戻る（read_at がそれより前なら前の月の値）。\n";
     out += "# reserved は月末ショップの購買戦略で予約中のカード（ショップ・品・払うコイン）と、任務 Hard で予約中の生徒の神名文字（shop: 任務 Hard、coin: AP）。\n";
     out += "credits: ";
     out += &credits.map_or("null".to_owned(), |c| c.to_string());

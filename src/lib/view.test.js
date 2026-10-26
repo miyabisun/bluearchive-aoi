@@ -280,6 +280,21 @@ describe("shops", () => {
     expect(shopStale(shop("カケラ(文字)", "2026-09-01 08:00:00", false, []), now)).toBe(false);
   });
 
+  it("starts a shop's month on the 1st at 4:00", () => {
+    const november = (hour, minute) => new Date(2026, 10, 1, hour, minute);
+    const october = shop("総力戦", "2026-10-31 23:00:00", true, []);
+    expect(shopStale(october, november(3, 59))).toBe(false);
+    expect(shopStale(october, november(4, 0))).toBe(true);
+    // Read in the 1st's first hours, it is the month before's.
+    const early = shop("総力戦", "2026-11-01 03:30:00", true, []);
+    expect(shopStale(early, november(3, 50))).toBe(false);
+    expect(shopStale(early, november(4, 0))).toBe(true);
+    // New Year's first hours are December's.
+    const december = shop("総力戦", "2025-12-31 22:00:00", true, []);
+    expect(shopStale(december, new Date(2026, 0, 1, 3, 0))).toBe(false);
+    expect(shopStale(december, new Date(2026, 0, 1, 4, 0))).toBe(true);
+  });
+
   it("writes what each coin buys: the times left at its price, or sold out", () => {
     expect(
       goodTile(

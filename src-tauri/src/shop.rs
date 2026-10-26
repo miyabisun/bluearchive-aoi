@@ -756,9 +756,10 @@ impl Shelves {
         }
     }
 
-    /// Takes one frame's offers, seen at local time `now`; returns whether a
-    /// shelf changed. A shop's lineup is the month's: the first offer taken in
-    /// a new month clears what an earlier month left, but in the `LASTING` shop.
+    /// Takes one frame's offers and coins held, seen at local time `now`;
+    /// returns whether a shelf changed, which dates it `now`. A shop's lineup is
+    /// the month's (see `period`): the first offer or count taken in a new month
+    /// clears the offers an earlier month left, but in the `LASTING` shop.
     pub fn observe(&mut self, seen: &Seen, now: &str) -> bool {
         let mut changed = false;
         for (coin, &count) in seen.held.iter().enumerate() {
@@ -774,10 +775,15 @@ impl Shelves {
             }
             let stock = self.by_shop.entry(seen.shop.to_owned()).or_default();
             if streak.1 >= CONFIRM && stock.held.get(coin) != Some(&Some(count)) {
+                // The coins outlast the month; its lineup does not.
+                if outdated(stock, seen.shop, now) {
+                    stock.offers.clear();
+                }
                 stock
                     .held
                     .resize(seen.held.len().max(stock.held.len()), None);
                 stock.held[coin] = Some(count);
+                now.clone_into(&mut stock.read_at);
                 changed = true;
             }
         }
@@ -795,7 +801,7 @@ impl Shelves {
                 continue;
             }
             let stock = self.by_shop.entry(seen.shop.to_owned()).or_default();
-            if seen.shop != LASTING && month(&stock.read_at) != month(now) {
+            if outdated(stock, seen.shop, now) {
                 stock.offers.clear();
             }
             let known = stock
@@ -925,8 +931,31 @@ pub fn goods(offers: &[Offer], coins: usize) -> Vec<(i64, Vec<Option<Offer>>)> {
 }
 
 /// The year and month of a local time ("2026-10").
-fn month(at: &str) -> &str {
-    at.get(..7).unwrap_or(at)
+/// The hour of the 1st the shops reset at.
+const RESET_HOUR: u32 = 4;
+
+/// The month a local time ("2026-10-26 11:06:37") falls in for the shops, as
+/// "2026-10": the shops reset on the 1st at 4:00, so its first hours are the
+/// month before's.
+pub fn period(at: &str) -> String {
+    let field = |from: usize, to: usize| at.get(from..to).and_then(|s| s.parse::<u32>().ok());
+    let (Some(year), Some(month), Some(day), Some(hour)) =
+        (field(0, 4), field(5, 7), field(8, 10), field(11, 13))
+    else {
+        return at.get(..7).unwrap_or(at).to_owned();
+    };
+    let (year, month) = match (day, month) {
+        (1, 1) if hour < RESET_HOUR => (year - 1, 12),
+        (1, _) if hour < RESET_HOUR => (year, month - 1),
+        _ => (year, month),
+    };
+    format!("{year:04}-{month:02}")
+}
+
+/// Whether `stock`, last changed in a month before `now`'s, holds a lineup the
+/// shop has since reset (all but `LASTING` reset).
+fn outdated(stock: &Shelf, shop: &str, now: &str) -> bool {
+    shop != LASTING && period(&stock.read_at) != period(now)
 }
 
 /// The item a card shows, from its icon (`Ok` the icon, `Err` the icons it
@@ -1098,9 +1127,57 @@ mod tests {
     }
 
     #[test]
+    fn a_shops_month_starts_on_the_first_at_four() {
+        assert_eq!(period("2026-10-26 11:06:37"), "2026-10");
+        assert_eq!(period("2026-11-01 03:59:59"), "2026-10");
+        assert_eq!(period("2026-11-01 04:00:00"), "2026-11");
+        assert_eq!(period("2026-01-01 00:30:00"), "2025-12");
+        assert_eq!(period("2026-10-01 03:00:00"), "2026-09");
+        assert_eq!(period(""), "");
+    }
+
+    #[test]
+    fn a_coin_count_taken_dates_the_shelf_and_starts_its_month() {
+        let mut shelves = Shelves::seeded(BTreeMap::from([(
+            "総力戦".to_owned(),
+            Shelf {
+                read_at: "2026-10-26 11:06:37".to_owned(),
+                offers: vec![offer(1, 1, 40)],
+                held: vec![Some(380), Some(2350)],
+            },
+        )]));
+        let held = |counts: &[Option<u64>]| Seen {
+            shop: "総力戦",
+            offers: Vec::new(),
+            held: counts.to_vec(),
+        };
+        // Coins held alike change nothing, not even the time.
+        for _ in 0..CONFIRM {
+            assert!(!shelves.observe(&held(&[Some(380), Some(2350)]), "2026-10-26 11:30:00"));
+        }
+        assert_eq!(shelves.shelves()["総力戦"].read_at, "2026-10-26 11:06:37");
+        // Another count dates the shelf, its offers kept within the month.
+        for _ in 0..CONFIRM {
+            shelves.observe(&held(&[Some(380), Some(1800)]), "2026-10-26 12:00:00");
+        }
+        let shelf = shelves.shelves()["総力戦"].clone();
+        assert_eq!(shelf.read_at, "2026-10-26 12:00:00");
+        assert_eq!(shelf.held, [Some(380), Some(1800)]);
+        assert_eq!(shelf.offers, [offer(1, 1, 40)]);
+        // In a new month the first count taken drops the last month's offers.
+        for _ in 0..CONFIRM {
+            shelves.observe(&held(&[Some(380), Some(1900)]), "2026-11-01 04:10:00");
+        }
+        let shelf = shelves.shelves()["総力戦"].clone();
+        assert_eq!(shelf.read_at, "2026-11-01 04:10:00");
+        assert_eq!(shelf.offers, []);
+        assert_eq!(shelf.held, [Some(380), Some(1900)]);
+    }
+
+    #[test]
     fn a_new_month_clears_the_shops_that_reset() {
         let last_month = |offers: Vec<Offer>| Shelf {
-            read_at: "2026-09-30 23:00:00".to_owned(),
+            read_at: "2026-10-31 23:00:00".to_owned(),
             offers,
             held: Vec::new(),
         };
@@ -1114,13 +1191,22 @@ mod tests {
                 last_month(vec![offer(3, 0, 0), offer(4, 0, 1)]),
             ),
         ]));
+        // Till 4:00 on the 1st it is still the month before.
         for _ in 0..CONFIRM {
-            shelves.observe(&seen("総力戦", &[offer(1, 0, 0)]), NOW);
-            shelves.observe(&seen("カケラ(文字)", &[offer(3, 0, 0)]), NOW);
+            shelves.observe(&seen("総力戦", &[offer(2, 0, 1)]), "2026-11-01 03:59:00");
+        }
+        assert_eq!(
+            shelves.shelves()["総力戦"].offers,
+            [offer(1, 0, 0), offer(2, 0, 1)]
+        );
+        let now = "2026-11-01 04:00:00";
+        for _ in 0..CONFIRM {
+            shelves.observe(&seen("総力戦", &[offer(1, 0, 0)]), now);
+            shelves.observe(&seen("カケラ(文字)", &[offer(3, 0, 0)]), now);
         }
         let shelf = |shop: &str| shelves.shelves()[shop].clone();
         assert_eq!(shelf("総力戦").offers, [offer(1, 0, 0)]);
-        assert_eq!(shelf("総力戦").read_at, NOW);
+        assert_eq!(shelf("総力戦").read_at, now);
         assert_eq!(
             shelf("カケラ(文字)").offers,
             [offer(3, 0, 0), offer(4, 0, 1)]

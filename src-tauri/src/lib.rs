@@ -790,7 +790,7 @@ impl Recognizer {
         let read: Vec<&shop::ShopRow> = shops
             .iter()
             .filter(|s| s.name != shop::LASTING)
-            .filter(|s| !(s.resets && s.read_at.get(..7) < now.get(..7)))
+            .filter(|s| !(s.resets && shop::period(&s.read_at) < shop::period(now)))
             .collect();
         let for_sale = self.for_sale(&read);
         let entries = self.items.entries();
