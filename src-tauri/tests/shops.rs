@@ -41,7 +41,8 @@ fn fixtures_dir() -> PathBuf {
 
 /// Every offer read is a labeled one with its labeled values, and most
 /// labeled offers read in a single frame, the fixtures read as Aoi reads them
-/// (scaled down to Full HD; 104 of 105 on 2026-10-16).
+/// (scaled down to Full HD; 104 of 105 on 2026-10-16); every coin held that is
+/// labeled reads as labeled.
 #[test]
 fn every_offer_read_is_right() {
     let (wrong, read, labeled) = offers_read(None);
@@ -115,13 +116,15 @@ fn offers_read(width: Option<u32>) -> (Vec<String>, usize, usize) {
             wrong.push(format!("{}: read as {}", fixture.image, seen.shop));
         }
         if let Some(held) = &fixture.held {
-            // Unread is no wrong count.
+            // A window reads every coin labeled (left unread, its count would
+            // stay what an older frame read); a smaller screen may leave one
+            // unread, which is no wrong count.
             let held_wrong = seen.held.len() != held.len()
                 || seen
                     .held
                     .iter()
                     .zip(held)
-                    .any(|(s, h)| s.is_some() && s != h);
+                    .any(|(s, h)| (s.is_some() || width.is_none() && h.is_some()) && s != h);
             if held_wrong {
                 wrong.push(format!("{}: held read {:?}", fixture.image, seen.held));
             }

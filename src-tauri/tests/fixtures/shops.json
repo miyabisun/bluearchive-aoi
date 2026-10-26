@@ -156,6 +156,40 @@
     ]
   },
   {
+    "image": "shops/souryokusen-2-tune.png",
+    "role": "tune",
+    "shop": "総力戦",
+    "held": [380, null],
+    "note": "2026-10-26 capture of the game's window, 2204x1240, as the app captures it (Windows Graphics Capture, the client area); the shop just reset: 百鬼夜行 then トリニティ. Coins held: purple 380, gold 1,800. Read as the app does (scaled to 1920), every 8 went unread before v0.2.54: the 1920 bank had no 8 of the coins held. Labels by eye. The gold coin's digits are blacked out: its 1,800 is the eval fixture's (souryokusen-2-eval.png), so the 8 tuned on (380) and the 8 evaluated (1,800) are other cuts.",
+    "offers": [
+      { "name": "初級戦術教育BD（百鬼夜行）", "coin": 1, "left": 40, "price": 10 },
+      { "name": "中級戦術教育BD（百鬼夜行）", "coin": 1, "left": 30, "price": 20 },
+      { "name": "上級戦術教育BD（百鬼夜行）", "coin": 1, "left": 25, "price": 50 },
+      { "name": "最上級戦術教育BD（百鬼夜行）", "coin": 1, "left": 6, "price": 100 },
+      { "name": "初級戦術教育BD（トリニティ）", "coin": 1, "left": 40, "price": 10 },
+      { "name": "中級戦術教育BD（トリニティ）", "coin": 1, "left": 30, "price": 20 },
+      { "name": "上級戦術教育BD（トリニティ）", "coin": 1, "left": 14, "price": 50 },
+      { "name": "最上級戦術教育BD（トリニティ）", "coin": 1, "left": 6, "price": 100 }
+    ]
+  },
+  {
+    "image": "shops/souryokusen-2-eval.png",
+    "role": "eval",
+    "shop": "総力戦",
+    "held": [null, 1800],
+    "note": "2026-10-26 capture of the game's window, 2204x1240, as the app captures it (Windows Graphics Capture, the client area); the shop just reset: 百鬼夜行 then トリニティ. Coins held: purple 380, gold 1,800. Read as the app does (scaled to 1920), every 8 went unread before v0.2.54: the 1920 bank had no 8 of the coins held. Labels by eye. The purple coin's digits are blacked out (tuned on in souryokusen-2-tune.png). The cards are the tune fixture's: only the coins held are evaluated apart.",
+    "offers": [
+      { "name": "初級戦術教育BD（百鬼夜行）", "coin": 1, "left": 40, "price": 10 },
+      { "name": "中級戦術教育BD（百鬼夜行）", "coin": 1, "left": 30, "price": 20 },
+      { "name": "上級戦術教育BD（百鬼夜行）", "coin": 1, "left": 25, "price": 50 },
+      { "name": "最上級戦術教育BD（百鬼夜行）", "coin": 1, "left": 6, "price": 100 },
+      { "name": "初級戦術教育BD（トリニティ）", "coin": 1, "left": 40, "price": 10 },
+      { "name": "中級戦術教育BD（トリニティ）", "coin": 1, "left": 30, "price": 20 },
+      { "name": "上級戦術教育BD（トリニティ）", "coin": 1, "left": 14, "price": 50 },
+      { "name": "最上級戦術教育BD（トリニティ）", "coin": 1, "left": 6, "price": 100 }
+    ]
+  },
+  {
     "image": "android/souryokusen.png",
     "role": "tune",
     "shop": "総力戦",
