@@ -411,10 +411,10 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[tauri::command]
 async fn check_update() -> Result<UpdateCheck, String> {
     tauri::async_runtime::spawn_blocking(|| {
-        let release = update::latest()?;
+        let tag = update::latest()?;
         Ok(UpdateCheck {
             current: format!("v{VERSION}"),
-            latest: update::update_of(&release, VERSION).map(|u| u.version),
+            latest: update::update_of(&tag, VERSION).map(|u| u.version),
             installs: cfg!(windows),
         })
     })
@@ -434,8 +434,8 @@ fn apply_update() -> Result<(), String> {
 #[tauri::command]
 async fn apply_update(app: tauri::AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(|| {
-        let release = update::latest()?;
-        let update = update::update_of(&release, VERSION).ok_or("最新のバージョンです")?;
+        let tag = update::latest()?;
+        let update = update::update_of(&tag, VERSION).ok_or("最新のバージョンです")?;
         update::install(&update)
     })
     .await

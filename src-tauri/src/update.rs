@@ -2,13 +2,19 @@
 //! checked against the SHA-256 published beside it, takes the running exe's
 //! place, which is kept aside until the next start. On macOS the app is not
 //! replaced: the release page is opened to take its disk image by hand.
+//!
+//! The latest release is told by where its web page sends to, not by GitHub's
+//! API: the API allows a home 60 calls an hour without a token, shared by every
+//! machine there, and once they were spent the check failed (2026-10-26).
 
 use std::{fmt::Write as _, io::Read as _, path::PathBuf};
 
-use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
-const RELEASES: &str = "https://api.github.com/repos/miyabisun/bluearchive-aoi/releases/latest";
+/// The repository's web address: `/releases/latest` sends to the latest
+/// release's tag (`/releases/tag/v0.2.55`), or to `/releases` when there is
+/// none, and its files lie at `/releases/download/<tag>/<name>`.
+const REPOSITORY: &str = "https://github.com/miyabisun/bluearchive-aoi";
 /// The release's file for this OS, and its SHA-256 beside it with this suffix.
 #[cfg(windows)]
 const ASSET: &str = "bluearchive-aoi-x86_64-pc-windows-msvc.exe";
@@ -17,19 +23,6 @@ const ASSET: &str = "bluearchive-aoi-universal-apple-darwin.dmg";
 const SHA: &str = ".sha256";
 /// The release exe is about 20 MB; a download past this is no release exe.
 const MAX_EXE: u64 = 200 * 1024 * 1024;
-
-/// A GitHub release as its API tells it.
-#[derive(Debug, Clone, Deserialize)]
-pub struct Release {
-    pub tag_name: String,
-    pub assets: Vec<Asset>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Asset {
-    pub name: String,
-    pub browser_download_url: String,
-}
 
 /// An update to take: its version ("v0.1.30") and where its exe and the
 /// exe's SHA-256 are.
@@ -49,23 +42,26 @@ fn numbers(version: &str) -> Option<Vec<u64>> {
         .collect()
 }
 
-/// The update `release` brings to the app at `current`, if it is newer and
-/// carries the exe and its SHA-256.
-pub fn update_of(release: &Release, current: &str) -> Option<Update> {
-    if numbers(&release.tag_name)? <= numbers(current)? {
+/// The tag of the release whose page `address` is (where `/releases/latest`
+/// sent to), if it is one.
+pub fn tag_of(address: &str) -> Option<&str> {
+    let tag = address
+        .strip_prefix(REPOSITORY)?
+        .strip_prefix("/releases/tag/")?;
+    (tag.starts_with('v') && numbers(tag).is_some()).then_some(tag)
+}
+
+/// The update the release `tag` brings to the app at `current`, if it is newer:
+/// where its exe and the exe's SHA-256 are.
+pub fn update_of(tag: &str, current: &str) -> Option<Update> {
+    if numbers(tag)? <= numbers(current)? {
         return None;
     }
-    let url = |name: &str| {
-        release
-            .assets
-            .iter()
-            .find(|a| a.name == name)
-            .map(|a| a.browser_download_url.clone())
-    };
+    let files = format!("{REPOSITORY}/releases/download/{tag}");
     Some(Update {
-        version: release.tag_name.clone(),
-        exe: url(ASSET)?,
-        sha: url(&format!("{ASSET}{SHA}"))?,
+        version: tag.to_owned(),
+        exe: format!("{files}/{ASSET}"),
+        sha: format!("{files}/{ASSET}{SHA}"),
     })
 }
 
@@ -91,10 +87,21 @@ fn get(url: &str) -> Result<ureq::Response, String> {
         .map_err(|e| e.to_string())
 }
 
-/// The latest release on GitHub.
-pub fn latest() -> Result<Release, String> {
-    let text = get(RELEASES)?.into_string().map_err(|e| e.to_string())?;
-    serde_json::from_str(&text).map_err(|e| e.to_string())
+/// The latest release's tag on GitHub, from where its web page sends to.
+pub fn latest() -> Result<String, String> {
+    let page = format!("{REPOSITORY}/releases/latest");
+    let response = ureq::head(&page)
+        .set("User-Agent", "bluearchive-aoi")
+        .call()
+        .map_err(|e| e.to_string())?;
+    tag_of(response.get_url())
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            format!(
+                "公開されたリリースが見つかりません（{} へ転送）",
+                response.get_url()
+            )
+        })
 }
 
 /// Where the running exe is kept aside while its update takes its place.
@@ -132,9 +139,9 @@ pub fn install(update: &Update) -> Result<(), String> {
 /// Opens the latest release's page, where the app cannot replace itself.
 #[cfg(not(windows))]
 pub fn open_page() -> Result<(), String> {
-    let page = "https://github.com/miyabisun/bluearchive-aoi/releases/latest";
+    let page = format!("{REPOSITORY}/releases/latest");
     let status = std::process::Command::new("open")
-        .arg(page)
+        .arg(&page)
         .status()
         .map_err(|e| e.to_string())?;
     status
@@ -154,33 +161,35 @@ pub fn clean_up() {
 mod tests {
     use super::*;
 
-    fn release(tag: &str, names: &[&str]) -> Release {
-        Release {
-            tag_name: tag.to_owned(),
-            assets: names
-                .iter()
-                .map(|n| Asset {
-                    name: (*n).to_owned(),
-                    browser_download_url: format!("https://example.test/{tag}/{n}"),
-                })
-                .collect(),
-        }
+    #[test]
+    fn the_latest_tag_is_where_the_latest_release_page_sends_to() {
+        let page =
+            |rest: &str| format!("https://github.com/miyabisun/bluearchive-aoi/releases{rest}");
+        assert_eq!(tag_of(&page("/tag/v0.2.55")), Some("v0.2.55"));
+        // No release published: the list of releases.
+        assert_eq!(tag_of(&page("")), None);
+        assert_eq!(tag_of(&page("/latest")), None);
+        assert_eq!(tag_of(&page("/tag/")), None);
+        assert_eq!(tag_of(&page("/tag/nightly")), None);
+        assert_eq!(tag_of(&page("/tag/v0.2.55/extra")), None);
+        assert_eq!(
+            tag_of("https://github.com/someone/else/releases/tag/v9.0.0"),
+            None
+        );
     }
 
     #[test]
-    fn a_newer_release_with_its_exe_and_hash_is_an_update() {
-        let sha = format!("{ASSET}.sha256");
-        let both = [ASSET, &sha];
-        let update = update_of(&release("v0.1.30", &both), "0.1.29").unwrap();
+    fn a_newer_release_is_an_update_from_its_download_addresses() {
+        let update = update_of("v0.1.30", "0.1.29").unwrap();
         assert_eq!(update.version, "v0.1.30");
-        assert!(update.exe.ends_with(&format!("/v0.1.30/{ASSET}")));
-        assert!(update.sha.ends_with(&format!("/v0.1.30/{sha}")));
+        let files = "https://github.com/miyabisun/bluearchive-aoi/releases/download/v0.1.30";
+        assert_eq!(update.exe, format!("{files}/{ASSET}"));
+        assert_eq!(update.sha, format!("{files}/{ASSET}.sha256"));
         // Numbers compare as numbers, not text.
-        assert!(update_of(&release("v0.1.100", &both), "0.1.99").is_some());
-        // The same or an older version, or without its hash, is none.
-        assert_eq!(update_of(&release("v0.1.29", &both), "0.1.29"), None);
-        assert_eq!(update_of(&release("v0.1.28", &both), "0.1.29"), None);
-        assert_eq!(update_of(&release("v0.1.30", &[ASSET]), "0.1.29"), None);
+        assert!(update_of("v0.1.100", "0.1.99").is_some());
+        // The same or an older version is none.
+        assert_eq!(update_of("v0.1.29", "0.1.29"), None);
+        assert_eq!(update_of("v0.1.28", "0.1.29"), None);
     }
 
     #[test]

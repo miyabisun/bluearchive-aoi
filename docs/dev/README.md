@@ -80,9 +80,11 @@ A release is its commit "release: vX.Y.Z" on main, pushed with its `vX.Y.Z` tag:
 Actions builds the exe from that commit (not from the tag, so the Rust cache main keeps serves
 every release) and publishes it with its SHA-256 (`bluearchive-aoi-x86_64-pc-windows-msvc.exe`
 and `.exe.sha256`). Other pushes to main build nothing. The app's
-アップデートを確認 asks the GitHub API for the latest release; 更新して再起動 downloads its
-exe, checks it against the SHA-256, puts it in place of the running one (the old one kept
-as `.old` until the next start) and starts it.
+アップデートを確認 reads the latest release's tag off where `github.com/…/releases/latest`
+sends to (not the GitHub API, whose 60 calls an hour without a token a home shares);
+更新して再起動 downloads that tag's exe from `releases/download/<tag>/`, checks it against the
+SHA-256, puts it in place of the running one (the old one kept as `.old` until the next
+start) and starts it.
 
 A second job then adds the universal macOS disk image and its SHA-256
 (`bluearchive-aoi-universal-apple-darwin.dmg` and `.dmg.sha256`), bundled as
