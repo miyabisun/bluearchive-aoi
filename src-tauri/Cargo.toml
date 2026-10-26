@@ -1,6 +1,6 @@
 [package]
 name = "bluearchive-aoi"
-version = "0.2.55"
+version = "0.2.56"
 edition = "2024"
 rust-version = "1.96"
 license = "MIT"
