@@ -414,20 +414,29 @@
 {#snippet heldTiers(/** @type {any[]} */ tiers)}
   {#each tiers as cell, i (i)}
     <td class="tier-{i + 1}">
-      {#if cell}<img
-          src={iconUrl(cell.icon)}
-          alt={cell.name}
-          title={cell.name}
-          width="40"
-          height="40"
-        /><span class={heldTone(cell.held, cell.need)}>{heldText(cell.held)}</span>{/if}
+      {#if cell}<div class="pair">
+          <img
+            src={iconUrl(cell.icon)}
+            alt={cell.name}
+            title={cell.name}
+            width="50"
+            height="40"
+          /><span class={heldTone(cell.held, cell.need)}>{heldText(cell.held)}</span>
+        </div>{/if}
     </td>
   {/each}
 {/snippet}
 
-<!-- How many students what is held raises, and how under it, at a row's right end. -->
-{#snippet raiseCell(/** @type {{ students: string, detail: string }} */ cells)}
-  <td class="raise"><strong>{cells.students}</strong><span class="detail">{cells.detail}</span></td>
+<!-- How many students what is held raises at a row's right end, and how in two lines under
+     it: the exp held, then over what one takes (the user's of 2026-10-29). -->
+{#snippet raiseCell(
+  /** @type {{ students: string, numerator: string, denominator: string }} */ cells,
+)}
+  <td class="raise"
+    ><strong>{cells.students}</strong><span class="detail">{cells.numerator}</span><span
+      class="detail">{cells.denominator}</span
+    ></td
+  >
 {/snippet}
 
 <!-- The work tab's counts of students raised, drawn as the enhancement materials' rows
@@ -444,13 +453,15 @@
             {@render heldTiers(row.tiers)}
           {:else}
             <td colspan="4" class="credits"
-              ><img
-                src={iconUrl("currency_icon_gold")}
-                alt="クレジット"
-                title="クレジット"
-                width="40"
-                height="40"
-              />{row.held}</td
+              ><div class="pair">
+                <img
+                  src={iconUrl("currency_icon_gold")}
+                  alt="クレジット"
+                  title="クレジット"
+                  width="50"
+                  height="40"
+                />{row.held}
+              </div></td
             >
           {/if}
           {@render raiseCell(row)}
@@ -1275,14 +1286,15 @@
                   {#each kinds.secret as cell (cell.id)}
                     <!-- Both 最上級. -->
                     <td class="tier-4"
-                      ><img
-                        src={iconUrl(cell.icon)}
-                        alt={cell.name}
-                        title={cell.name}
-                        width="40"
-                        height="40"
-                      /><span class={heldTone(cell.held, cell.need)}>{heldText(cell.held)}</span
-                      ></td
+                      ><div class="pair">
+                        <img
+                          src={iconUrl(cell.icon)}
+                          alt={cell.name}
+                          title={cell.name}
+                          width="50"
+                          height="40"
+                        /><span class={heldTone(cell.held, cell.need)}>{heldText(cell.held)}</span>
+                      </div></td
                     >
                   {/each}
                   <td colspan={4 - kinds.secret.length}></td>
@@ -2525,8 +2537,7 @@
   // How many students what is held raises, its terms under it, at the row's right end:
   // the enhancement materials' rows and the work tab's alike.
   .tiers .raise
-    width: 1%
-    padding-left: var(--sp-3)
+    width: 6.5rem
     text-align: right
     white-space: nowrap
     font-variant-numeric: tabular-nums
@@ -2560,21 +2571,31 @@
     align-items: center
     gap: var(--sp-2)
 
-  // Each tier on its colour, from the grey of the first to the purple of the last.
+  // Each tier on its colour, from the grey of the first to the purple of the last: the
+  // icon at its own shape on the left, the count at the right, 10px in from each side
+  // (the user's of 2026-10-29).
   .tiers
     margin-top: var(--sp-4)
     td
       width: 25%
-      padding: var(--sp-1) var(--sp-2)
+      padding: var(--sp-1) 10px
       border-bottom: 2px solid var(--c-surface)
       font-variant-numeric: tabular-nums
       white-space: nowrap
     @for $i from 1 through 4
       .tier-#{$i}
         background: var(--c-tier-#{$i})
+    .pair
+      display: flex
+      align-items: center
+      justify-content: space-between
+      gap: var(--sp-2)
     img
-      vertical-align: middle
-      margin-right: var(--sp-2)
+      flex: none
+      object-fit: contain
+    // The credits held: their count after their icon.
+    .credits .pair
+      justify-content: flex-start
 
   // The work tab: the plays grouped by when they are played, a section a kind
   // of play, each count with its terms under it.

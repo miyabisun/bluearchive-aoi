@@ -652,25 +652,39 @@ export const placeName = (name) => name.split(/：| - /).at(-1);
 const raised = (n) => (n == null ? "?" : `${tenths.format(n)}人分`);
 
 /**
- * How a raise (see `work::Raise`) comes: the exp held ("約" where it is
- * about), times the rate it is taken at where that is not 1, over what one
- * student takes, the counts written by `format`.
+ * A count of an odd number of digits ("172,650") in thousands, rounded to a
+ * tenth ("172.7K", the user's of 2026-10-29: 「K表記も使う、少数第二位を四捨五入」);
+ * below a thousand as it is, a million on in millions.
  */
-function raiseDetail({ exp, about, rate = 1, exp_each }, format) {
-  const times = rate === 1 ? "" : ` × ${rate}`;
-  return `${about ? "約" : ""}${format(exp)} EXP${times} ÷ ${format(exp_each)} EXP`;
+const thousands = (n) =>
+  n < 1000
+    ? exact.format(n)
+    : n < 1e6
+      ? `${oneDecimal.format(Math.round(n / 100) / 10)}K`
+      : millions(n);
+
+/**
+ * How a raise (see `work::Raise`) comes, in two lines (the user's of
+ * 2026-10-29: 「分子」「/ 分母」): the exp held times the rate it is taken at
+ * ("約" where it is about), and over what one student takes, written by `format`.
+ */
+function raiseTerms({ exp, about, rate = 1, exp_each }, format) {
+  return {
+    numerator: `${about ? "約" : ""}${format(Math.round(exp * rate))} EXP`,
+    denominator: `/ ${format(exp_each)} EXP`,
+  };
 }
 
 /**
  * A kind of enhancement material in the equipment tab: how many students
  * what is held raises ("6.6人分", the user's 「生徒何人分」 of 2026-10-22), and
  * how, as the work tab counts it: the orbs in millions as its normal items
- * shop, the parts as its scrimmages.
+ * shop, the parts in thousands as its scrimmages.
  */
 export function enhancementCells({ category, raise }) {
   return {
     students: raised(raise.students),
-    detail: raiseDetail(raise, category === "Exp" ? millions : (n) => exact.format(n)),
+    ...raiseTerms(raise, category === "Exp" ? millions : thousands),
   };
 }
 
@@ -687,7 +701,8 @@ const creditRow = (c, title) => ({
   title,
   held: c.credits == null ? "—" : exact.format(c.credits),
   students: raised(c.credit_students),
-  detail: `${c.credits == null ? "?" : millions(c.credits)} ÷ ${millions(c.credits_each)}`,
+  numerator: c.credits == null ? "?" : millions(c.credits),
+  denominator: `/ ${millions(c.credits_each)}`,
 });
 
 /**
@@ -713,10 +728,7 @@ export function commissionRows(c) {
     title: c.reports_name,
     tiers: c.report_tiers,
     students: raised(c.report_students),
-    detail: raiseDetail(
-      { exp: c.report_exp, about: c.report_about, exp_each: c.exp_each },
-      millions,
-    ),
+    ...raiseTerms({ exp: c.report_exp, about: c.report_about, exp_each: c.exp_each }, millions),
   };
   return toned([reports, creditRow(c, c.credits_name)], [c.report_students, c.credit_students]);
 }
@@ -769,13 +781,14 @@ export function normalItemRows(c, orbs) {
  */
 export const scrimmageRows = (places, schools) =>
   places.map((place, p) => {
-    const { students, detail, first, why } = schoolCells(schools[p]);
+    const { students, numerator, denominator, first, why } = schoolCells(schools[p]);
     return {
       key: place.name,
       title: placeName(place.name),
       tiers: place.kinds[0],
       students,
-      detail,
+      numerator,
+      denominator,
       tone: first ? "first" : "",
       why,
     };
@@ -893,7 +906,7 @@ export function schoolCells(row) {
   if (row.first) why.push("最も少ないので先に回します");
   return {
     students,
-    detail: raiseDetail(row, (n) => exact.format(n)),
+    ...raiseTerms(row, thousands),
     first: row.first,
     why: why.join(String.fromCharCode(10)),
   };

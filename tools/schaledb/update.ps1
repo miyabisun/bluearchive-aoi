@@ -187,11 +187,13 @@ $growth = [ordered]@{
   weapon_credits = [int]$const.WeaponLvUpCoefficient
   # The unique weapon's parts (springs, hammers, barrels, firing pins): the exp each gives.
   weapon_parts = @($equipment | Where-Object { $_.Category -like 'WeaponExpGrowth*' } | ForEach-Object { , @([int64]$_.Id, [int64]$_.LevelUpFeedExp) })
-  # Each weapon type and the parts' kind (but the firing pins, which suit all)
-  # giving it more exp, and how much more (per 10,000).
+  # Each weapon type and the parts' kinds giving it more exp, and how much more
+  # (per 10,000): its school's springs, hammers or barrels, and the firing pins,
+  # which suit every type (WeaponExpGrowthZ, 15000 for all).
   weapon_bonus = @(foreach ($row in $weaponBonus) {
-    $kind = @('WeaponExpGrowthA', 'WeaponExpGrowthB', 'WeaponExpGrowthC') | Sort-Object { -[int]$row.$_ } | Select-Object -First 1
-    , @($row.WeaponType, $kind, [int]$row.$kind)
+    foreach ($kind in @('WeaponExpGrowthA', 'WeaponExpGrowthB', 'WeaponExpGrowthC', 'WeaponExpGrowthZ')) {
+      if ([int]$row.$kind -gt 10000) { , @($row.WeaponType, $kind, [int]$row.$kind) }
+    }
   })
   # Each level of a potential (HP, attack or healing, 1 to 25): the tier of its
   # ooparts (0 the first) and how many.

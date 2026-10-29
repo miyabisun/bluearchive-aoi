@@ -385,20 +385,37 @@ test("the equipment tab's blueprints: a slot a row, its T1 pieces to T10 bluepri
     "1",
     "2",
     "3",
-    "7.6人分約5.7M EXP ÷ 0.74M EXP",
+    "7.6人分約5.7M EXP/ 0.74M EXP",
   ]);
   await expect(rows.nth(1).locator("td")).toHaveText([
     "100",
     "101",
     "102",
     "103",
-    "6.6人分220,280 EXP × 1.5 ÷ 49,605 EXP",
+    "6.6人分330.4K EXP/ 49.6K EXP",
   ]);
-  // The count at the row's right end, its terms under it.
+  // The count at the row's right end, in three lines: the students, the exp held with
+  // the rate taken in, over what one takes (the user's of 2026-10-29).
   const raised = rows.nth(1).locator("td.raise");
-  const [count, terms] = [raised.locator("strong"), raised.locator(".detail")];
-  expect((await terms.boundingBox()).y).toBeGreaterThan((await count.boundingBox()).y);
+  const lines = [raised.locator("strong"), ...(await raised.locator(".detail").all())];
+  await expect(lines[1]).toHaveText("330.4K EXP");
+  await expect(lines[2]).toHaveText("/ 49.6K EXP");
+  const tops = await Promise.all(lines.map(async (l) => (await l.boundingBox()).y));
+  expect(tops).toEqual([...tops].sort((a, b) => a - b));
+  expect(new Set(tops).size).toBe(3);
   await expect(raised).toHaveCSS("text-align", "right");
+  // Every row's count as wide, however long its terms.
+  const widths = await page
+    .locator("table.enhancements td.raise")
+    .evaluateAll((cells) => cells.map((c) => c.getBoundingClientRect().width));
+  expect(new Set(widths).size).toBe(1);
+  // The icons at their own shape (SchaleDB's 146 by 116), the count at the right, 10px in.
+  const cell = rows.nth(1).locator("td").first();
+  const icon = await cell.locator("img").boundingBox();
+  expect(icon.width / icon.height).toBeCloseTo(146 / 116, 1);
+  const [box, count] = [await cell.boundingBox(), await cell.locator("span").boundingBox()];
+  expect(Math.round(box.x + box.width - (count.x + count.width))).toBe(10);
+  expect(Math.round(icon.x - box.x)).toBe(10);
   await expect(rows.nth(1).getByRole("img").first()).toHaveAttribute("title", "スプリング0");
   for (let t = 0; t < 4; t++) {
     const face = await colorOf(page, `--c-tier-${t + 1}`);
@@ -1489,14 +1506,14 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
     "クレジット回収",
   ]);
   await expect(page.locator(".raises tbody")).toHaveText([
-    "クレジット248,955,6865.9人分249M ÷ 41.5M",
-    "強化珠01237.6人分約5.7M EXP ÷ 0.74M EXP",
+    "クレジット248,955,6865.9人分249M/ 41.5M",
+    "強化珠01237.6人分約5.7M EXP/ 0.74M EXP",
   ]);
   await expect(page.locator(".raises .credits img")).toHaveAttribute("alt", "クレジット");
   await expect(page.locator(".schools tbody td.tier-1")).toHaveText(["—"]);
   await expect(page.locator(".commissions tbody")).toHaveText([
-    "拠点防衛010—305.0人分6.2M EXP ÷ 1.2M EXP",
-    "クレジット回収248,955,6865.9人分249M ÷ 41.5M",
+    "拠点防衛010—305.0人分6.2M EXP/ 1.2M EXP",
+    "クレジット回収248,955,6865.9人分249M/ 41.5M",
   ]);
   // The counts lined up at the right end of each section, their terms under them.
   for (const kind of ["raises", "commissions"]) {
@@ -1525,7 +1542,7 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
     return rgb;
   });
   const school = page.locator(".schools tbody");
-  await expect(school).toHaveText("トリニティ—6.6人分220,280 EXP × 1.5 ÷ 49,605 EXP");
+  await expect(school).toHaveText("トリニティ—6.6人分330.4K EXP/ 49.6K EXP");
   await expect(school.locator("strong")).toHaveCSS("color", red);
   await expect(school.locator("th")).toHaveCSS("color", red);
   // Why, on hover alone: the students its parts suit and the weapons per them.
@@ -1597,8 +1614,8 @@ test("the item tab's 通貨等: the credits and the reports in students, then th
   // green, fewer orange.
   const rows = page.locator("table.raising tbody");
   await expect(rows).toHaveText([
-    "クレジット248,955,6865.9人分249M ÷ 41.5M",
-    "レポート010—305.0人分6.2M EXP ÷ 1.2M EXP",
+    "クレジット248,955,6865.9人分249M/ 41.5M",
+    "レポート010—305.0人分6.2M EXP/ 1.2M EXP",
   ]);
   await expect(rows.nth(0).locator("strong")).toHaveCSS("color", await colorOf(page, "--c-ok"));
   await expect(rows.nth(1).locator("strong")).toHaveCSS("color", await colorOf(page, "--c-warn"));

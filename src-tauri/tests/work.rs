@@ -158,6 +158,9 @@ fn the_bounties_and_scrimmages_show_what_they_drop() {
     assert_eq!(held, [4030]);
     assert_eq!(work.scrimmages.len(), 3);
     assert!(work.scrimmages.iter().all(|p| p.kinds.len() == 1));
+    // Every student's weapon suits one school's parts, whatever else (the pins) suits it.
+    let shares: f64 = work.schools.iter().map(|s| s.share).sum();
+    assert!((shares - 1.0).abs() < 1e-9, "{shares}");
     assert_eq!(
         work.scrimmages[0].kinds[0][0].as_ref().unwrap().held,
         Some(Count::Exact(5))

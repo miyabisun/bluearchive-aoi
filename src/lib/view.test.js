@@ -894,7 +894,8 @@ describe("work", () => {
         title: "拠点防衛",
         tiers: reportTiers,
         students: "5.0人分",
-        detail: "約6.2M EXP ÷ 1.2M EXP",
+        numerator: "約6.2M EXP",
+        denominator: "/ 1.2M EXP",
         tone: "fewer",
       },
       {
@@ -902,14 +903,15 @@ describe("work", () => {
         title: "クレジット回収",
         held: "248,955,686",
         students: "5.9人分",
-        detail: "249M ÷ 41.5M",
+        numerator: "249M",
+        denominator: "/ 41.5M",
         tone: "more",
       },
     ]);
     // Credits never read: no count, and neither raises fewer.
     expect(commissionRows({ ...row, credits: null, credit_students: null })).toMatchObject([
       { tone: "" },
-      { held: "—", students: "?", detail: "? ÷ 41.5M", tone: "" },
+      { held: "—", students: "?", numerator: "?", denominator: "/ 41.5M", tone: "" },
     ]);
   });
 
@@ -966,7 +968,8 @@ describe("work", () => {
         title: "トリニティ",
         tiers: parts(10),
         students: "6.6人分",
-        detail: "220,280 EXP × 1.5 ÷ 49,605 EXP",
+        numerator: "330.4K EXP",
+        denominator: "/ 49.6K EXP",
         tone: "first",
       },
       {
@@ -974,7 +977,8 @@ describe("work", () => {
         title: "ゲヘナ",
         tiers: parts(20),
         students: "7.0人分",
-        detail: "220,280 EXP × 1.5 ÷ 49,605 EXP",
+        numerator: "330.4K EXP",
+        denominator: "/ 49.6K EXP",
         tone: "",
       },
     ]);
@@ -1007,7 +1011,8 @@ describe("month-end and daily shops", () => {
         title: "クレジット",
         held: "248,955,686",
         students: "5.9人分",
-        detail: "249M ÷ 41.5M",
+        numerator: "249M",
+        denominator: "/ 41.5M",
         tone: "fewer",
       },
       {
@@ -1015,7 +1020,8 @@ describe("month-end and daily shops", () => {
         title: "強化珠",
         tiers,
         students: "7.6人分",
-        detail: "約5.7M EXP ÷ 0.74M EXP",
+        numerator: "約5.7M EXP",
+        denominator: "/ 0.74M EXP",
         tone: "more",
       },
     ]);
@@ -1164,22 +1170,28 @@ describe("hard missions", () => {
 describe("enhancementCells", () => {
   it("tells how many students a kind of enhancement material raises, as the work tab counts it", () => {
     const raise = { exp: 5700780, about: true, rate: 1, exp_each: 741690, students: 7.686 };
-    // The orbs in millions, as the work tab's normal items shop.
+    // The orbs in millions, as the work tab's normal items shop: the count, the exp held
+    // over the exp one student takes (the user's of 2026-10-29: three lines).
     expect(enhancementCells({ category: "Exp", raise })).toEqual({
       students: "7.6人分",
-      detail: "約5.7M EXP ÷ 0.74M EXP",
+      numerator: "約5.7M EXP",
+      denominator: "/ 0.74M EXP",
     });
-    // A kind of parts at its weapons' rate, as the scrimmages.
+    // A kind of parts with its weapons' rate taken in (the user's 「x1.5倍は計算してしまう」),
+    // thousands as K rounded to a tenth (49,605 → 49.6K).
     const parts = { exp: 220280, about: false, rate: 1.5, exp_each: 49605, students: 6.661 };
     expect(enhancementCells({ category: "WeaponExpGrowthA", raise: parts })).toEqual({
       students: "6.6人分",
-      detail: "220,280 EXP × 1.5 ÷ 49,605 EXP",
+      numerator: "330.4K EXP",
+      denominator: "/ 49.6K EXP",
     });
-    // The pins, which no weapon takes more of, with no rate written.
-    const pins = { ...parts, rate: 1, students: 4.44 };
-    expect(enhancementCells({ category: "WeaponExpGrowthZ", raise: pins }).detail).toBe(
-      "220,280 EXP ÷ 49,605 EXP",
-    );
+    // Rounded half up, not cut: 172,650 is 172.7K; below a thousand as it is, a million on in M.
+    const at = (exp, rate = 1) =>
+      enhancementCells({ category: "WeaponExpGrowthZ", raise: { ...parts, exp, rate } }).numerator;
+    expect([at(172650), at(999), at(1_234_567)]).toEqual(["172.7K EXP", "999 EXP", "1.2M EXP"]);
+    expect(at(129050, 1.5)).toBe("193.6K EXP");
+    // Always to a tenth, as the counts of students: 258,975 is 259.0K.
+    expect(at(172650, 1.5)).toBe("259.0K EXP");
   });
 });
 
@@ -1199,13 +1211,14 @@ describe("schoolCells", () => {
     };
     expect(schoolCells(row)).toEqual({
       students: "6.6人分",
-      detail: "220,280 EXP × 1.5 ÷ 49,605 EXP",
+      numerator: "330.4K EXP",
+      denominator: "/ 49.6K EXP",
       first: true,
       // Why it is red, on hover: the students its parts suit, and per them.
       why: lines("素材が合う生徒: 46%", "6.6人分 ÷ 46% = 14.5", "最も少ないので先に回します"),
     });
     expect(schoolCells({ ...row, about: true, first: false })).toMatchObject({
-      detail: "約220,280 EXP × 1.5 ÷ 49,605 EXP",
+      numerator: "約330.4K EXP",
       first: false,
       why: lines("素材が合う生徒: 46%", "6.6人分 ÷ 46% = 14.5"),
     });

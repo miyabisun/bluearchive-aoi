@@ -214,10 +214,11 @@ fn the_enhancement_materials_raise_as_many_students_as_the_work_tab_counts() {
         );
         assert!((row.raise.students - school.students).abs() < 1e-9);
     }
-    // The pins suit every weapon alike: no bonus.
+    // The pins suit every weapon alike: 1.5 times for every weapon type (the game's
+    // CharacterWeaponExpBonus, WeaponExpGrowthZ 15000 for all; the user's of 2026-10-29).
     let pins = &kinds.enhancements[4];
     assert_eq!(pins.category, "WeaponExpGrowthZ");
-    assert!((pins.raise.rate - 1.0).abs() < f64::EPSILON);
+    assert!((pins.raise.rate - 1.5).abs() < f64::EPSILON);
     assert!(pins.raise.students > 0.0);
 }
 

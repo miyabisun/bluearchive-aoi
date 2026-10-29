@@ -576,13 +576,7 @@ impl Recognizer {
                 .find(|e| e.id == id)
                 .map(|e| e.category.clone())
         };
-        let suits = |weapon: &str| {
-            growth
-                .weapon_bonus
-                .iter()
-                .find(|(w, _, _)| w == weapon)
-                .map(|(_, kind, rate)| (kind.as_str(), *rate))
-        };
+
         let typed: Vec<&str> = self
             .planner
             .growers
@@ -594,7 +588,13 @@ impl Recognizer {
             .iter()
             .map(|place| {
                 let kind = place.drops.first().copied().and_then(kind_of);
-                let suited = |weapon: &str| suits(weapon).map(|(k, _)| k) == kind.as_deref();
+                // The school's kind among those the weapon takes more of (the pins suit all).
+                let suited = |weapon: &str| {
+                    growth
+                        .weapon_bonus
+                        .iter()
+                        .any(|(w, k, _)| w == weapon && Some(k.as_str()) == kind.as_deref())
+                };
                 let rate = self.part_rate(kind.as_deref());
                 let share = if typed.is_empty() {
                     0.0
