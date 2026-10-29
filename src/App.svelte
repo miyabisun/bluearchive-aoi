@@ -55,6 +55,7 @@
     starMarks,
     starName,
     starOf,
+    starTitle,
     statusView,
     stockCells,
     studentCells,
@@ -311,6 +312,10 @@
     const found = filterRows(rows, query);
     return view.tab === "students" ? sortStudents(found, sortBy) : found;
   });
+  /** The elephs held by their students' ids, as the item list counts them. */
+  const elephs = $derived(
+    new Map((snapshot.items ?? []).filter((r) => r.eleph).map((r) => [r.id, r.count])),
+  );
   /** How many students were read, to compare with how many the game holds. */
   const studentCount = $derived((snapshot.students ?? []).length);
   const nothingRead = $derived(lists.every((l) => (snapshot[l.id] ?? []).length === 0));
@@ -1472,7 +1477,7 @@
                     </td>
                     <td class="name">{row.name}</td>
                     <td class="num">{cells.level}</td>
-                    <td title={cells.weapon || undefined}
+                    <td title={starTitle(cells.weapon, elephs.get(row.id))}
                       >{#if cells.star == null}?{:else}{@render stars(cells.star)}{/if}</td
                     >
                     <td class="code">{cells.skills}</td>

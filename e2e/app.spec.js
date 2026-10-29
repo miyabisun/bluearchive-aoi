@@ -492,7 +492,17 @@ const students = [
 ];
 
 test("shows the students read from the student screen", async ({ page }) => {
-  await open(page, { status: reading("students"), items, equipment, students }, "生徒");
+  // ホシノ's elephs as the item list holds them; アカネ's never read.
+  const eleph = {
+    id: 10005,
+    name: "ホシノの神名文字",
+    icon: "item_icon_secretstone_hoshino",
+    tier: null,
+    count: { exact: 148 },
+    eleph: true,
+  };
+  const snapshot = { status: reading("students"), items: [...items, eleph], equipment, students };
+  await open(page, snapshot, "生徒");
   await expect(page.getByRole("status")).toHaveText("生徒を集計中");
   await expect(page.getByRole("tab", { name: "生徒" })).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("tbody tr").first().locator("td")).toHaveText([
@@ -517,10 +527,18 @@ test("shows the students read from the student screen", async ({ page }) => {
     "0/0/0",
     "20",
   ]);
-  // The star counts on into the unique weapon's, its level on hover; drawn as the
-  // game's stars: the weapon's in blue, the student's in yellow, named to read by.
+  // The star counts on into the unique weapon's, its level and the student's elephs
+  // held on hover (the user's of 2026-10-29); drawn as the game's stars: the
+  // weapon's in blue, the student's in yellow, named to read by.
   const hoshino = page.locator("tbody tr").first().locator("td").nth(3);
-  await expect(hoshino).toHaveAttribute("title", "固有武器 Lv60");
+  await expect(hoshino).toHaveAttribute(
+    "title",
+    "固有武器 Lv60" + String.fromCharCode(10) + "神名文字: 148",
+  );
+  await expect(page.locator("tbody tr").nth(1).locator("td").nth(3)).toHaveAttribute(
+    "title",
+    "神名文字: ?",
+  );
   const weapon = hoshino.getByRole("img", { name: "固有4" });
   await expect(weapon.locator("svg.star")).toHaveCount(4);
   await expect(weapon.locator("use").first()).toHaveAttribute("href", "#star-weapon");

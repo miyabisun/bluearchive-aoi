@@ -45,6 +45,7 @@ import {
   sortStudents,
   statusView,
   studentCells,
+  starTitle,
 } from "./view.js";
 
 const rows = [
@@ -145,6 +146,18 @@ describe("formatCount", () => {
     expect(formatCount({ exact: 1383 })).toBe("1,383");
     expect(formatCount({ exact: 7 })).toBe("7");
     expect(formatCount({ thousands: 51 })).toBe("51K");
+  });
+});
+
+describe("starTitle", () => {
+  it("tells a student's star on hover: the unique weapon's level, then the elephs held", () => {
+    const NL = String.fromCharCode(10);
+    expect(starTitle("固有武器 Lv60", { exact: 148 })).toBe(
+      ["固有武器 Lv60", "神名文字: 148"].join(NL),
+    );
+    expect(starTitle("", { thousands: 2 })).toBe("神名文字: 2K");
+    // Never read in the item list: not told from none held.
+    expect(starTitle("", undefined)).toBe("神名文字: ?");
   });
 });
 

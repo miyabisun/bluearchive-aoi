@@ -127,6 +127,16 @@ export function studentCells(t) {
   };
 }
 
+/**
+ * A student's star on hover: the unique weapon's level (`weapon`, see
+ * `studentCells`), then how many of the student's elephs are held (`eleph`,
+ * "?" never read in the item list; the user's of 2026-10-29).
+ */
+export function starTitle(weapon, eleph) {
+  const elephs = `神名文字: ${eleph == null ? "?" : formatCount(eleph)}`;
+  return weapon ? [weapon, elephs].join("\n") : elephs;
+}
+
 const sum = (values) => (values.every(known) ? values.reduce((a, b) => a + b, 0) : null);
 
 /**
