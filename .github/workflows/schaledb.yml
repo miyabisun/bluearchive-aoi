@@ -1,14 +1,14 @@
 name: SchaleDB
 
-# New students come with Wednesday's maintenance. Each Thursday the SchaleDB
-# snapshot is refreshed (tools/schaledb/update.ps1); where the students changed,
-# the glyph banks are rebuilt so their names read (build_glyphs); and the change
-# is committed to the branch run on. Nothing is tested here: the next release
-# ships it through the local pre-push gate (npm run verify).
+# New students come with Wednesday's maintenance, and SchaleDB lists them some
+# days later. Each day the SchaleDB snapshot is refreshed (tools/schaledb/update.ps1);
+# where the students changed, the glyph banks are rebuilt so their names read
+# (build_glyphs); and the change is committed to the branch run on. Nothing is
+# tested here: the next release ships it through the local pre-push gate (npm run verify).
 on:
   schedule:
-    # Thursday 09:00 JST.
-    - cron: "0 0 * * 4"
+    # Every day at 09:00 JST.
+    - cron: "0 0 * * *"
   workflow_dispatch:
 
 permissions:

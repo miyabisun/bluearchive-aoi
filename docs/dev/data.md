@@ -20,7 +20,7 @@ missions' elephs), and so do the schools' emblems the item tab's
 skill materials show (`school-icons`, white, drawn in the theme's text colour by a
 filter). `tools/schaledb/update.ps1` refreshes the
 snapshot and the tables (it runs `stages.ps1` and `boxes.ps1`). New students come with
-Wednesday's maintenance: every Thursday the SchaleDB workflow
+Wednesday's maintenance and reach SchaleDB some days later: every day the SchaleDB workflow
 (`.github/workflows/schaledb.yml`) runs the script, rebuilds the glyph banks where the
 students changed (`build_glyphs`, so their names read), and commits the change to main.
 It ships with the next release, which the pre-push gate tests.
