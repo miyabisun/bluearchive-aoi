@@ -6,6 +6,8 @@ name: Release
 on:
   push:
     branches: [main]
+  # The SchaleDB workflow's release of new students: its push starts no run.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -18,7 +20,7 @@ env:
 
 jobs:
   publish:
-    if: "startsWith(github.event.head_commit.message, 'release: v')"
+    if: "github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'release: v')"
     runs-on: windows-latest
     env:
       ASSET: bluearchive-aoi-x86_64-pc-windows-msvc.exe
@@ -45,12 +47,11 @@ jobs:
       - name: Check that the commit releases package.json's version
         id: tag
         shell: pwsh
-        env:
-          MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          if (($env:MESSAGE -split "`n")[0] -ne "release: v$version") {
-            throw "commit '$env:MESSAGE' does not release package.json version $version"
+          $subject = git log -1 --format=%s
+          if ($subject -ne "release: v$version") {
+            throw "commit '$subject' does not release package.json version $version"
           }
           "tag=v$version" >> $env:GITHUB_OUTPUT
 

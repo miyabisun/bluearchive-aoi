@@ -4,7 +4,9 @@ name: SchaleDB
 # days later. Each day the SchaleDB snapshot is refreshed (tools/schaledb/update.ps1);
 # where the students changed, the glyph banks are rebuilt so their names read
 # (build_glyphs); and the change is committed to the branch run on. Nothing is
-# tested here: the next release ships it through the local pre-push gate (npm run verify).
+# tested here: the next release ships it through the local pre-push gate (npm run verify),
+# but for new students, which main releases the same day untested (the user's choice of
+# 2026-10-30: 「Actionsだけ・テスト無し」).
 on:
   schedule:
     # Every day at 09:00 JST.
@@ -13,6 +15,8 @@ on:
 
 permissions:
   contents: write
+  # To dispatch the release of new students.
+  actions: write
 
 env:
   CARGO_HTTP_MULTIPLEXING: false
@@ -79,3 +83,21 @@ jobs:
           git add -A src-tauri/data
           git commit -m "chore: refresh the SchaleDB snapshot"
           git push origin "HEAD:$env:GITHUB_REF_NAME"
+
+      # A patch release as agent-tools' bump.sh makes, without its gate. This job's
+      # pushes start no workflow, so the release (built from main's head) is dispatched.
+      - name: Release the new students
+        if: steps.changed.outputs.students == 'True' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A git or gh that fails stops the step, not only the last command.
+          $PSNativeCommandUseErrorActionPreference = $true
+          $version = ./tools/release/bump-patch.ps1
+          if (git ls-remote --tags origin "refs/tags/v$version") { throw "v$version is already tagged" }
+          git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock
+          git commit -m "release: v$version"
+          git tag "v$version"
+          git push origin HEAD:main "v$version"
+          gh workflow run release.yml --ref main

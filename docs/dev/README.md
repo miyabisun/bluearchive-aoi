@@ -79,7 +79,8 @@ To measure against the running game, run `cargo run --release --example watch --
 A release is its commit "release: vX.Y.Z" on main, pushed with its `vX.Y.Z` tag: GitHub
 Actions builds the exe from that commit (not from the tag, so the Rust cache main keeps serves
 every release) and publishes it with its SHA-256 (`bluearchive-aoi-x86_64-pc-windows-msvc.exe`
-and `.exe.sha256`). Other pushes to main build nothing. The app's
+and `.exe.sha256`). Other pushes to main build nothing. The SchaleDB workflow releases new
+students the same way by itself (see [Data](data.md)), dispatching the release workflow. The app's
 アップデートを確認 reads the latest release's tag off where `github.com/…/releases/latest`
 sends to (not the GitHub API, whose 60 calls an hour without a token a home shares);
 更新して再起動 downloads that tag's exe from `releases/download/<tag>/`, checks it against the

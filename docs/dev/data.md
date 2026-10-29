@@ -23,7 +23,11 @@ snapshot and the tables (it runs `stages.ps1` and `boxes.ps1`). New students com
 Wednesday's maintenance and reach SchaleDB some days later: every day the SchaleDB workflow
 (`.github/workflows/schaledb.yml`) runs the script, rebuilds the glyph banks where the
 students changed (`build_glyphs`, so their names read), and commits the change to main.
-It ships with the next release, which the pre-push gate tests.
+It ships with the next release, which the pre-push gate tests; but where the students
+changed, the workflow releases them the same day, untested (the user's choice of
+2026-10-30): `tools/release/bump-patch.ps1` raises the patch version, the workflow commits
+"release: vX.Y.Z" with its tag to main and dispatches the release workflow, which its own
+pushes would not start.
 
 The shops' prices, how many come with a purchase and the monthly limits are written in
 `src-tauri/data/shops.yaml`, from the [Blue Archive wiki](https://bluearchive.wiki/wiki/Shop);
