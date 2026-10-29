@@ -1536,6 +1536,60 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   expect(await overflow(page)).toBe(0);
 });
 
+test("the item tab's 通貨等: the credits and the reports in students, then the coins", async ({
+  page,
+}) => {
+  const coin = (id, name, icon, held) => heldCell(id, name, icon, held);
+  const coins = [
+    coin(7, "総力戦コイン", "item_icon_raidcoin", { exact: 1160 }),
+    coin(8, "戦術コイン", "item_icon_arenacoin", null),
+  ];
+  // 熟達証書 is no item: its count is its shop's.
+  const shops = [
+    {
+      name: "熟達証書",
+      read_at: "2026-10-29 12:00:00",
+      resets: true,
+      coins: [{ name: "熟達証書", icon: "currency_icon_mastercoin", held: { exact: 320 } }],
+      goods: [],
+    },
+  ];
+  const snapshot = {
+    status: { state: "other_screen" },
+    items,
+    equipment,
+    kinds: { ...kinds, coins },
+    work,
+    shops,
+  };
+  await open(page, snapshot, "アイテム");
+  await page.getByRole("tab", { name: "通貨等" }).click();
+  await expect(page.getByLabel("名前で検索")).toHaveCount(0);
+  // As the commissions count them (the user's of 2026-10-29), the credits first; more
+  // green, fewer orange.
+  const rows = page.locator("table.raising tbody");
+  await expect(rows).toHaveText([
+    "クレジット248,955,6865.9人分249M ÷ 41.5M",
+    "レポート010—305.0人分6.2M EXP ÷ 1.2M EXP",
+  ]);
+  await expect(rows.nth(0).locator("strong")).toHaveCSS("color", await colorOf(page, "--c-ok"));
+  await expect(rows.nth(1).locator("strong")).toHaveCSS("color", await colorOf(page, "--c-warn"));
+  const [a, b] = await page
+    .locator("table.raising td.raise strong")
+    .evaluateAll((all) => all.map((c) => c.getBoundingClientRect().right));
+  expect(a).toBe(b);
+  // The coins held as tiles, the item list's in its order, then 熟達証書 as its shop read it.
+  const tiles = page.locator(".tiles li");
+  expect(await tiles.evaluateAll((t) => t.map((e) => e.title))).toEqual([
+    "総力戦コイン",
+    "戦術コイン",
+    "熟達証書",
+  ]);
+  await expect(tiles.locator(".count")).toHaveText(["1,160", "—", "320"]);
+  await page.setViewportSize({ width: 360, height: 640 });
+  expect(await overflow(page)).toBe(0);
+});
+
 test("reserves a hard mission's eleph, the day's AP it takes red in the hard missions' heading", async ({
   page,
 }) => {

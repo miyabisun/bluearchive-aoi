@@ -513,6 +513,7 @@ impl Recognizer {
                 &equipment_held,
                 |category| self.feed(category),
             ),
+            coins: kinds::coins(goods, &items_held),
         }
     }
 

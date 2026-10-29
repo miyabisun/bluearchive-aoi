@@ -36,6 +36,7 @@ export const SUBTABS = {
     { id: "all", name: "全体" },
     { id: "skills", name: "スキル素材" },
     { id: "ooparts", name: "オーパーツ" },
+    { id: "currency", name: "通貨等" },
   ],
   equipment: [
     { id: "all", name: "全体" },
@@ -718,6 +719,34 @@ export function commissionRows(c) {
     ),
   };
   return toned([reports, creditRow(c, c.credits_name)], [c.report_students, c.credit_students]);
+}
+
+/**
+ * The credits and the reports for the item tab's 通貨等 (the user's of
+ * 2026-10-29), as the commissions count them: the credits first.
+ */
+export function currencyRows(c) {
+  const [reports, credits] = commissionRows(c);
+  return [
+    { ...credits, title: "クレジット" },
+    { ...reports, title: "レポート" },
+  ];
+}
+
+/**
+ * The coins for the item tab's 通貨等: those the item list holds (`coins`,
+ * see `kinds::coins`), then each coin of the shops read (`shops`) the item
+ * list lacks (熟達証書), as its shop last read it.
+ */
+export function currencyCoins(coins, shops) {
+  const named = new Set(coins.map((c) => c.name));
+  const more = [];
+  for (const coin of shops.flatMap((s) => s.coins)) {
+    if (named.has(coin.name)) continue;
+    named.add(coin.name);
+    more.push({ name: coin.name, icon: coin.icon, held: coin.held });
+  }
+  return [...coins, ...more];
 }
 
 /**

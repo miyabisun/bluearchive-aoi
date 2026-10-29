@@ -14,6 +14,8 @@ import {
   tierCell,
   unknownText,
   commissionRows,
+  currencyRows,
+  currencyCoins,
   normalItemRows,
   scrimmageRows,
   enhancementCells,
@@ -908,6 +910,41 @@ describe("work", () => {
     expect(commissionRows({ ...row, credits: null, credit_students: null })).toMatchObject([
       { tone: "" },
       { held: "—", students: "?", detail: "? ÷ 41.5M", tone: "" },
+    ]);
+  });
+
+  it("lists the credits, then the reports, as the commissions count them", () => {
+    const row = {
+      credits_name: "クレジット回収",
+      credits: 248955686,
+      credits_each: 41500000,
+      credit_students: 5.999,
+      reports_name: "拠点防衛",
+      report_tiers: reportTiers,
+      report_exp: 6245925,
+      report_about: false,
+      exp_each: 1249185,
+      report_students: 5.0,
+    };
+    const [reports, credits] = commissionRows(row);
+    expect(currencyRows(row)).toEqual([
+      { ...credits, title: "クレジット" },
+      { ...reports, title: "レポート" },
+    ]);
+  });
+
+  it("lists the coins held, then the shops' coins the item list lacks, each once", () => {
+    const coin = (name, held) => ({ id: 1, name, icon: `icon_${name}`, held, need: null });
+    const coins = [coin("総力戦コイン", { exact: 1160 }), coin("戦術コイン", null)];
+    const shop = (...names) => ({
+      coins: names.map((name) => ({ name, icon: `icon_${name}`, held: { exact: 50 } })),
+    });
+    const shops = [shop("総力戦レアコイン", "総力戦コイン"), shop("熟達証書"), shop("熟達証書")];
+    expect(currencyCoins(coins, shops).map((c) => [c.name, c.held])).toEqual([
+      ["総力戦コイン", { exact: 1160 }],
+      ["戦術コイン", null],
+      ["総力戦レアコイン", { exact: 50 }],
+      ["熟達証書", { exact: 50 }],
     ]);
   });
 

@@ -20,6 +20,8 @@
   import {
     LISTS,
     commissionRows,
+    currencyCoins,
+    currencyRows,
     enhancementCells,
     blueprintCells,
     castLine,
@@ -1335,6 +1337,28 @@
             </tbody>
           </table>
         </div>
+      {:else if sub === "currency"}
+        <!-- The credits and the reports in students raised, as the commissions count them,
+             then the coins held (the user's of 2026-10-29: 「通貨等」). -->
+        <div class="table-scroll" data-state="success">
+          {#if snapshot.work}
+            {@render raiseRows("commissions", currencyRows(snapshot.work.commissions))}
+          {/if}
+          <h4 class="coins">コイン</h4>
+          <ul class="tiles">
+            {#each currencyCoins(kinds.coins ?? [], snapshot.shops ?? []) as coin (coin.name)}
+              <li title={coin.name}>
+                <img
+                  src={iconUrl(coin.icon)}
+                  alt={coin.name}
+                  width="64"
+                  height="64"
+                  loading="lazy"
+                /><span class="count">{heldText(coin.held)}</span>
+              </li>
+            {/each}
+          </ul>
+        </div>
       {:else if sub === "enhancements"}
         <!-- A kind of enhancement material a row: its tiers on their colours, then how many
              students what is held raises, and how, as the work tab counts it. -->
@@ -2458,6 +2482,36 @@
   .ooparts .boxes td
     border-bottom-width: var(--sp-2)
 
+  // The rows of students raised, in the work tab and the item tab's 通貨等: a row's
+  // title over it, as a place's heading; the credits held beside their icon; the one
+  // raising more green, fewer orange, the school to play first red.
+  .raising
+    th
+      position: static
+      padding: var(--sp-3) 0 var(--sp-1)
+      border-bottom: none
+      background: none
+      font-weight: 600
+    tbody:first-child th
+      padding-top: var(--sp-1)
+    .credits
+      width: auto
+    .more strong
+      color: var(--c-ok)
+    .fewer strong
+      color: var(--c-warn)
+    .first :is(th, strong)
+      color: var(--c-danger)
+  // The normal items shop's fewer red (the user's 「赤字と緑字」).
+  .raising.raises .fewer strong
+    color: var(--c-danger)
+  // The coins under the credits and the reports, headed as a place.
+  .coins
+    margin: var(--sp-4) 0 var(--sp-2)
+    font-size: var(--fs-sm)
+    font-weight: 600
+    color: var(--c-muted)
+
   // How many students what is held raises, its terms under it, at the row's right end:
   // the enhancement materials' rows and the work tab's alike.
   .tiers .raise
@@ -2553,28 +2607,6 @@
     .slots td
       padding-top: var(--sp-1)
       padding-bottom: var(--sp-1)
-    .more strong
-      color: var(--c-ok)
-    .fewer strong
-      color: var(--c-warn)
-    // A row's title over it, as a place's heading; the credits held beside their icon.
-    .raising
-      th
-        position: static
-        padding: var(--sp-3) 0 var(--sp-1)
-        border-bottom: none
-        background: none
-        font-weight: 600
-      tbody:first-child th
-        padding-top: var(--sp-1)
-      .credits
-        width: auto
-    // The school to play first red, its name and its count.
-    .first :is(th, strong)
-      color: var(--c-danger)
-    // The normal items shop's fewer red (the user's 「赤字と緑字」).
-    .raises .fewer strong
-      color: var(--c-danger)
     .fold summary
       flex-wrap: wrap
     // Short of one student red; a slot short of the golden ratio orange.

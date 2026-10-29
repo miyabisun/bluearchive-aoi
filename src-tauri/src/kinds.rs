@@ -63,6 +63,8 @@ pub struct Kinds {
     pub blueprints: Vec<SlotPrints>,
     /// The enhancement materials, kind by kind (see `ENHANCEMENTS`).
     pub enhancements: Vec<Enhancement>,
+    /// The coins held (see `coins`).
+    pub coins: Vec<HeldCell>,
 }
 
 /// A school's skill materials by tier: its name, the icon of its emblem
@@ -304,6 +306,18 @@ pub fn ooparts<S: BuildHasher, T: BuildHasher>(
     .into_iter()
     .map(|(_, tiers)| tiers)
     .collect()
+}
+
+/// The coins of `entries` (SchaleDB's category Coin) in their order, with how
+/// many are held; the events' exchange goods, which SchaleDB files as coins
+/// too, left out (the user's of 2026-10-29: 「各種コイン」).
+pub fn coins<S: BuildHasher>(entries: &[Item], held: &HashMap<i64, Count, S>) -> Vec<HeldCell> {
+    let none = HashMap::<i64, u64>::new();
+    entries
+        .iter()
+        .filter(|e| e.category == "Coin" && !e.icon.starts_with("item_icon_event"))
+        .map(|e| HeldCell::of(e, held, &none))
+        .collect()
 }
 
 /// The enhancement materials of the equipment list by their category, in the

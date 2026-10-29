@@ -118,6 +118,28 @@ fn the_skill_materials_choice_boxes_come_by_the_schools_they_choose_from_every_s
 }
 
 #[test]
+fn the_coins_come_in_the_item_lists_order_without_the_events_goods() {
+    let kinds = recognizer().kinds(&[row(7, 1160), row(80_001, 12)], &[]);
+    let coins: Vec<_> = kinds.coins.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(
+        coins,
+        [
+            "総力戦コイン",
+            "戦術コイン",
+            "総力戦レアコイン",
+            "神名のカケラ",
+            "火力演習コイン",
+            "指名手配コイン",
+            "大決戦コイン",
+            "大決戦レアコイン",
+            "アーカイブポイント",
+        ]
+    );
+    assert_eq!(kinds.coins[0].held, Some(Count::Exact(1160)));
+    assert_eq!(kinds.coins[1].held, None);
+}
+
+#[test]
 fn each_oopart_comes_with_its_four_tiers() {
     let kinds = recognizer().kinds(&[row(150_008, 672)], &[]);
     assert_eq!(kinds.ooparts.len(), 20);
