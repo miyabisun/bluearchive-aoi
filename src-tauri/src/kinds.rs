@@ -61,6 +61,8 @@ pub struct Kinds {
     /// Each oopart's tiers.
     pub ooparts: Vec<[Option<HeldCell>; 4]>,
     pub blueprints: Vec<SlotPrints>,
+    /// The blueprints' choice boxes by the tier they give (see `print_boxes`).
+    pub print_boxes: Vec<Option<HeldCell>>,
     /// The enhancement materials, kind by kind (see `ENHANCEMENTS`).
     pub enhancements: Vec<Enhancement>,
     /// The coins held (see `coins`).
@@ -377,6 +379,31 @@ pub fn enhancements<S: BuildHasher>(
                 category,
                 tiers,
             }
+        })
+        .collect()
+}
+
+/// The blueprints' choice boxes of `boxes` (their `entries`, and `equipment`
+/// what they give) by the tier they give, T1 (none gives it) to T10, as the
+/// slots' blueprints line up (the user's of 2026-10-29: 「設計図選択ボックスの行」).
+pub fn print_boxes<S: BuildHasher>(
+    boxes: &[ChoiceBox],
+    entries: &[Item],
+    equipment: &[Item],
+    held: &HashMap<i64, Count, S>,
+) -> Vec<Option<HeldCell>> {
+    let none = HashMap::<i64, u64>::new();
+    let gives = |b: &ChoiceBox| {
+        let first = b.choices.first()?;
+        equipment.iter().find(|e| e.id == *first).map(|e| e.tier)
+    };
+    (1..=10)
+        .map(|tier| {
+            let found = boxes
+                .iter()
+                .find(|b| b.equipment && gives(b) == Some(tier))?;
+            let entry = entries.iter().find(|e| e.id == found.id)?;
+            Some(HeldCell::of(entry, held, &none))
         })
         .collect()
 }

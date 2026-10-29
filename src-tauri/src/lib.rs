@@ -508,6 +508,12 @@ impl Recognizer {
                 self.equipment.entries(),
                 &equipment_held,
             ),
+            print_boxes: kinds::print_boxes(
+                &self.boxes,
+                goods,
+                self.equipment.entries(),
+                &items_held,
+            ),
             enhancements: kinds::enhancements(
                 self.equipment.entries(),
                 &equipment_held,

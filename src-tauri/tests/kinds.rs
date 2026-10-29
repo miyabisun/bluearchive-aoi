@@ -222,6 +222,27 @@ fn the_enhancement_materials_raise_as_many_students_as_the_work_tab_counts() {
 }
 
 #[test]
+fn the_blueprints_choice_boxes_come_by_the_tier_they_give() {
+    let kinds = recognizer().kinds(&[row(150_030, 732)], &[]);
+    // T1 to T10 as the slots' blueprints line up; no box gives T1.
+    let ids: Vec<_> = ids(&kinds.print_boxes);
+    let tiers = [
+        150_028, 150_029, 150_030, 150_031, 150_032, 150_033, 150_041, 150_045, 150_048,
+    ];
+    assert_eq!(
+        ids,
+        std::iter::once(None)
+            .chain(tiers.into_iter().map(Some))
+            .collect::<Vec<_>>()
+    );
+    let t4 = kinds.print_boxes[3].as_ref().unwrap();
+    assert_eq!(
+        (t4.name.as_str(), t4.held),
+        ("T4装備設計図選択ボックス", Some(Count::Exact(732)))
+    );
+}
+
+#[test]
 fn each_slot_shows_its_t1_piece_and_blueprints_to_t10_and_its_universal_ones() {
     let kinds = recognizer().kinds(&[], &[row(1000, 249), row(501_000, 51)]);
     let slots: Vec<_> = kinds.blueprints.iter().map(|s| s.name.as_str()).collect();

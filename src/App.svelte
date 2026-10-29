@@ -1407,6 +1407,16 @@
                   {/each}
                 </tr>
               {/each}
+              <!-- The blueprints' choice boxes at the bottom (the user's of 2026-10-29), each under the
+                   tier it gives; none gives T1 or the universal ones. -->
+              {#if kinds.print_boxes?.some(Boolean)}
+                <tr class="boxes">
+                  <td class="slot">選択ボックス</td>
+                  {#each [...kinds.print_boxes, null] as cell, i (i)}
+                    <td class="count" title={cell?.name}>{cell ? heldText(cell.held) : ""}</td>
+                  {/each}
+                </tr>
+              {/if}
             </tbody>
           </table>
         </div>

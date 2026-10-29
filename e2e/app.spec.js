@@ -157,6 +157,16 @@ const kinds = {
     boxSet(true, ["トリニティ", "ゲヘナ", "ミレニアム"], 100),
     boxSet(false, ["トリニティ", "ゲヘナ"], 200),
   ],
+  print_boxes: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((t) =>
+    t === 1
+      ? null
+      : heldCell(
+          150020 + t,
+          `T${t}装備設計図選択ボックス`,
+          `equipment_icon_selection_tier${t}_piece`,
+          t === 4 ? { exact: 732 } : null,
+        ),
+  ),
   oopart_boxes: [0, 1, 2, 3].map((t) =>
     heldCell(
       150008 + t,
@@ -343,6 +353,24 @@ test("the equipment tab's blueprints: a slot a row, its T1 pieces to T10 bluepri
   await expect(hat).toHaveText(["帽子", ...held, "59K"]);
   await expect(hat.nth(2)).toHaveAttribute("title", "帽子T2の設計図");
   await expect(hat.last()).toHaveAttribute("title", "帽子の万能設計図");
+  // The blueprints' choice boxes at the bottom (the user's of 2026-10-29), each under the
+  // tier it gives.
+  const boxes = prints.locator("tbody tr").last().locator("td");
+  await expect(boxes).toHaveText([
+    "選択ボックス",
+    "",
+    "—",
+    "—",
+    "732",
+    "—",
+    "—",
+    "—",
+    "—",
+    "—",
+    "—",
+    "",
+  ]);
+  await expect(boxes.nth(4)).toHaveAttribute("title", "T4装備設計図選択ボックス");
   await page.setViewportSize({ width: 360, height: 640 });
   expect(await overflow(page)).toBe(0);
 
