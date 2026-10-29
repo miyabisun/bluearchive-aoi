@@ -58,12 +58,75 @@ fn the_skill_materials_come_by_school_the_three_great_first() {
     assert!(bd.need.is_some());
 }
 
+/// The ids of a row's tiers.
+fn ids(tiers: &[Option<aoi::work::HeldCell>]) -> Vec<Option<i64>> {
+    tiers.iter().map(|c| c.as_ref().map(|c| c.id)).collect()
+}
+
+#[test]
+fn the_skill_materials_choice_boxes_come_by_the_schools_they_choose_from_every_school_first() {
+    let kinds = recognizer().kinds(&[row(150_000, 830), row(150_020, 5)], &[]);
+    let sets: Vec<(bool, Vec<&str>)> = kinds
+        .skill_boxes
+        .iter()
+        .map(|b| (b.all, b.schools.iter().map(String::as_str).collect()))
+        .collect();
+    // The game's three sets of the same names: every school, then two of six
+    // schools each, the one with トリニティ first; each in the order of the schools.
+    assert_eq!(sets.len(), 3);
+    assert!(sets[0].0 && sets[0].1.len() == 12);
+    assert_eq!(
+        sets[1..],
+        [
+            (
+                false,
+                vec![
+                    "トリニティ",
+                    "ゲヘナ",
+                    "山海経",
+                    "ヴァルキューレ",
+                    "アリウス",
+                    "ワイルドハント"
+                ]
+            ),
+            (
+                false,
+                vec![
+                    "ミレニアム",
+                    "百鬼夜行",
+                    "アビドス",
+                    "レッドウィンター",
+                    "ハイランダー",
+                    "オデュッセイア"
+                ]
+            ),
+        ]
+    );
+    // Each set as a school's: its BD boxes over its tech note boxes, by tier.
+    let every = &kinds.skill_boxes[0];
+    let tiers = |first: i64| (first..first + 4).map(Some).collect::<Vec<_>>();
+    assert_eq!(ids(&every.bd), tiers(150_004));
+    assert_eq!(ids(&every.notes), tiers(150_000));
+    assert_eq!(
+        every.notes[0].as_ref().unwrap().held,
+        Some(Count::Exact(830))
+    );
+    let six = &kinds.skill_boxes[1];
+    assert_eq!(ids(&six.bd), tiers(150_020));
+    assert_eq!(ids(&six.notes), tiers(150_012));
+    assert_eq!(six.bd[0].as_ref().unwrap().held, Some(Count::Exact(5)));
+}
+
 #[test]
 fn each_oopart_comes_with_its_four_tiers() {
-    let kinds = recognizer().kinds(&[], &[]);
+    let kinds = recognizer().kinds(&[row(150_008, 672)], &[]);
     assert_eq!(kinds.ooparts.len(), 20);
     assert!(kinds.ooparts.iter().flatten().all(Option::is_some));
     assert_eq!(kinds.ooparts[0][0].as_ref().unwrap().id, 100);
+    // Their choice boxes by tier, (1) to (4).
+    let boxes = &kinds.oopart_boxes;
+    assert_eq!(ids(boxes), (150_008..150_012).map(Some).collect::<Vec<_>>());
+    assert_eq!(boxes[0].as_ref().unwrap().held, Some(Count::Exact(672)));
 }
 
 #[test]

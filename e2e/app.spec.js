@@ -134,11 +134,39 @@ test("shows the equipment by tile, each piece's tier at its corner", async ({ pa
 const heldCell = (id, name, icon, held, need = null) => ({ id, name, icon, held, need });
 
 /** The tables by kind: the secret notes, two schools, two ooparts and a slot. */
+/** A set of choice boxes of the skill materials: whether of every school, the schools. */
+const boxSet = (all, schools, first) => ({
+  all,
+  schools,
+  bd: [0, 1, 2, 3].map((t) =>
+    heldCell(first + 4 + t, `BD選択ボックス${t}`, `item_icon_exskillcd_selection_${t}`, {
+      exact: first + t,
+    }),
+  ),
+  notes: [0, 1, 2, 3].map((t) =>
+    heldCell(first + t, `ノート選択ボックス${t}`, `item_icon_skillbook_selection_${t}`, null),
+  ),
+});
+
 const kinds = {
   secret: [
     heldCell(9999, "秘伝ノート", "item_icon_skillbook_ultimate", { exact: 1 }, 3),
     heldCell(9998, "秘伝ノートの断片", "item_icon_skillbook_ultimate_piece", { exact: 11 }),
   ],
+  skill_boxes: [
+    boxSet(true, ["トリニティ", "ゲヘナ", "ミレニアム"], 100),
+    boxSet(false, ["トリニティ", "ゲヘナ"], 200),
+  ],
+  oopart_boxes: [0, 1, 2, 3].map((t) =>
+    heldCell(
+      150008 + t,
+      `オーパーツ（${t + 1}）選択ボックス`,
+      `item_icon_material_selection_${t}`,
+      {
+        exact: 670 - t,
+      },
+    ),
+  ),
   schools: ["trinity", "gehenna"].map((key, s) => ({
     name: ["トリニティ", "ゲヘナ"][s],
     icon: `school_icon_${key}`,
@@ -238,7 +266,8 @@ test("the item tab's sub-tabs: every item on its rarity, the skill materials, th
   await page.getByLabel("名前で検索").fill("ノート");
   await expect(tiles).toHaveCount(1);
 
-  // The skill materials: no search; the secret notes, then a school's BDs over its notes.
+  // The skill materials: no search; the secret notes, the choice boxes, then a school's
+  // BDs over its notes.
   await page.getByRole("tab", { name: "スキル素材" }).click();
   await expect(page.getByLabel("名前で検索")).toHaveCount(0);
   const skills = page.locator("table.skills");
@@ -251,7 +280,16 @@ test("the item tab's sub-tabs: every item on its rarity, the skill materials, th
   expect(await emblems.evaluateAll((i) => i.map((e) => e.alt))).toEqual(["トリニティ", "ゲヘナ"]);
   const loaded = await emblems.evaluateAll((i) => i.map((e) => e.complete && e.naturalWidth > 0));
   expect(loaded).toEqual([true, true]);
-  const trinity = skills.locator("tbody").nth(1).locator("tr");
+  // The choice boxes above トリニティ (the user's of 2026-10-29), set by set as a school's:
+  // every school's first, the schools on hover.
+  const sets = skills.locator("th.set");
+  await expect(sets).toHaveText(["全学園", "2校"]);
+  await expect(sets.nth(1)).toHaveAttribute("title", "トリニティ・ゲヘナ");
+  const every = skills.locator("tbody").nth(1).locator("tr");
+  await expect(every.nth(0).locator("td")).toHaveText(["100", "101", "102", "103"]);
+  await expect(every.nth(1).locator("td")).toHaveText(["—", "—", "—", "—"]);
+  await expect(every.nth(0).getByRole("img", { name: "BD選択ボックス0" })).toBeVisible();
+  const trinity = skills.locator("tbody").nth(3).locator("tr");
   await expect(trinity.nth(0).locator("td")).toHaveText(["0", "10", "20", "30"]);
   await expect(trinity.nth(1).locator("td")).toHaveText(["0", "100", "200", "—"]);
   await expect(trinity.nth(1).locator("td").first()).toHaveClass(/tier-1/);
@@ -272,12 +310,17 @@ test("the item tab's sub-tabs: every item on its rarity, the skill materials, th
   );
   await expect(skills).toBeVisible();
 
-  // The ooparts: one a row, its tiers on their colours.
+  // The ooparts: their choice boxes on top (the user's of 2026-10-29), then one a row,
+  // its tiers on their colours.
   await page.getByRole("tab", { name: "オーパーツ" }).click();
   const ooparts = page.locator("table.ooparts tr");
-  await expect(ooparts).toHaveCount(2);
-  await expect(ooparts.nth(0).locator("td")).toHaveText(["1,680", "1,679", "1,678", "1,677"]);
-  await expect(ooparts.nth(1).locator("td")).toHaveText(["2,291", "", "", ""]);
+  await expect(ooparts).toHaveCount(3);
+  await expect(ooparts.nth(0).locator("td")).toHaveText(["670", "669", "668", "667"]);
+  await expect(
+    ooparts.nth(0).getByRole("img", { name: "オーパーツ（1）選択ボックス" }),
+  ).toBeVisible();
+  await expect(ooparts.nth(1).locator("td")).toHaveText(["1,680", "1,679", "1,678", "1,677"]);
+  await expect(ooparts.nth(2).locator("td")).toHaveText(["2,291", "", "", ""]);
   expect(await overflow(page)).toBe(0);
 });
 

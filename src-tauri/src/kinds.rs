@@ -13,6 +13,7 @@ use crate::{
     Item,
     plan::{BLUEPRINTS, Piece},
     quantity::Count,
+    supply::ChoiceBox,
     work::{HeldCell, Raise, by_tier, raise, slot_data},
 };
 
@@ -52,7 +53,11 @@ const SCHOOLS: [&str; 11] = [
 pub struct Kinds {
     /// The secret notes held (see `SECRET`).
     pub secret: Vec<HeldCell>,
+    /// The skill materials' choice boxes, set by set (see `SkillBoxes`).
+    pub skill_boxes: Vec<SkillBoxes>,
     pub schools: Vec<SchoolMaterials>,
+    /// The ooparts' choice boxes by tier.
+    pub oopart_boxes: [Option<HeldCell>; 4],
     /// Each oopart's tiers.
     pub ooparts: Vec<[Option<HeldCell>; 4]>,
     pub blueprints: Vec<SlotPrints>,
@@ -66,6 +71,18 @@ pub struct Kinds {
 pub struct SchoolMaterials {
     pub name: String,
     pub icon: String,
+    pub bd: [Option<HeldCell>; 4],
+    pub notes: [Option<HeldCell>; 4],
+}
+
+/// The skill materials' choice boxes of one set of schools (the user's of
+/// 2026-10-29: 「スキル素材の選択ボックス欄」): whether they choose from every
+/// school, the schools' names in the order of `SCHOOLS`, and the BD boxes and
+/// the tech note boxes by tier. The game's sets share their names.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SkillBoxes {
+    pub all: bool,
+    pub schools: Vec<String>,
     pub bd: [Option<HeldCell>; 4],
     pub notes: [Option<HeldCell>; 4],
 }
@@ -107,6 +124,123 @@ fn school_name(entry: &Item) -> Option<&str> {
     entry.name.split_once('（')?.1.strip_suffix('）')
 }
 
+/// Where a school's key comes in `SCHOOLS`, those not listed last.
+fn school_rank(key: &str) -> usize {
+    SCHOOLS
+        .iter()
+        .position(|s| *s == key)
+        .unwrap_or(SCHOOLS.len())
+}
+
+/// The `entries` of `boxes` (by id) and of their first choices (told by `kind`).
+fn boxes_of<'a>(
+    boxes: &'a [ChoiceBox],
+    entries: &'a [Item],
+    kind: impl Fn(&Item) -> Option<Kind>,
+) -> impl Iterator<Item = (&'a ChoiceBox, &'a Item, Kind)> {
+    let entry = |id: i64| entries.iter().find(|e| e.id == id);
+    boxes.iter().filter(|b| !b.equipment).filter_map(move |b| {
+        let first = entry(*b.choices.first()?)?;
+        Some((b, entry(b.id)?, kind(first)?))
+    })
+}
+
+/// The tiers of `found`, by their rarity.
+fn tiers_of<'a, S: BuildHasher>(
+    found: impl IntoIterator<Item = &'a Item>,
+    held: &HashMap<i64, Count, S>,
+) -> [Option<HeldCell>; 4] {
+    by_tier(
+        found,
+        |_| Some(String::new()),
+        held,
+        &HashMap::<i64, u64>::new(),
+    )
+    .pop()
+    .map(|(_, tiers)| tiers)
+    .unwrap_or_default()
+}
+
+/// The schools a set of choice boxes chooses from (key, name), and its boxes
+/// with what they give.
+type BoxSet<'a> = (Vec<(&'a str, &'a str)>, Vec<(&'a Item, Kind)>);
+
+/// The skill materials' choice boxes of `boxes` (their `entries` and their
+/// choices' kinds told by `kind`), a set a row pair: the set of every school
+/// first, then by its first school in the order of `SCHOOLS`.
+pub fn skill_boxes<S: BuildHasher>(
+    boxes: &[ChoiceBox],
+    entries: &[Item],
+    kind: impl Fn(&Item) -> Option<Kind> + Copy,
+    held: &HashMap<i64, Count, S>,
+) -> Vec<SkillBoxes> {
+    // The schools of the choices, by key, in the order of `SCHOOLS`.
+    let schools = |b: &ChoiceBox| {
+        let mut keys: Vec<(&str, &str)> = b
+            .choices
+            .iter()
+            .filter_map(|id| entries.iter().find(|e| e.id == *id))
+            .filter_map(|e| Some((stem(e)?.1, school_name(e)?)))
+            .collect();
+        keys.sort_by_key(|(key, _)| school_rank(key));
+        keys.dedup();
+        keys
+    };
+    let every = entries
+        .iter()
+        .filter(|e| matches!(kind(e), Some(Kind::Bd | Kind::Note)))
+        .filter_map(|e| stem(e).map(|(_, key)| key))
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
+    let mut sets: Vec<BoxSet> = Vec::new();
+    for (b, entry, kind) in boxes_of(boxes, entries, kind) {
+        if !matches!(kind, Kind::Bd | Kind::Note) {
+            continue;
+        }
+        let keys = schools(b);
+        match sets.iter_mut().find(|(k, _)| *k == keys) {
+            Some((_, found)) => found.push((entry, kind)),
+            None => sets.push((keys, vec![(entry, kind)])),
+        }
+    }
+    sets.sort_by_key(|(keys, _)| {
+        (
+            keys.len() < every,
+            keys.first().map(|(k, _)| school_rank(k)),
+        )
+    });
+    sets.into_iter()
+        .map(|(keys, found)| {
+            let of = |wanted: Kind| {
+                tiers_of(
+                    found.iter().filter(|(_, k)| *k == wanted).map(|(e, _)| *e),
+                    held,
+                )
+            };
+            SkillBoxes {
+                all: keys.len() >= every,
+                schools: keys.iter().map(|(_, name)| (*name).to_owned()).collect(),
+                bd: of(Kind::Bd),
+                notes: of(Kind::Note),
+            }
+        })
+        .collect()
+}
+
+/// The ooparts' choice boxes of `boxes` (their `entries` and their choices'
+/// kinds told by `kind`) by tier.
+pub fn oopart_boxes<S: BuildHasher>(
+    boxes: &[ChoiceBox],
+    entries: &[Item],
+    kind: impl Fn(&Item) -> Option<Kind>,
+    held: &HashMap<i64, Count, S>,
+) -> [Option<HeldCell>; 4] {
+    let found = boxes_of(boxes, entries, kind)
+        .filter(|(_, _, kind)| *kind == Kind::Oopart)
+        .map(|(_, entry, _)| entry);
+    tiers_of(found, held)
+}
+
 /// The schools' BDs and tech notes of `entries`, told by `kind`, in the order
 /// of `SCHOOLS`.
 pub fn schools<S: BuildHasher, T: BuildHasher>(
@@ -125,12 +259,7 @@ pub fn schools<S: BuildHasher, T: BuildHasher>(
             keys.push(key);
         }
     }
-    keys.sort_by_key(|key| {
-        SCHOOLS
-            .iter()
-            .position(|s| s == key)
-            .unwrap_or(SCHOOLS.len())
-    });
+    keys.sort_by_key(|key| school_rank(key));
     keys.into_iter()
         .map(|key| {
             let of = |wanted: Kind| {

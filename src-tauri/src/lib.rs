@@ -499,7 +499,9 @@ impl Recognizer {
         let needs = &self.person_needs;
         kinds::Kinds {
             secret: kinds::secret(goods, &items_held, needs),
+            skill_boxes: kinds::skill_boxes(&self.boxes, goods, kind, &items_held),
             schools: kinds::schools(goods, kind, &items_held, needs),
+            oopart_boxes: kinds::oopart_boxes(&self.boxes, goods, kind, &items_held),
             ooparts: kinds::ooparts(goods, kind, &items_held, needs),
             blueprints: kinds::blueprints(
                 &self.planner.pieces,

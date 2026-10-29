@@ -1262,8 +1262,8 @@
         </div>
       {/if}
       {#if sub === "skills"}
-        <!-- The secret notes, then each school's BDs over its tech notes, its emblem
-             at the left, the three great schools first. -->
+        <!-- The secret notes, the choice boxes, then each school's BDs over its tech notes,
+             its emblem at the left, the three great schools first. -->
         <div class="table-scroll" data-state="success">
           <table class="tiers stock skills">
             {#if kinds.secret.length > 0}
@@ -1287,6 +1287,20 @@
                 </tr>
               </tbody>
             {/if}
+            <!-- The choice boxes above トリニティ (the user's of 2026-10-29), set by set as a
+                 school's: the BD boxes over the tech note boxes, at the left whether they choose
+                 from every school or from how many, the schools named on hover. -->
+            {#each kinds.skill_boxes ?? [] as set, i (i)}
+              <tbody>
+                <tr>
+                  <th scope="rowgroup" rowspan="2" class="emblem set" title={set.schools.join("・")}
+                    >{set.all ? "全学園" : `${set.schools.length}校`}</th
+                  >
+                  {@render heldTiers(set.bd)}
+                </tr>
+                <tr>{@render heldTiers(set.notes)}</tr>
+              </tbody>
+            {/each}
             {#each kinds.schools as school (school.icon)}
               <tbody>
                 <tr>
@@ -1307,10 +1321,14 @@
           </table>
         </div>
       {:else if sub === "ooparts"}
-        <!-- An oopart a row, its tiers on their colours. -->
+        <!-- An oopart a row, its tiers on their colours; their choice boxes first (the user's
+             of 2026-10-29). -->
         <div class="table-scroll" data-state="success">
           <table class="tiers stock ooparts">
             <tbody>
+              {#if kinds.oopart_boxes}
+                <tr class="boxes">{@render heldTiers(kinds.oopart_boxes)}</tr>
+              {/if}
               {#each kinds.ooparts as tiers, k (k)}
                 <tr>{@render heldTiers(tiers)}</tr>
               {/each}
@@ -2429,8 +2447,16 @@
         margin: 0 auto
         object-fit: contain
         filter: var(--emblem-filter)
+    // A set of choice boxes: which schools, in words where a school has its emblem.
+    .set
+      text-align: center
+      white-space: nowrap
+      font-size: var(--fs-caption)
     tbody:not(:last-child) :is(tr:last-child > td, .emblem)
       border-bottom-width: var(--sp-2)
+  // The ooparts' choice boxes apart from the ooparts under them, as a school from the next.
+  .ooparts .boxes td
+    border-bottom-width: var(--sp-2)
 
   // How many students what is held raises, its terms under it, at the row's right end:
   // the enhancement materials' rows and the work tab's alike.
