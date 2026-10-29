@@ -13,8 +13,9 @@ import {
   starOf,
   tierCell,
   unknownText,
-  commissionCells,
-  orbCells,
+  commissionRows,
+  normalItemRows,
+  scrimmageRows,
   enhancementCells,
   hardTile,
   hardCost,
@@ -854,28 +855,81 @@ describe("work", () => {
     ]);
   });
 
-  it("counts the students each commission's haul raises, the fewer marked", () => {
+  // The reports by tier, as the enhancement materials show theirs.
+  const reportTiers = [0, 1, 2, 3].map((t) => ({ id: 10 + t, held: { exact: t } }));
+
+  it("counts the students each commission's haul raises, the reports first, the fewer marked", () => {
     const row = {
       credits_name: "クレジット回収",
       credits: 248955686,
       credits_each: 41500000,
       credit_students: 5.999,
       reports_name: "拠点防衛",
+      report_tiers: reportTiers,
       report_exp: 6245925,
       report_about: true,
       exp_each: 1249185,
       report_students: 5.0,
     };
-    expect(commissionCells(row)).toEqual({
-      credits: { name: "クレジット回収", students: "5.9人分", detail: "249M ÷ 41.5M" },
-      reports: { name: "拠点防衛", students: "5.0人分", detail: "約6.2M EXP ÷ 1.2M EXP" },
-      fewer: "reports",
-    });
-    expect(commissionCells({ ...row, credits: null, credit_students: null }).credits).toEqual({
-      name: "クレジット回収",
-      students: "?",
-      detail: "? ÷ 41.5M",
-    });
+    // A commission's name over its haul held: the reports by tier, the credits as a
+    // count beside their icon; the students raised and how at the right.
+    expect(commissionRows(row)).toEqual([
+      {
+        key: "reports",
+        title: "拠点防衛",
+        tiers: reportTiers,
+        students: "5.0人分",
+        detail: "約6.2M EXP ÷ 1.2M EXP",
+        tone: "fewer",
+      },
+      {
+        key: "credits",
+        title: "クレジット回収",
+        held: "248,955,686",
+        students: "5.9人分",
+        detail: "249M ÷ 41.5M",
+        tone: "more",
+      },
+    ]);
+    // Credits never read: no count, and neither raises fewer.
+    expect(commissionRows({ ...row, credits: null, credit_students: null })).toMatchObject([
+      { tone: "" },
+      { held: "—", students: "?", detail: "? ÷ 41.5M", tone: "" },
+    ]);
+  });
+
+  it("names each school's scrimmage over its parts held, the first to run out marked", () => {
+    const parts = (id) => [0, 1, 2, 3].map((t) => ({ id: id + t, held: { exact: t } }));
+    const places = [
+      { name: "学園交流会 - トリニティ", kinds: [parts(10)] },
+      { name: "学園交流会 - ゲヘナ", kinds: [parts(20)] },
+    ];
+    const school = { exp: 220280, about: false, rate: 1.5, exp_each: 49605, share: 0.4593 };
+    const schools = [
+      { ...school, students: 6.661, first: true },
+      { ...school, students: 7.0, first: false, share: 0.26 },
+    ];
+    const rows = scrimmageRows(places, schools);
+    expect(rows).toMatchObject([
+      {
+        key: "学園交流会 - トリニティ",
+        title: "トリニティ",
+        tiers: parts(10),
+        students: "6.6人分",
+        detail: "220,280 EXP × 1.5 ÷ 49,605 EXP",
+        tone: "first",
+      },
+      {
+        key: "学園交流会 - ゲヘナ",
+        title: "ゲヘナ",
+        tiers: parts(20),
+        students: "7.0人分",
+        detail: "220,280 EXP × 1.5 ÷ 49,605 EXP",
+        tone: "",
+      },
+    ]);
+    // Why on hover, as `schoolCells` tells it.
+    expect(rows[0].why).toBe(schoolCells(schools[0]).why);
   });
 });
 
@@ -893,14 +947,32 @@ describe("month-end and daily shops", () => {
   };
 
   it("counts the students the credits and the orbs held raise, the fewer marked", () => {
-    const orbs = { exp: 5700780, about: true, exp_each: 741690, students: 7.686 };
-    expect(orbCells(commissions, orbs)).toEqual({
-      credits: { name: "クレジット", students: "5.9人分", detail: "249M ÷ 41.5M" },
-      orbs: { name: "強化珠", students: "7.6人分", detail: "約5.7M EXP ÷ 0.74M EXP" },
-      fewer: "credits",
-    });
+    // The orbs as the equipment tab's enhancement materials show them.
+    const tiers = [0, 1, 2, 3].map((t) => ({ id: 1 + t, held: { exact: t } }));
+    const raise = { exp: 5700780, about: true, rate: 1, exp_each: 741690, students: 7.686 };
+    const orbs = { category: "Exp", tiers, raise };
+    expect(normalItemRows(commissions, orbs)).toEqual([
+      {
+        key: "credits",
+        title: "クレジット",
+        held: "248,955,686",
+        students: "5.9人分",
+        detail: "249M ÷ 41.5M",
+        tone: "fewer",
+      },
+      {
+        key: "orbs",
+        title: "強化珠",
+        tiers,
+        students: "7.6人分",
+        detail: "約5.7M EXP ÷ 0.74M EXP",
+        tone: "more",
+      },
+    ]);
     const unread = { ...commissions, credits: null, credit_students: null };
-    expect(orbCells(unread, orbs).fewer).toBe(null);
+    expect(normalItemRows(unread, orbs).map((r) => r.tone)).toEqual(["", ""]);
+    // Before the equipment is counted by kind, the credits alone.
+    expect(normalItemRows(commissions, undefined)).toMatchObject([{ key: "credits", tone: "" }]);
   });
 
   it("tells a card's times left at its price, bought up, or its student done", () => {

@@ -408,9 +408,9 @@ impl Recognizer {
                 credits,
                 self.raise_cost(),
                 &self.planner.growth.reports,
+                goods,
                 &items_held,
             ),
-            orbs: work::orbs(&self.planner.growth.orbs, self.orbs_each(), &equipment_held),
             schools: work::school_rows(
                 &self.schools(),
                 &self.planner.growth.weapon_parts,

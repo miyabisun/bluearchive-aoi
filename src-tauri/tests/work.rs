@@ -177,4 +177,19 @@ fn a_raise_from_lv1_takes_the_game_tables_exp() {
         c.credits_each
     );
     assert!(c.report_exp > 0 && c.credit_students.is_some());
+    // The reports by tier, as the enhancement materials show theirs.
+    let reports: Vec<_> = c
+        .report_tiers
+        .iter()
+        .map(|t| t.as_ref().map(|t| (t.name.as_str(), t.held)))
+        .collect();
+    assert_eq!(
+        reports,
+        [
+            Some(("初級レポート", None)),
+            Some(("中級レポート", None)),
+            Some(("上級レポート", None)),
+            Some(("最上級レポート", Some(Count::Exact(1000)))),
+        ]
+    );
 }

@@ -19,7 +19,7 @@
   import { THEMES, applyTheme, storedTheme } from "./lib/theme.js";
   import {
     LISTS,
-    commissionCells,
+    commissionRows,
     enhancementCells,
     blueprintCells,
     castLine,
@@ -37,13 +37,13 @@
     heldTone,
     groupPlan,
     needCells,
-    orbCells,
+    normalItemRows,
     phoneLine,
     planCard,
     planCoin,
     planTitle,
     placeName,
-    schoolCells,
+    scrimmageRows,
     procureCells,
     qrPath,
     settle,
@@ -416,6 +416,41 @@
         /><span class={heldTone(cell.held, cell.need)}>{heldText(cell.held)}</span>{/if}
     </td>
   {/each}
+{/snippet}
+
+<!-- How many students what is held raises, and how under it, at a row's right end. -->
+{#snippet raiseCell(/** @type {{ students: string, detail: string }} */ cells)}
+  <td class="raise"><strong>{cells.students}</strong><span class="detail">{cells.detail}</span></td>
+{/snippet}
+
+<!-- The work tab's counts of students raised, drawn as the enhancement materials' rows
+     (the user's of 2026-10-29: 「強化素材タブと同じ表記」): a body each, its title over its
+     tiers or the credits held, the students it raises at the right end, lined up down the
+     table. -->
+{#snippet raiseRows(/** @type {string} */ kind, /** @type {any[]} */ rows)}
+  <table class="tiers stock raising {kind}">
+    {#each rows as row (row.key)}
+      <tbody class={row.tone} title={row.why}>
+        <tr><th colspan="5" scope="rowgroup">{row.title}</th></tr>
+        <tr>
+          {#if row.tiers}
+            {@render heldTiers(row.tiers)}
+          {:else}
+            <td colspan="4" class="credits"
+              ><img
+                src={iconUrl("currency_icon_gold")}
+                alt="クレジット"
+                title="クレジット"
+                width="40"
+                height="40"
+              />{row.held}</td
+            >
+          {/if}
+          {@render raiseCell(row)}
+        </tr>
+      </tbody>
+    {/each}
+  </table>
 {/snippet}
 
 <!-- A star as the game draws it (the user's of 2026-10-22): the student's yellow, the
@@ -951,8 +986,7 @@
     {:else if view.tab === "work"}
       {#if snapshot.work}
         {@const work = snapshot.work}
-        {@const commission = commissionCells(work.commissions)}
-        {@const orb = orbCells(work.commissions, work.orbs)}
+        {@const orbs = kinds.enhancements.find((row) => row.category === "Exp")}
         {@const hardAp = hardCost(snapshot.hard ?? [])}
         <div class="table-scroll work" data-state="success">
           <!-- The plays by when they are played: each day, in a doubled-drop campaign, at the month's end. -->
@@ -963,53 +997,32 @@
               <h3>ショップ: 通常アイテム</h3></summary
             >
             <!-- The credits and the orbs the shop sells daily, in students raised: the more green, the fewer red. -->
-            <table class="raises">
-              <tbody>
-                {#each [{ key: "credits", ...orb.credits }, { key: "orbs", ...orb.orbs }] as cell (cell.key)}
-                  <tr
-                    class:fewer={orb.fewer === cell.key}
-                    class:more={orb.fewer != null && orb.fewer !== cell.key}
-                  >
-                    <td>{cell.name}</td>
-                    <td class="fit"
-                      ><strong>{cell.students}</strong><span class="detail">{cell.detail}</span></td
-                    >
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
+            {@render raiseRows("raises", normalItemRows(work.commissions, orbs))}
           </details>
-          {#each [{ title: "指名手配", places: work.bounties, schools: [] }, { title: "学園交流会", places: work.scrimmages, schools: work.schools ?? [] }] as group (group.title)}
-            <details class="fold" open={opened.has(`work:${group.title}`)}>
-              <summary onclick={(event) => toggle(event, `work:${group.title}`)}
-                >{@render chevron()}
-                <h3>{group.title}</h3></summary
-              >
-              {#each group.places as place, p (place.name)}
-                {@const school = group.schools[p]}
-                {#if school}
-                  {@const cells = schoolCells(school)}
-                  <!-- A school: how many unique weapons its parts held raise, and how; the one to play first red. -->
-                  <div class="school" class:first={cells.first} title={cells.why}>
-                    <h4>{placeName(place.name)}</h4>
-                    <span class="raised"
-                      ><strong>{cells.students}</strong><span class="detail">{cells.detail}</span
-                      ></span
-                    >
-                  </div>
-                {:else}
-                  <h4>{placeName(place.name)}</h4>
-                {/if}
-                <table class="tiers stock">
-                  <tbody>
-                    {#each place.kinds as tiers, k (k)}
-                      <tr>{@render heldTiers(tiers)}</tr>
-                    {/each}
-                  </tbody>
-                </table>
-              {/each}
-            </details>
-          {/each}
+          <details class="fold" open={opened.has("work:指名手配")}>
+            <summary onclick={(event) => toggle(event, "work:指名手配")}
+              >{@render chevron()}
+              <h3>指名手配</h3></summary
+            >
+            {#each work.bounties as place (place.name)}
+              <h4>{placeName(place.name)}</h4>
+              <table class="tiers stock">
+                <tbody>
+                  {#each place.kinds as tiers, k (k)}
+                    <tr>{@render heldTiers(tiers)}</tr>
+                  {/each}
+                </tbody>
+              </table>
+            {/each}
+          </details>
+          <details class="fold" open={opened.has("work:学園交流会")}>
+            <summary onclick={(event) => toggle(event, "work:学園交流会")}
+              >{@render chevron()}
+              <h3>学園交流会</h3></summary
+            >
+            <!-- A school: how many unique weapons its parts held raise, and how; the one to play first red. -->
+            {@render raiseRows("schools", scrimmageRows(work.scrimmages, work.schools))}
+          </details>
           <h2 class="category">2倍キャンペーン</h2>
           <details class="fold" open={opened.has("work:任務")}>
             <summary onclick={(event) => toggle(event, "work:任務")}
@@ -1148,21 +1161,7 @@
             >
             <!-- Each commission's haul held, in students raised from Lv1: the more green, the fewer orange.
                  The reports first, as the game lists 拠点防衛 first. -->
-            <table class="commissions">
-              <tbody>
-                {#each [{ key: "reports", ...commission.reports }, { key: "credits", ...commission.credits }] as cell (cell.key)}
-                  <tr
-                    class:fewer={commission.fewer === cell.key}
-                    class:more={commission.fewer != null && commission.fewer !== cell.key}
-                  >
-                    <td>{cell.name}</td>
-                    <td class="fit"
-                      ><strong>{cell.students}</strong><span class="detail">{cell.detail}</span></td
-                    >
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
+            {@render raiseRows("commissions", commissionRows(work.commissions))}
           </details>
           <h2 class="category">月末</h2>
           {#each snapshot.month_end ?? [] as shop (shop.name)}
@@ -1323,9 +1322,7 @@
                 {@const cells = enhancementCells(row)}
                 <tr>
                   {@render heldTiers(row.tiers)}
-                  <td class="raise"
-                    ><strong>{cells.students}</strong><span class="detail">{cells.detail}</span></td
-                  >
+                  {@render raiseCell(cells)}
                 </tr>
               {/each}
             </tbody>
@@ -2430,9 +2427,9 @@
     tbody:not(:last-child) :is(tr:last-child > td, .emblem)
       border-bottom-width: var(--sp-2)
 
-  // How many students a kind of enhancement material raises, its terms under it, at
-  // the row's right end.
-  .enhancements .raise
+  // How many students what is held raises, its terms under it, at the row's right end:
+  // the enhancement materials' rows and the work tab's alike.
+  .tiers .raise
     width: 1%
     padding-left: var(--sp-3)
     text-align: right
@@ -2529,21 +2526,21 @@
       color: var(--c-ok)
     .fewer strong
       color: var(--c-warn)
-    // A school: its name left, the weapons its parts raise right, the one to
-    // play first red.
-    .school
-      display: flex
-      justify-content: space-between
-      align-items: baseline
-      gap: var(--sp-2)
-      margin: var(--sp-3) 0 var(--sp-1)
-      h4
-        margin: 0
-      .raised
-        text-align: right
-    .school.first
-      h4, strong
-        color: var(--c-danger)
+    // A row's title over it, as a place's heading; the credits held beside their icon.
+    .raising
+      th
+        position: static
+        padding: var(--sp-3) 0 var(--sp-1)
+        border-bottom: none
+        background: none
+        font-weight: 600
+      tbody:first-child th
+        padding-top: var(--sp-1)
+      .credits
+        width: auto
+    // The school to play first red, its name and its count.
+    .first :is(th, strong)
+      color: var(--c-danger)
     // The normal items shop's fewer red (the user's 「赤字と緑字」).
     .raises .fewer strong
       color: var(--c-danger)

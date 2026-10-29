@@ -150,7 +150,6 @@ pub struct WorkRows {
     pub bounties: Vec<PlaceRow>,
     pub scrimmages: Vec<PlaceRow>,
     pub commissions: CommissionRow,
-    pub orbs: Raise,
     /// The scrimmages' schools, as `scrimmages` lists them.
     pub schools: Vec<SchoolRow>,
 }
@@ -713,7 +712,8 @@ pub fn places<S: BuildHasher, T: BuildHasher>(
 
 /// The commissions against what raising a student from Lv1 takes: the
 /// credits held over a whole training's, and the exp of the reports held over
-/// Lv1 to 90's.
+/// Lv1 to 90's; the reports held by tier, as the enhancement materials show
+/// theirs (the user's of 2026-10-29: 「レポートを強化素材風の表記にする」).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CommissionRow {
     pub credits_name: String,
@@ -721,27 +721,43 @@ pub struct CommissionRow {
     pub credits_each: u64,
     pub credit_students: Option<f64>,
     pub reports_name: String,
+    pub report_tiers: [Option<HeldCell>; 4],
     pub report_exp: u64,
     pub report_about: bool,
     pub exp_each: u64,
     pub report_students: f64,
 }
 
-/// The commissions as `CommissionRow` tells, the reports' exp each by id.
+/// The commissions as `CommissionRow` tells, the reports' exp each by id and
+/// their tiers among `entries`.
 pub fn commissions<S: BuildHasher>(
     names: &Commissions,
     credits: Option<u64>,
     (credits_each, exp_each): (u64, u64),
     reports: &[(i64, u64)],
+    entries: &[Item],
     held: &HashMap<i64, Count, S>,
 ) -> CommissionRow {
     let (report_exp, report_about) = exp_held(reports, held);
+    let report_tiers = by_tier(
+        entries
+            .iter()
+            .filter(|e| reports.iter().any(|(id, _)| *id == e.id)),
+        |_| Some(String::new()),
+        held,
+        &HashMap::<i64, u64>::new(),
+    )
+    .into_iter()
+    .next()
+    .map(|(_, tiers)| tiers)
+    .unwrap_or_default();
     CommissionRow {
         credits_name: names.credits.clone(),
         credits,
         credits_each,
         credit_students: credits.map(|c| per(c, credits_each)),
         reports_name: names.reports.clone(),
+        report_tiers,
         report_exp,
         report_about,
         exp_each,
@@ -876,15 +892,6 @@ pub fn orbs_each(equipment_exp: &[Vec<u64>], tops: &[u8], orbs: &[(i64, u64)]) -
         .map(|(exp, &top)| crate::plan::fed(exp[usize::from(top) - 1], orbs))
         .sum();
     3 * slot
-}
-
-/// The orbs (`(item, exp of one)`) as `Raise` tells, a student taking `each`.
-pub fn orbs<S: BuildHasher>(
-    orbs: &[(i64, u64)],
-    each: u64,
-    held: &HashMap<i64, Count, S>,
-) -> Raise {
-    raise(orbs, 1.0, each, held)
 }
 
 #[cfg(test)]
@@ -1240,19 +1247,41 @@ mod tests {
             reports: "拠点防衛".into(),
         };
         let held = HashMap::from([(10, Count::Exact(1000)), (13, Count::Thousands(2))]);
+        let reports = [
+            item(10, "初級レポート", Rarity::N),
+            item(11, "中級レポート", Rarity::R),
+            item(13, "最上級レポート", Rarity::SSR),
+            item(20, "錆びたスプリング", Rarity::N),
+        ];
         let row = commissions(
             &names,
             Some(250_000_000),
             (50_000_000, 1_000_000),
-            &[(10, 50), (13, 10_000)],
+            &[(10, 50), (11, 500), (13, 10_000)],
+            &reports,
             &held,
         );
         assert_eq!(row.credit_students, Some(5.0));
         // 1,000 × 50 + 2,000 × 10,000 (about).
         assert_eq!((row.report_exp, row.report_about), (20_050_000, true));
         assert!((row.report_students - 20.05).abs() < 1e-9);
+        // The reports by tier as the scrimmages' parts: held, or none read.
+        let tiers: Vec<Option<(i64, Option<Count>)>> = row
+            .report_tiers
+            .iter()
+            .map(|c| c.as_ref().map(|c| (c.id, c.held)))
+            .collect();
         assert_eq!(
-            commissions(&names, None, (1, 1), &[], &held).credit_students,
+            tiers,
+            [
+                Some((10, Some(Count::Exact(1000)))),
+                Some((11, None)),
+                None,
+                Some((13, Some(Count::Thousands(2)))),
+            ]
+        );
+        assert_eq!(
+            commissions(&names, None, (1, 1), &[], &reports, &held).credit_students,
             None
         );
     }
@@ -1378,7 +1407,7 @@ mod tests {
     }
 
     #[test]
-    fn the_orbs_count_the_students_whose_equipment_they_raise() {
+    fn a_student_takes_the_orbs_of_three_slots_from_t1_to_their_tops() {
         // Tier 1 takes 15 exp to its top, tier 2 50, fed 10 at a time.
         let each = orbs_each(
             &[vec![0, 5, 15], vec![0, 20, 50]],
@@ -1386,9 +1415,5 @@ mod tests {
             &[(1, 10), (2, 40)],
         );
         assert_eq!(each, 3 * (20 + 50));
-        let held = HashMap::from([(1, Count::Exact(21)), (2, Count::Exact(10))]);
-        let row = orbs(&[(1, 10), (2, 40)], each, &held);
-        assert_eq!((row.exp, row.about, row.exp_each), (210 + 400, false, 210));
-        assert!((row.students - 610.0 / 210.0).abs() < 1e-9);
     }
 }

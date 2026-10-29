@@ -637,33 +637,8 @@ export function farmCells(farm) {
 /** A daily play's place without the kind of play it is ("指名手配：ハイウェイ" is "ハイウェイ"). */
 export const placeName = (name) => name.split(/：| - /).at(-1);
 
-/**
- * The commissions against a student raised from Lv1: how many students the
- * credits and the reports' exp held raise ("5.9人分"), from what over what,
- * and which raises fewer (the one to play), none when they tie or one is unknown.
- */
-export function commissionCells(c) {
-  const students = (n) => (n == null ? "?" : `${tenths.format(n)}人分`);
-  const fewer =
-    c.credit_students == null || c.credit_students === c.report_students
-      ? null
-      : c.credit_students < c.report_students
-        ? "credits"
-        : "reports";
-  return {
-    credits: {
-      name: c.credits_name,
-      students: students(c.credit_students),
-      detail: `${c.credits == null ? "?" : millions(c.credits)} ÷ ${millions(c.credits_each)}`,
-    },
-    reports: {
-      name: c.reports_name,
-      students: students(c.report_students),
-      detail: `${c.report_about ? "約" : ""}${millions(c.report_exp)} EXP ÷ ${millions(c.exp_each)} EXP`,
-    },
-    fewer,
-  };
-}
+/** How many students are raised ("5.9人分"), "?" where it is unknown. */
+const raised = (n) => (n == null ? "?" : `${tenths.format(n)}人分`);
 
 /**
  * How a raise (see `work::Raise`) comes: the exp held ("約" where it is
@@ -683,35 +658,89 @@ function raiseDetail({ exp, about, rate = 1, exp_each }, format) {
  */
 export function enhancementCells({ category, raise }) {
   return {
-    students: `${tenths.format(raise.students)}人分`,
+    students: raised(raise.students),
     detail: raiseDetail(raise, category === "Exp" ? millions : (n) => exact.format(n)),
   };
 }
 
 /**
- * The normal items shop's daily buys against a student raised from Lv1: how
- * many students the credits and the enhancement orbs held raise (`orbs`,
- * their exp over a student's T1 to T10), and which raises fewer, none when
- * they tie or one is unknown.
+ * The credits held against a student raised from Lv1 as a row of the work
+ * tab, under `title`: their count ("—" never read), the students and how.
+ * The work tab's rows are drawn as the enhancement materials' (the user's of
+ * 2026-10-29: 「強化素材タブと同じ表記」): a title over what is held, the tiers
+ * (`tiers`) or a count of credits (`held`), with the students it raises and
+ * how at the right; `tone` marks it against the others.
  */
-export function orbCells(c, orbs) {
-  const credits = commissionCells(c).credits;
-  const raised = orbs.students;
-  return {
-    credits: { ...credits, name: "クレジット" },
-    orbs: {
-      name: "強化珠",
-      students: `${tenths.format(raised)}人分`,
-      detail: raiseDetail(orbs, millions),
-    },
-    fewer:
-      c.credit_students == null || c.credit_students === raised
-        ? null
-        : c.credit_students < raised
-          ? "credits"
-          : "orbs",
-  };
+const creditRow = (c, title) => ({
+  key: "credits",
+  title,
+  held: c.credits == null ? "—" : exact.format(c.credits),
+  students: raised(c.credit_students),
+  detail: `${c.credits == null ? "?" : millions(c.credits)} ÷ ${millions(c.credits_each)}`,
+});
+
+/**
+ * `rows` toned by the students each raises (`counts`): "fewer" the one to
+ * play, "more" the others; none when they tie or one is unknown.
+ */
+function toned(rows, counts) {
+  const known = counts.every((n) => n != null) && new Set(counts).size === counts.length;
+  const fewest = Math.min(...counts);
+  return rows.map((row, i) => ({
+    ...row,
+    tone: known ? (counts[i] === fewest ? "fewer" : "more") : "",
+  }));
 }
+
+/**
+ * The commissions as their rows, the reports first as the game lists 拠点防衛
+ * (the user's of 2026-10-16): the reports by tier, then the credits.
+ */
+export function commissionRows(c) {
+  const reports = {
+    key: "reports",
+    title: c.reports_name,
+    tiers: c.report_tiers,
+    students: raised(c.report_students),
+    detail: raiseDetail(
+      { exp: c.report_exp, about: c.report_about, exp_each: c.exp_each },
+      millions,
+    ),
+  };
+  return toned([reports, creditRow(c, c.credits_name)], [c.report_students, c.credit_students]);
+}
+
+/**
+ * The normal items shop's daily buys as their rows: the credits, then the
+ * enhancement orbs as the equipment tab's row of them (`orbs`, its category
+ * Exp: their exp over a student's T1 to T10); the credits alone before the
+ * equipment is counted by kind.
+ */
+export function normalItemRows(c, orbs) {
+  const credits = creditRow(c, "クレジット");
+  if (!orbs) return [{ ...credits, tone: "" }];
+  const row = { key: "orbs", title: "強化珠", tiers: orbs.tiers, ...enhancementCells(orbs) };
+  return toned([credits, row], [c.credit_students, orbs.raise.students]);
+}
+
+/**
+ * Each school's scrimmage as its row: the school's name over the parts it
+ * drops (`places`), with the weapons they raise (`schools`, see
+ * `schoolCells`); the school to play first toned "first", why on hover.
+ */
+export const scrimmageRows = (places, schools) =>
+  places.map((place, p) => {
+    const { students, detail, first, why } = schoolCells(schools[p]);
+    return {
+      key: place.name,
+      title: placeName(place.name),
+      tiers: place.kinds[0],
+      students,
+      detail,
+      tone: first ? "first" : "",
+      why,
+    };
+  });
 
 /**
  * A month-end shop's card: how many one buy gives ("×5"), and the times left
@@ -816,7 +845,7 @@ export function planCoin(coin) {
  * the hover: the share of students its parts suit, and the weapons per it.
  */
 export function schoolCells(row) {
-  const students = `${tenths.format(row.students)}人分`;
+  const students = raised(row.students);
   const share = `${Math.round(row.share * 100)}%`;
   const why = [`素材が合う生徒: ${share}`];
   if (row.share > 0) {

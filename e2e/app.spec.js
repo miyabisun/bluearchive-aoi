@@ -1301,12 +1301,19 @@ const work = {
     credits_each: 41500000,
     credit_students: 5.999,
     reports_name: "拠点防衛",
+    report_tiers: [0, 1, 2, 3].map((t) =>
+      heldCell(
+        10 + t,
+        `レポート${t}`,
+        `item_icon_expitem_${t}`,
+        t === 2 ? null : { exact: 10 * t },
+      ),
+    ),
     report_exp: 6245925,
     report_about: false,
     exp_each: 1249185,
     report_students: 5.0,
   },
-  orbs: { exp: 5700780, about: false, exp_each: 741690, students: 7.686 },
   schools: [
     {
       exp: 220280,
@@ -1321,7 +1328,8 @@ const work = {
 };
 
 test("tells what the daily plays give against what is held", async ({ page }) => {
-  await open(page, { status: { state: "other_screen" }, items, equipment, work });
+  const snapshot = { status: { state: "other_screen" }, items, equipment, kinds, work };
+  await open(page, snapshot);
   await page.getByRole("tab", { name: "お仕事" }).click();
   // The plays grouped by when they are played; each section folds as a shop
   // does, closed until opened.
@@ -1338,6 +1346,9 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   await expect(page.locator(".work summary .chevron")).toHaveCount(6);
   await expect(page.locator(".slots")).toBeHidden();
   for (const section of await sections.all()) await section.click();
+  // Opened by hand, they stay open while the window takes a snapshot every frame.
+  for (let i = 0; i < 3; i++) await page.evaluate((s) => window.__AOI_PUSH__(s), snapshot);
+  await expect(page.locator(".work details[open]")).toHaveCount(6);
   // A slot: how many pieces its T10 blueprints and its universal ones make,
   // short of its golden ratio orange.
   await expect(page.locator(".slots tbody tr")).toHaveText([
@@ -1372,16 +1383,50 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
     );
     expect(new Set(boxes).size).toBe(1);
   }
-  // Each place's drops by tier with what is held, "—" where none is counted.
+  // Each bounty's drops by tier with what is held.
   await expect(page.locator(".work h4")).toHaveText([
     "ハイウェイ",
-    "トリニティ",
     "黄金比までの周回（2倍キャンペーン中）",
     "その後に黄金比を整える周回",
   ]);
-  await expect(page.locator(".work .tiers td.tier-1")).toHaveText(["51", "—"]);
-  // A school: the weapons its parts raise on its right, the sum under it; the
-  // one to play first red.
+  // The normal items shop, the scrimmages and the commissions as the enhancement
+  // materials' rows (the user's of 2026-10-29): a title over what is held, the
+  // students it raises at the right end, its terms under it; "—" where none is counted.
+  await expect(page.locator(".work table.raising th")).toHaveText([
+    "クレジット",
+    "強化珠",
+    "トリニティ",
+    "拠点防衛",
+    "クレジット回収",
+  ]);
+  await expect(page.locator(".raises tbody")).toHaveText([
+    "クレジット248,955,6865.9人分249M ÷ 41.5M",
+    "強化珠01237.6人分約5.7M EXP ÷ 0.74M EXP",
+  ]);
+  await expect(page.locator(".raises .credits img")).toHaveAttribute("alt", "クレジット");
+  await expect(page.locator(".schools tbody td.tier-1")).toHaveText(["—"]);
+  await expect(page.locator(".commissions tbody")).toHaveText([
+    "拠点防衛010—305.0人分6.2M EXP ÷ 1.2M EXP",
+    "クレジット回収248,955,6865.9人分249M ÷ 41.5M",
+  ]);
+  // The counts lined up at the right end of each section, their terms under them.
+  for (const kind of ["raises", "commissions"]) {
+    const counts = page.locator(`.${kind} td.raise strong`);
+    const [a, b] = await counts.evaluateAll((all) => all.map((c) => c.getBoundingClientRect()));
+    expect(a.right).toBe(b.right);
+    const terms = await page.locator(`.${kind} td.raise .detail`).first().boundingBox();
+    expect(terms.y).toBeGreaterThan(a.top);
+  }
+  const table = await page.locator(".raises").boundingBox();
+  const count = await page.locator(".raises td.raise strong").first().boundingBox();
+  expect(table.x + table.width - (count.x + count.width)).toBeLessThan(16);
+  // A title scrolls with its row, unlike the tables' headings that stick.
+  const tiers = page.locator(".schools tbody tr").last();
+  await tiers.evaluate((el) => el.scrollIntoView({ block: "start" }));
+  const title = await page.locator(".schools th").boundingBox();
+  expect(title.y + title.height).toBeLessThanOrEqual((await tiers.boundingBox()).y + 1);
+  await page.locator(".table-scroll.work").evaluate((el) => (el.scrollTop = 0));
+  // A school: the weapons its parts raise, the one to play first red.
   const red = await page.evaluate(() => {
     const probe = document.createElement("span");
     probe.style.color = "var(--c-danger)";
@@ -1390,10 +1435,10 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
     probe.remove();
     return rgb;
   });
-  const school = page.locator(".work .school");
-  await expect(school).toHaveText("トリニティ 6.6人分220,280 EXP × 1.5 ÷ 49,605 EXP");
+  const school = page.locator(".schools tbody");
+  await expect(school).toHaveText("トリニティ—6.6人分220,280 EXP × 1.5 ÷ 49,605 EXP");
   await expect(school.locator("strong")).toHaveCSS("color", red);
-  await expect(school.locator("h4")).toHaveCSS("color", red);
+  await expect(school.locator("th")).toHaveCSS("color", red);
   // Why, on hover alone: the students its parts suit and the weapons per them.
   await expect(school).toHaveAttribute(
     "title",
@@ -1412,19 +1457,22 @@ test("tells what the daily plays give against what is held", async ({ page }) =>
   await expect(page.getByRole("img", { name: "ファイストス円盤の欠片" })).toBeVisible();
   // The commission raising more students is green, the fewer orange; the
   // reports first, as the game lists them.
-  await expect(page.locator(".commissions tr")).toHaveText([
-    "拠点防衛5.0人分6.2M EXP ÷ 1.2M EXP",
-    "クレジット回収5.9人分249M ÷ 41.5M",
-  ]);
-  await expect(page.locator(".commissions tr.more")).toContainText("クレジット回収");
-  await expect(page.locator(".commissions tr.fewer")).toContainText("拠点防衛");
+  await expect(page.locator(".commissions tbody.more")).toContainText("クレジット回収");
+  await expect(page.locator(".commissions tbody.fewer")).toContainText("拠点防衛");
+  await expect(page.locator(".commissions tbody.fewer strong")).toHaveCSS(
+    "color",
+    await colorOf(page, "--c-warn"),
+  );
   // The normal items shop: the credits and the orbs held in students, the fewer red.
-  await expect(page.locator(".raises tr")).toHaveText([
-    "クレジット5.9人分249M ÷ 41.5M",
-    "強化珠7.6人分5.7M EXP ÷ 0.74M EXP",
-  ]);
-  await expect(page.locator(".raises tr.fewer")).toContainText("クレジット");
-  await expect(page.locator(".raises tr.fewer strong")).toHaveCSS("color", red);
+  await expect(page.locator(".raises tbody.fewer")).toContainText("クレジット");
+  await expect(page.locator(".raises tbody.fewer strong")).toHaveCSS("color", red);
+  await expect(page.locator(".raises tbody.more strong")).toHaveCSS(
+    "color",
+    await colorOf(page, "--c-ok"),
+  );
+  // Narrow, the rows scroll in the tab rather than the page.
+  await page.setViewportSize({ width: 360, height: 640 });
+  expect(await overflow(page)).toBe(0);
 });
 
 test("reserves a hard mission's eleph, the day's AP it takes red in the hard missions' heading", async ({

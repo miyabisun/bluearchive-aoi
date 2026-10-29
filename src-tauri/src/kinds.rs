@@ -189,8 +189,9 @@ const ENHANCEMENTS: [&str; 5] = [
 ];
 
 /// A kind of enhancement material: its category, its tiers held, and how many
-/// students what is held raises, as the work tab counts the orbs and the
-/// scrimmages' parts (the user's of 2026-10-22: 「生徒何人分？」).
+/// students what is held raises, as the work tab counts the scrimmages' parts
+/// (the user's of 2026-10-22: 「生徒何人分？」). The work tab's normal items shop
+/// shows the orbs' row itself.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Enhancement {
     pub category: String,
