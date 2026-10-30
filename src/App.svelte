@@ -414,13 +414,15 @@
      many are held, coloured against what one student takes. -->
 {#snippet heldTiers(/** @type {any[]} */ tiers)}
   {#each tiers as cell, i (i)}
-    <!-- A sum of choice boxes says on hover what each set holds. -->
-    <td class="tier-{i + 1}" title={cell?.parts}>
+    <!-- A sum of choice boxes says on hover its name, then what each set holds (the user's
+         of 2026-10-31: 「1行目: 名称 2行目: 内訳」). -->
+    {@const title = cell?.parts ? `${cell.name}\n${cell.parts}` : undefined}
+    <td class="tier-{i + 1}" {title}>
       {#if cell}<div class="pair">
           <img
             src={iconUrl(cell.icon)}
             alt={cell.name}
-            title={cell.parts ?? cell.name}
+            title={title ?? cell.name}
             width="50"
             height="40"
           /><span class={heldTone(cell.held, cell.need)}>{heldText(cell.held)}</span>
