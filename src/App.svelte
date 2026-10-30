@@ -36,6 +36,7 @@
     hardCost,
     hardTile,
     heldText,
+    boxTotals,
     heldTone,
     groupPlan,
     needCells,
@@ -413,12 +414,13 @@
      many are held, coloured against what one student takes. -->
 {#snippet heldTiers(/** @type {any[]} */ tiers)}
   {#each tiers as cell, i (i)}
-    <td class="tier-{i + 1}">
+    <!-- A sum of choice boxes says on hover what each set holds. -->
+    <td class="tier-{i + 1}" title={cell?.parts}>
       {#if cell}<div class="pair">
           <img
             src={iconUrl(cell.icon)}
             alt={cell.name}
-            title={cell.name}
+            title={cell.parts ?? cell.name}
             width="50"
             height="40"
           /><span class={heldTone(cell.held, cell.need)}>{heldText(cell.held)}</span>
@@ -1301,20 +1303,21 @@
                 </tr>
               </tbody>
             {/if}
-            <!-- The choice boxes above トリニティ (the user's of 2026-10-29), set by set as a
-                 school's: the BD boxes over the tech note boxes, at the left whether they choose
-                 from every school or from how many, the schools named on hover. -->
-            {#each kinds.skill_boxes ?? [] as set, i (i)}
+            <!-- The choice boxes above トリニティ (the user's of 2026-10-29), every set added up
+                 as one (the user's of 2026-10-31): the BD boxes over the tech note boxes, what
+                 each set holds on hover. -->
+            {#if boxTotals(kinds.skill_boxes ?? [])}
+              {@const boxes = boxTotals(kinds.skill_boxes ?? [])}
               <tbody>
                 <tr>
-                  <th scope="rowgroup" rowspan="2" class="emblem set" title={set.schools.join("・")}
-                    >{set.all ? "全学園" : `${set.schools.length}校`}</th
+                  <th scope="rowgroup" rowspan="2" class="emblem set" title="選択ボックスの合計"
+                    >選択</th
                   >
-                  {@render heldTiers(set.bd)}
+                  {@render heldTiers(boxes.bd)}
                 </tr>
-                <tr>{@render heldTiers(set.notes)}</tr>
+                <tr>{@render heldTiers(boxes.notes)}</tr>
               </tbody>
-            {/each}
+            {/if}
             {#each kinds.schools as school (school.icon)}
               <tbody>
                 <tr>

@@ -621,6 +621,36 @@ const amountOf = (count) => (count == null ? 0 : (count.exact ?? count.thousands
  * How a drop held stands against what students need: short of one "short"
  * (red), of two "fair" (blue), two or more "enough" (green).
  */
+/**
+ * The skill materials' choice boxes of every set as one (the user's of 2026-10-31:
+ * 「3種類の物を合算してください」): each tier of the BD row and of the tech note row holds
+ * every set's boxes, the first set's picture, and in `parts` what each set holds
+ * ("429 + 5 + 0"), a set without the tier's box or holding none as 0. None held anywhere
+ * stays unknown, as one box would; a tier no set has stays empty.
+ * @param {Array<{ bd: any[], notes: any[] }>} sets
+ */
+export function boxTotals(sets) {
+  if (sets.length === 0) return null;
+  const row = (/** @type {"bd" | "notes"} */ key) =>
+    sets[0][key].map((_, tier) => {
+      const cells = sets.map((set) => set[key][tier]);
+      const first = cells.find(Boolean);
+      if (!first) return null;
+      const total = cells.reduce((sum, cell) => sum + amountOf(cell?.held), 0);
+      const known = cells.some((cell) => cell?.held != null);
+      return {
+        ...first,
+        held: !known
+          ? null
+          : total < 10000
+            ? { exact: total }
+            : { thousands: Math.round(total / 1000) },
+        parts: cells.map((cell) => (cell?.held == null ? "0" : formatCount(cell.held))).join(" + "),
+      };
+    });
+  return { bd: row("bd"), notes: row("notes") };
+}
+
 export function heldTone(held, need) {
   if (need == null) return "";
   const n = amountOf(held);

@@ -290,16 +290,16 @@ test("the item tab's sub-tabs: every item on its rarity, the skill materials, th
   expect(await emblems.evaluateAll((i) => i.map((e) => e.alt))).toEqual(["トリニティ", "ゲヘナ"]);
   const loaded = await emblems.evaluateAll((i) => i.map((e) => e.complete && e.naturalWidth > 0));
   expect(loaded).toEqual([true, true]);
-  // The choice boxes above トリニティ (the user's of 2026-10-29), set by set as a school's:
-  // every school's first, the schools on hover.
-  const sets = skills.locator("th.set");
-  await expect(sets).toHaveText(["全学園", "2校"]);
-  await expect(sets.nth(1)).toHaveAttribute("title", "トリニティ・ゲヘナ");
-  const every = skills.locator("tbody").nth(1).locator("tr");
-  await expect(every.nth(0).locator("td")).toHaveText(["100", "101", "102", "103"]);
-  await expect(every.nth(1).locator("td")).toHaveText(["—", "—", "—", "—"]);
-  await expect(every.nth(0).getByRole("img", { name: "BD選択ボックス0" })).toBeVisible();
-  const trinity = skills.locator("tbody").nth(3).locator("tr");
+  // The choice boxes above トリニティ as one set (the user's of 2026-10-31: 「3種類の物を合算」),
+  // what each set holds on hover.
+  await expect(skills.locator("th.set")).toHaveText(["選択"]);
+  const boxes = skills.locator("tbody").nth(1).locator("tr");
+  await expect(boxes.nth(0).locator("td")).toHaveText(["300", "302", "304", "306"]);
+  await expect(boxes.nth(0).locator("td").first()).toHaveAttribute("title", "100 + 200");
+  await expect(boxes.nth(1).locator("td")).toHaveText(["—", "—", "—", "—"]);
+  await expect(boxes.nth(1).locator("td").first()).toHaveAttribute("title", "0 + 0");
+  await expect(boxes.nth(0).getByRole("img", { name: "BD選択ボックス0" })).toBeVisible();
+  const trinity = skills.locator("tbody").nth(2).locator("tr");
   await expect(trinity.nth(0).locator("td")).toHaveText(["0", "10", "20", "30"]);
   await expect(trinity.nth(1).locator("td")).toHaveText(["0", "100", "200", "—"]);
   await expect(trinity.nth(1).locator("td").first()).toHaveClass(/tier-1/);

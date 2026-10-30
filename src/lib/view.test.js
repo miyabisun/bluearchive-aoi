@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   blueprintCells,
+  boxTotals,
   filterRows,
   filterShops,
   groupPlan,
@@ -1222,6 +1223,41 @@ describe("schoolCells", () => {
       first: false,
       why: lines("素材が合う生徒: 46%", "6.6人分 ÷ 46% = 14.5"),
     });
+  });
+});
+
+describe("boxTotals", () => {
+  const cell = (id, held) => ({ id, name: `箱${id}`, icon: `icon_${id}`, held, need: null });
+  const set = (bd, notes) => ({ all: false, schools: [], bd, notes });
+
+  it("adds every set's boxes tier by tier and says how much each holds", () => {
+    const sets = [
+      set(
+        [cell(1, { exact: 429 }), cell(2, null), null, cell(4, { exact: 9000 })],
+        [cell(5, null), null, null, null],
+      ),
+      set(
+        [cell(11, { exact: 5 }), cell(12, null), null, cell(14, { exact: 2000 })],
+        [cell(15, null), null, null, null],
+      ),
+      set([null, cell(22, null), null, cell(24, { thousands: 12 })], [null, null, null, null]),
+    ];
+    const totals = boxTotals(sets);
+    // A set without the tier's box, or holding none, counts 0.
+    expect(totals.bd[0]).toEqual({ ...cell(1, { exact: 434 }), parts: "429 + 5 + 0" });
+    // None held anywhere stays unknown, as one box would.
+    expect(totals.bd[1]).toEqual({ ...cell(2, null), parts: "0 + 0 + 0" });
+    expect(totals.bd[2]).toBeNull();
+    // From 10,000 in thousands, as the game writes it.
+    expect(totals.bd[3]).toEqual({
+      ...cell(4, { thousands: 23 }),
+      parts: "9,000 + 2,000 + 12K",
+    });
+    expect(totals.notes).toEqual([{ ...cell(5, null), parts: "0 + 0 + 0" }, null, null, null]);
+  });
+
+  it("has nothing without sets", () => {
+    expect(boxTotals([])).toBeNull();
   });
 });
 
