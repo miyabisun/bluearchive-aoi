@@ -263,6 +263,9 @@ test("the item tab's sub-tabs: every item on its rarity, the skill materials, th
   const azusa = { id: 10019, name: "アズサ", training };
   const snapshot = { status: reading("items"), items: held, equipment, students: [azusa], kinds };
   await open(page, snapshot);
+  // The sub-tabs are one row with no scroll up and down (the user's of 2026-11-03: 「▲●▼が存在」).
+  const row = page.getByRole("tablist", { name: "分類" });
+  expect(await row.evaluate((r) => r.scrollHeight - r.clientHeight)).toBe(0);
   // Everything held: each tile on its rarity, an eleph on pink with its student's star on hover.
   await expect(page.getByRole("tab", { name: "全体" })).toHaveAttribute("aria-selected", "true");
   const tiles = page.locator(".tiles li");

@@ -1940,17 +1940,18 @@
     display: flex
     justify-content: center
     margin: 0 0 var(--sp-2)
-  // A tab's sub-tabs, over a rule; narrower than they are, they scroll sideways.
+  // A tab's sub-tabs, over a rule; narrower than they are, they scroll sideways. The rule is
+  // a shadow under the chosen tab's line: a tab hanging over a border would overflow the row
+  // and scroll it up and down too.
   .subtabs
     display: flex
     flex: none
     margin: 0 0 var(--sp-3)
     overflow-x: auto
     scrollbar-width: thin
-    border-bottom: 1px solid var(--c-border)
+    box-shadow: inset 0 -1px var(--c-border)
     button
       flex: none
-      margin-bottom: -1px
       white-space: nowrap
   :is(.code-choice, .subtabs) button
       padding: var(--sp-1) var(--sp-3)
