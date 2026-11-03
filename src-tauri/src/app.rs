@@ -13,6 +13,7 @@ use crate::{
     List, Recognizer, Row,
     android::Link,
     broadcast::Cast,
+    cursor::{Highlight, Palette},
     export,
     keep::{self, Kept, ReadAt, now},
     kinds::Kinds,
@@ -396,6 +397,21 @@ fn wait_for_stream(watcher: tauri::State<'_, watch::Watcher>, wait: bool) {
     }
 }
 
+/// Puts the arrow in `color` (red, green, blue) in for Windows' arrow cursor, or
+/// Windows' own back (none); whether the cursor can be changed here (Windows only).
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)] // Tauri hands command arguments over by value.
+fn set_cursor(
+    highlight: tauri::State<'_, Highlight>,
+    color: Option<String>,
+) -> Result<bool, String> {
+    let palette = color
+        .map(|name| Palette::named(&name).ok_or(format!("unknown cursor colour: {name}")))
+        .transpose()?;
+    highlight.set(palette);
+    Ok(cfg!(windows))
+}
+
 /// The app's version and the newer one the latest release brings, if any;
 /// whether the app takes it itself, or opens the release page (macOS).
 #[derive(Debug, Clone, Serialize)]
@@ -440,7 +456,26 @@ async fn apply_update(app: tauri::AppHandle) -> Result<(), String> {
     })
     .await
     .map_err(|e| e.to_string())??;
+    // The cursor chosen is put back in by the window of the new version.
+    app.state::<Highlight>().set(None);
     app.restart()
+}
+
+/// The built-in icon a request to `icon://<name>` names, or 404.
+fn icon(
+    request: &tauri::http::Request<Vec<u8>>,
+) -> tauri::http::Response<std::borrow::Cow<'static, [u8]>> {
+    let name = request.uri().path().trim_start_matches('/');
+    let response = tauri::http::Response::builder();
+    match crate::icon(name) {
+        Some((bytes, media)) => response
+            .header("Content-Type", media)
+            .body(std::borrow::Cow::Borrowed(bytes)),
+        None => response
+            .status(404)
+            .body(std::borrow::Cow::Borrowed(&[][..])),
+    }
+    .expect("a response of a status and a body")
 }
 
 pub fn run(context: tauri::Context) {
@@ -467,6 +502,7 @@ pub fn run(context: tauri::Context) {
             ))));
             app.manage(recognizer.clone());
             app.manage(places.clone());
+            app.manage(Highlight::start());
             let planner = recognizer.clone();
             let handle = app.handle().clone();
             // The phone's key and the phone paired sit beside what is kept.
@@ -518,19 +554,7 @@ pub fn run(context: tauri::Context) {
             Ok(())
         })
         // The window shows item icons from what is built in: `icon://<name>`.
-        .register_uri_scheme_protocol("icon", |_, request| {
-            let name = request.uri().path().trim_start_matches('/');
-            let response = tauri::http::Response::builder();
-            match crate::icon(name) {
-                Some((bytes, media)) => response
-                    .header("Content-Type", media)
-                    .body(std::borrow::Cow::Borrowed(bytes)),
-                None => response
-                    .status(404)
-                    .body(std::borrow::Cow::Borrowed(&[][..])),
-            }
-            .expect("a response of a status and a body")
-        })
+        .register_uri_scheme_protocol("icon", |_, request| icon(&request))
         .invoke_handler(tauri::generate_handler![
             snapshot,
             export,
@@ -542,8 +566,15 @@ pub fn run(context: tauri::Context) {
             reload_plan,
             pair_phone,
             connect_phone,
-            wait_for_stream
+            wait_for_stream,
+            set_cursor
         ])
-        .run(context)
-        .expect("bluearchive-aoi failed to start");
+        .build(context)
+        .expect("bluearchive-aoi failed to start")
+        // Windows' own cursor back as the app ends: it is changed only while the app runs.
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                app.state::<Highlight>().set(None);
+            }
+        });
 }

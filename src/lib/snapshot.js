@@ -87,6 +87,21 @@ export async function setPaused(paused) {
 }
 
 /**
+ * Puts the highlighted arrow in `color` (`blue`, `red`, `green`) in for Windows' arrow cursor, or
+ * Windows' own back (`null`); resolves to whether the cursor can be changed here (on Windows only).
+ * Outside the app it notes the call in `window.__AOI_CURSOR__` and answers with the demo's `cursor`
+ * (as on Windows unless it is `false`).
+ */
+export async function setCursor(color) {
+  if (!("__TAURI_INTERNALS__" in window)) {
+    const w = /** @type {any} */ (window);
+    (w.__AOI_CURSOR__ ??= []).push(color);
+    return w.__AOI_DEMO__?.cursor !== false;
+  }
+  return invoke("set_cursor", { color });
+}
+
+/**
  * Where the window loads the icon `name` from: the app's `icon` protocol;
  * outside the app `/icon/<name>`, which the browser tests answer.
  */

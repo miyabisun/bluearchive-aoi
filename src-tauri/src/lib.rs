@@ -11,6 +11,7 @@ pub mod app;
 pub mod broadcast;
 pub mod catalog;
 pub mod credit;
+pub mod cursor;
 pub mod equipment;
 pub mod export;
 pub mod glyph;

@@ -1873,6 +1873,39 @@ test("the menu chooses the theme, kept for the next start", async ({ page }) => 
   await expect(body).toHaveCSS("background-color", "rgb(25, 25, 25)");
 });
 
+test("the menu changes the mouse cursor, kept for the next start", async ({ page }) => {
+  await open(page, { status: { state: "no_game" }, items, equipment });
+  const calls = () => page.evaluate(() => window.__AOI_CURSOR__);
+  // At the start the choice kept is put back: none at first.
+  await expect.poll(calls).toEqual([null]);
+  await page.getByRole("button", { name: "メニュー" }).click();
+  const group = page.getByRole("group", { name: "マウスカーソル変更" });
+  await expect(group.getByRole("menuitemradio")).toHaveText(["なし", "青", "赤", "緑"]);
+  await expect(group.getByRole("menuitemradio", { name: "なし" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await group.getByRole("menuitemradio", { name: "赤" }).click();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  expect(await calls()).toEqual([null, "red"]);
+  await page.reload();
+  await expect.poll(calls).toEqual(["red"]);
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await expect(group.getByRole("menuitemradio", { name: "赤" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await group.getByRole("menuitemradio", { name: "なし" }).click();
+  expect(await calls()).toEqual(["red", null]);
+});
+
+test("where the cursor cannot be changed, the menu does not offer it", async ({ page }) => {
+  await open(page, { status: { state: "no_game" }, items, equipment, cursor: false });
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await expect(page.getByRole("menuitemradio", { name: "ライト" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "マウスカーソル変更" })).toHaveCount(0);
+});
+
 test("the menu checks for an update and takes it", async ({ page }) => {
   await open(page, {
     status: { state: "no_game" },

@@ -11,12 +11,20 @@
     iconUrl,
     pairPhone,
     reloadPlan,
+    setCursor,
     setPaused,
     setReserved,
     setTarget,
     waitForStream,
   } from "./lib/snapshot.js";
-  import { THEMES, applyTheme, storedTheme } from "./lib/theme.js";
+  import {
+    CURSORS,
+    THEMES,
+    applyTheme,
+    keepCursor,
+    storedCursor,
+    storedTheme,
+  } from "./lib/theme.js";
   import {
     LISTS,
     commissionRows,
@@ -230,6 +238,14 @@
     if (cast.state === "off" || cast.state === "failed") waitForStream(true);
   }
   let theme = $state(storedTheme());
+  /** The mouse cursor chosen in the menu, and whether it can be changed here (Windows). */
+  let cursor = $state(storedCursor());
+  let cursorShown = $state(false);
+
+  /** Puts the cursor `choice` in (see `CURSORS`), telling whether the menu offers it. */
+  async function changeCursor(/** @type {string} */ choice) {
+    cursorShown = await setCursor(choice === "none" ? null : choice);
+  }
   let query = $state("");
   /** The student column the table is ordered by. */
   let sortBy = $state("level");
@@ -392,6 +408,7 @@
   }
 
   onMount(() => {
+    changeCursor(cursor);
     follow((next) => {
       snapshot = next;
     });
@@ -662,6 +679,26 @@
               >
             {/each}
           </div>
+          <!-- On Windows, an arrow after the game's in a colour of choice instead of the game's own
+               highlighted cursor, which would show in what is read (the user's of 2026-11-03). -->
+          {#if cursorShown}
+            <div role="group" aria-labelledby="cursor-heading">
+              <span class="menu-heading" id="cursor-heading">マウスカーソル変更</span>
+              {#each CURSORS as choice (choice.id)}
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={cursor === choice.id}
+                  onclick={() => {
+                    cursor = choice.id;
+                    keepCursor(choice.id);
+                    changeCursor(choice.id);
+                    menuOpen = false;
+                  }}>{choice.name}</button
+                >
+              {/each}
+            </div>
+          {/if}
         </div>
       {/if}
     </div>
