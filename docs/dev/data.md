@@ -90,7 +90,10 @@ cargo run --release --example build_digits -- <collection>
   same to the pixel as the last one's reads as it did. All shops but カケラ(文字) reset as
   the month changes.
 - The 育成 tab counts from what was read when Aoi started or 再読込 was pressed, not from
-  what is read since.
+  what is read since. The snapshot's `plan_behind` (`ground::Ground::behind`) tells the window
+  when those reads were and what was read otherwise since: the marked students whose level,
+  star, skills or equipment changed, the shops whose goods changed, and whether anything held
+  did.
 
 ## What is kept
 

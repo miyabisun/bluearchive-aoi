@@ -16,6 +16,7 @@ pub mod equipment;
 pub mod export;
 pub mod glyph;
 pub mod grid;
+pub mod ground;
 pub mod icon;
 pub mod items;
 pub mod keep;

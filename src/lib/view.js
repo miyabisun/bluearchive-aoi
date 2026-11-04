@@ -571,6 +571,20 @@ export function unknownText(rows) {
 }
 
 /**
+ * What the 育成 tab tells of the snapshot's `plan_behind`: when the reads it counts from were
+ * ("11/03 14:37"), what was read otherwise since (students, shops, then 所持数) and that 再読込
+ * counts again; nothing while it counts alike.
+ */
+export function behindText(behind) {
+  if (!behind) return "";
+  const since = behind.since
+    ? `${behind.since.slice(5, 16).replace("-", "/")} の読み取りで計算中。`
+    : "";
+  const what = [...behind.students, ...behind.shops, ...(behind.held ? ["所持数"] : [])];
+  return `${since}${what.join("・")}が変わっています。再読込で数え直します（払った分は取り消されます）`;
+}
+
+/**
  * A count of students or pieces to a tenth, cut down, not rounded: a share short of
  * what is needed never shows as reaching it (238 / 60 shows 3.9, not 4.0; the user's
  * call, 2026-10-17).

@@ -14,6 +14,7 @@ import {
   starOf,
   tierCell,
   unknownText,
+  behindText,
   commissionRows,
   currencyRows,
   currencyCoins,
@@ -535,6 +536,28 @@ describe("plan", () => {
         { id: 10, name: "アル", part: "level" },
       ]),
     ).toEqual(["ツムギ: EX・装備3", "アル: Lv"]);
+  });
+});
+
+describe("behind the plan", () => {
+  it("tells when the plan's reads were and what changed since, the held last", () => {
+    expect(
+      behindText({
+        since: "2026-11-03 14:37:12",
+        students: ["ラナ"],
+        shops: ["カケラ(文字)"],
+        held: true,
+      }),
+    ).toBe(
+      "11/03 14:37 の読み取りで計算中。ラナ・カケラ(文字)・所持数が変わっています。再読込で数え直します（払った分は取り消されます）",
+    );
+    expect(behindText({ since: null, students: [], shops: [], held: true })).toBe(
+      "所持数が変わっています。再読込で数え直します（払った分は取り消されます）",
+    );
+  });
+
+  it("tells nothing while the plan counts alike", () => {
+    expect(behindText(null)).toBe("");
   });
 });
 

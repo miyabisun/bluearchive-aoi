@@ -15,6 +15,7 @@ use crate::{
     broadcast::Cast,
     cursor::{Highlight, Palette},
     export,
+    ground::{self, Behind, Ground},
     keep::{self, Kept, ReadAt, now},
     kinds::Kinds,
     plan::{BlueprintRow, NeedRow, Target, UnknownRow},
@@ -49,10 +50,11 @@ pub struct Snapshot {
     /// Counts the times the plan's ground was read again (`reload_plan`): the
     /// window's payments hold until it changes.
     plan_version: u32,
-    /// What the plan counts from: what was read when the app started or the
-    /// plan was last reloaded, so a student trained meanwhile leaves it as it is.
+    /// What the plan counts from (see `Ground`).
     #[serde(skip)]
     ground: Ground,
+    /// What was read since the plan's ground and counts otherwise, none while it counts alike.
+    plan_behind: Option<Behind>,
     /// The item and equipment tabs' tables by kind.
     kinds: Kinds,
     /// The daily plays against what is held.
@@ -83,16 +85,6 @@ struct TargetRow {
     training: Option<Training>,
 }
 
-/// What the plan counts from (see `Snapshot::ground`).
-#[derive(Debug, Clone, Default)]
-struct Ground {
-    students: Vec<StudentRow>,
-    items: Vec<Row>,
-    equipment: Vec<Row>,
-    credits: Option<u64>,
-    shops: Vec<ShopRow>,
-}
-
 /// Where what is read is kept: `state.json` in the app's folder, brought back
 /// on the next run, and `Documents\Aoi\aoi.yaml`, the latest of it to read.
 #[derive(Clone)]
@@ -121,6 +113,7 @@ impl Snapshot {
             procure: Vec::new(),
             plan_version: 0,
             ground: Ground::default(),
+            plan_behind: None,
             kinds: Kinds::default(),
             work: recognizer.work_rows(&[], &[], None),
             hard: Vec::new(),
@@ -137,16 +130,28 @@ impl Snapshot {
         snapshot
     }
 
-    /// Takes what was read as the plan's ground (see `Snapshot::ground`).
-    fn reground(&mut self) {
-        self.ground = Ground {
+    /// What was read, as the plan's ground takes it.
+    fn reads(&self) -> Ground {
+        Ground {
             students: self.students.clone(),
             items: self.items.clone(),
             equipment: self.equipment.clone(),
             credits: self.credits,
             shops: self.shops.clone(),
-        };
+            read_at: ground::newest(&self.read_at, &self.shops),
+        }
+    }
+
+    /// Takes what was read as the plan's ground (see `Snapshot::ground`).
+    fn reground(&mut self) {
+        self.ground = self.reads();
         self.plan_version += 1;
+    }
+
+    /// Tells what was read since the plan's ground and counts otherwise (see `Snapshot::plan_behind`).
+    fn retell(&mut self) {
+        let marked: Vec<i64> = self.targets.iter().map(|t| t.id).collect();
+        self.plan_behind = self.ground.behind(&self.reads(), &marked);
     }
 
     fn targets(&self) -> BTreeMap<i64, Target> {
@@ -191,6 +196,7 @@ impl Snapshot {
             &ground.shops,
             &now(),
         );
+        self.retell();
     }
 
     /// Counts the tables by kind, the daily plays and the month-end plan again
@@ -201,6 +207,7 @@ impl Snapshot {
         self.hard = recognizer.hard(&self.items, &self.students, &self.reserved);
         let held = |id| crate::good_held(id, &self.items, &self.equipment, self.credits);
         self.month_end = recognizer.month_end(&self.shops, &self.students, held, &self.reserved);
+        self.retell();
     }
 
     /// What is kept of the window.

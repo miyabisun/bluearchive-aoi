@@ -75,6 +75,7 @@
     TIERS,
     tierCell,
     unknownText,
+    behindText,
     updateText,
   } from "./lib/view.js";
 
@@ -189,6 +190,8 @@
     procure: [],
     /** Changes when the plan is counted from what is read anew. */
     plan_version: 0,
+    /** What was read since the plan's reads and counts otherwise (none while alike). */
+    plan_behind: null,
     /** The daily plays against what is held (none before the app sends it). */
     work: /** @type {any} */ (null),
     /** The month-end shops' purchase plan, card by card. */
@@ -740,6 +743,9 @@
             <h2 class="section">既存の生徒一覧</h2>
             <button type="button" class="reload" onclick={reloadPlan}>再読込</button>
           </div>
+          {#if snapshot.plan_behind}
+            <p class="behind" role="status">{behindText(snapshot.plan_behind)}</p>
+          {/if}
           <table class="students targets">
             <thead>
               <tr>
@@ -2402,6 +2408,11 @@
   .unknown
     margin: 0 0 var(--sp-2)
     color: var(--c-muted)
+    font-size: var(--fs-sm)
+  // The plan counts from older reads than these: the user's 2026-11-04 choice 「再読込を促す表示」.
+  .behind
+    margin: 0 0 var(--sp-2)
+    color: var(--c-warn)
     font-size: var(--fs-sm)
 
   .enough

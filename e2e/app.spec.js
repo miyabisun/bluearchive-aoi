@@ -1119,6 +1119,30 @@ test("shows the targets and what they take against what is held", async ({ page 
   expect(await page.evaluate(() => window.__AOI_CALLS__)).toEqual([{ reload: true }]);
   await page.evaluate((s) => window.__AOI_PUSH__({ ...s, plan_version: 2 }), snapshot);
   await expect(chips.first()).toHaveText("4");
+
+  // What was read since the plan's reads and counts otherwise is told, through later readings,
+  // until 再読込 counts again from it.
+  const behind = page.locator(".behind");
+  await expect(behind).toHaveCount(0);
+  const since = {
+    since: "2026-11-03 14:37:12",
+    students: ["アカネ（バニーガール）"],
+    shops: ["カケラ(文字)"],
+    held: true,
+  };
+  for (const status of [{ state: "other_screen" }, { state: "reading", list: "items", fps: 9 }]) {
+    await page.evaluate(
+      ([s, plan_behind, status]) =>
+        window.__AOI_PUSH__({ ...s, plan_version: 2, plan_behind, status }),
+      [snapshot, since, status],
+    );
+    await expect(behind).toHaveText(
+      "11/03 14:37 の読み取りで計算中。アカネ（バニーガール）・カケラ(文字)・所持数が変わっています。再読込で数え直します（払った分は取り消されます）",
+    );
+  }
+  await expect(behind).toHaveAttribute("role", "status");
+  await page.evaluate((s) => window.__AOI_PUSH__({ ...s, plan_version: 3 }), snapshot);
+  await expect(behind).toHaveCount(0);
   await page.evaluate(() => (window.__AOI_CALLS__ = []));
 
   // A target changes from the keyboard, within its range.
