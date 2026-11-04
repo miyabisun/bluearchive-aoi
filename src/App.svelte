@@ -1883,7 +1883,7 @@
       font-size: var(--fs-sm)
       text-align: left
       cursor: pointer
-      &:hover
+      &:hover, &:focus-visible
         background: var(--c-wash-base)
       &:disabled
         color: var(--c-muted)
@@ -2002,6 +2002,8 @@
       color: var(--c-on-surface)
       font: inherit
       cursor: pointer
+      &:focus-visible:not(.primary)
+        border-color: var(--c-muted)
       &.primary
         border-color: var(--c-accent)
         color: var(--c-accent)
@@ -2071,7 +2073,7 @@
     font: inherit
     font-size: var(--fs-sm)
     cursor: pointer
-    &:hover
+    &:hover, &:focus-visible
       border-color: var(--c-muted)
   .status[data-tone="paused"]
     color: var(--c-on-surface)
@@ -2205,7 +2207,7 @@
     background: none
     color: var(--c-danger)
     cursor: pointer
-    &:hover
+    &:hover, &:focus-visible
       background: var(--c-danger-subtle)
 
   .shop
@@ -2388,7 +2390,7 @@
       font-size: var(--fs-sm)
       text-align: left
       cursor: pointer
-      &:hover:not(:disabled)
+      &:is(:hover, :focus-visible):not(:disabled)
         background: var(--c-wash-base)
       &:disabled
         opacity: 0.35
@@ -2440,7 +2442,7 @@
     font: inherit
     font-size: var(--fs-sm)
     cursor: pointer
-    &:hover
+    &:hover, &:focus-visible
       border-color: var(--c-muted)
   .reset
     margin: var(--sp-3) 0
@@ -2467,6 +2469,8 @@
       cursor: pointer
       img
         object-fit: contain
+      &:focus-visible:not(.paid)
+        border-color: var(--c-muted)
       &.paid
         border-color: var(--c-accent)
       // Bought up this month: greyed, its "売切れ" in words.

@@ -68,9 +68,10 @@ body
   font-size: var(--fs-md)
   line-height: 1.6
 
+// No ring round what has the focus (the user's 2026-11-04 「フォーカスした時の全体的なクソデカborderをなくして」):
+// a control with a border changes its colour, as when the pointer is over it, and the rest stay as they are.
 \:focus-visible
-  outline: 2px solid var(--c-accent)
-  outline-offset: 2px
+  outline: none
 
 #app
   display: flex

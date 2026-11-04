@@ -103,6 +103,54 @@ test("lists the item tally in order and narrows it by name", async ({ page }) =>
   await expect(page.getByText("一致する項目がありません")).toBeVisible();
 });
 
+test("focus draws no ring: a bordered control's border changes colour, the rest stay as they are", async ({
+  page,
+}) => {
+  await open(page, { status: { state: "other_screen" }, items, equipment: [] });
+  // From the keyboard, so the focus shows as it would (:focus-visible).
+  await page.keyboard.press("Tab");
+  const look = (locator) =>
+    locator.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return {
+        outline: style.outlineStyle,
+        border: style.borderColor,
+        bottom: style.borderBottomColor,
+      };
+    });
+  const accent = await page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.style.color = "var(--c-accent)";
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+
+  // The header's tabs and its menu: nothing drawn, a tab not chosen keeps its line unlit.
+  const tab = page.getByRole("tab", { name: "装備" });
+  await tab.focus();
+  expect(await look(tab)).toMatchObject({ outline: "none", bottom: "rgba(0, 0, 0, 0)" });
+  const menu = page.getByRole("button", { name: "メニュー" });
+  await menu.focus();
+  expect((await look(menu)).outline).toBe("none");
+
+  // The status: its border as when the pointer is over it.
+  const status = page.locator("button.status");
+  const idle = (await look(status)).border;
+  await status.hover();
+  const hovered = (await look(status)).border;
+  expect(hovered).not.toBe(idle);
+  await page.mouse.move(0, 0);
+  await status.focus();
+  expect(await look(status)).toMatchObject({ outline: "none", border: hovered });
+
+  // The search field: its border in the accent, one line.
+  const search = page.getByLabel("名前で検索");
+  await search.focus();
+  expect(await look(search)).toMatchObject({ outline: "none", border: accent });
+});
+
 test("shows the equipment by tile, each piece's tier at its corner", async ({ page }) => {
   await open(page, { status: reading("equipment"), items, equipment });
   await expect(page.getByRole("status")).toHaveText("装備を集計中");
