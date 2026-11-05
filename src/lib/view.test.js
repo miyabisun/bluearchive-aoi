@@ -546,6 +546,8 @@ describe("the work tab follows the game", () => {
   }));
   it("opens the fold of the screen or the month-end shop the game shows", () => {
     expect(workFold({ kind: "screen", name: "学園交流会" }, monthEnd)).toBe("work:学園交流会");
+    // The 指名手配 stages' screen, told by its title: the daily fold.
+    expect(workFold({ kind: "screen", name: "指名手配" }, monthEnd)).toBe("work:指名手配");
     expect(workFold({ kind: "shop", name: "総力戦" }, monthEnd)).toBe("work:月末:総力戦");
     expect(workFold({ kind: "shop", name: "熟達証書" }, monthEnd)).toBe("work:月末:熟達証書");
     // The 指名手配 shop, not the daily 指名手配 stages.

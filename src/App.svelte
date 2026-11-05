@@ -20,10 +20,13 @@
   import {
     CURSORS,
     THEMES,
+    WORK_FOLLOW,
     applyTheme,
     keepCursor,
+    keepWorkFollow,
     storedCursor,
     storedTheme,
+    storedWorkFollow,
   } from "./lib/theme.js";
   import {
     LISTS,
@@ -246,6 +249,8 @@
   let theme = $state(storedTheme());
   /** The mouse cursor chosen in the menu, and whether it can be changed here (Windows). */
   let cursor = $state(storedCursor());
+  /** Whether the work tab follows the game (see `WORK_FOLLOW`). */
+  let workFollow = $state(storedWorkFollow());
   let cursorShown = $state(false);
 
   /** Puts the cursor `choice` in (see `CURSORS`), telling whether the menu offers it. */
@@ -328,14 +333,23 @@
   /**
    * The work tab's fold of where the game is, opened as the game comes there while the
    * tab is open (the user's 2026-11-06 「お仕事タブを開いている時は、各項目に画面遷移したらそのタブを開く」):
-   * once, so one the user closes there stays closed.
+   * once, so one the user closes there stays closed. The others close and it comes to the
+   * top of the tab's frame, in sight (the same day's 「他の項目は全て閉じる」「画面上部に表示させる」);
+   * none of it while the menu says not to (「お仕事の自動開閉」).
    */
   let followed = /** @type {string | null} */ (null);
   $effect(() => {
     const fold = workFold(snapshot.place, snapshot.month_end ?? []);
     if (fold === followed) return;
     followed = fold;
-    if (fold && view.tab === "work") opened.add(fold);
+    if (!fold || view.tab !== "work" || workFollow !== "on") return;
+    for (const key of [...opened]) if (key.startsWith("work:") && key !== fold) opened.delete(key);
+    opened.add(fold);
+    tick().then(() =>
+      document
+        .querySelector(`.work [data-fold="${CSS.escape(fold)}"]`)
+        ?.scrollIntoView({ block: "start" }),
+    );
   });
 
   const status = $derived(statusView(snapshot));
@@ -693,6 +707,21 @@
                 onclick={() => {
                   theme = choice.id;
                   applyTheme(choice.id);
+                  menuOpen = false;
+                }}>{choice.name}</button
+              >
+            {/each}
+          </div>
+          <div role="group" aria-labelledby="work-follow-heading">
+            <span class="menu-heading" id="work-follow-heading">お仕事の自動開閉</span>
+            {#each WORK_FOLLOW as choice (choice.id)}
+              <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={workFollow === choice.id}
+                onclick={() => {
+                  workFollow = choice.id;
+                  keepWorkFollow(choice.id);
                   menuOpen = false;
                 }}>{choice.name}</button
               >
@@ -1072,7 +1101,11 @@
         <div class="table-scroll work" data-state="success">
           <!-- The plays by when they are played: each day, in a doubled-drop campaign, at the month's end. -->
           <h2 class="category">日課</h2>
-          <details class="fold" open={opened.has("work:通常アイテム")}>
+          <details
+            class="fold"
+            data-fold="work:通常アイテム"
+            open={opened.has("work:通常アイテム")}
+          >
             <summary onclick={(event) => toggle(event, "work:通常アイテム")}
               >{@render chevron()}
               <h3>ショップ: 通常アイテム</h3></summary
@@ -1080,7 +1113,7 @@
             <!-- The credits and the orbs the shop sells daily, in students raised: the more green, the fewer red. -->
             {@render raiseRows("raises", normalItemRows(work.commissions, orbs))}
           </details>
-          <details class="fold" open={opened.has("work:指名手配")}>
+          <details class="fold" data-fold="work:指名手配" open={opened.has("work:指名手配")}>
             <summary onclick={(event) => toggle(event, "work:指名手配")}
               >{@render chevron()}
               <h3>指名手配</h3></summary
@@ -1096,7 +1129,7 @@
               </table>
             {/each}
           </details>
-          <details class="fold" open={opened.has("work:学園交流会")}>
+          <details class="fold" data-fold="work:学園交流会" open={opened.has("work:学園交流会")}>
             <summary onclick={(event) => toggle(event, "work:学園交流会")}
               >{@render chevron()}
               <h3>学園交流会</h3></summary
@@ -1105,7 +1138,7 @@
             {@render raiseRows("schools", scrimmageRows(work.scrimmages, work.schools))}
           </details>
           <h2 class="category">2倍キャンペーン</h2>
-          <details class="fold" open={opened.has("work:任務")}>
+          <details class="fold" data-fold="work:任務" open={opened.has("work:任務")}>
             <summary onclick={(event) => toggle(event, "work:任務")}
               >{@render chevron()}
               <h3>任務 Normal</h3></summary
@@ -1187,7 +1220,7 @@
               {/if}
             {/if}
           </details>
-          <details class="fold" open={opened.has("work:任務 Hard")}>
+          <details class="fold" data-fold="work:任務 Hard" open={opened.has("work:任務 Hard")}>
             <summary onclick={(event) => toggle(event, "work:任務 Hard")}
               >{@render chevron()}
               <h3>任務 Hard</h3>
@@ -1235,7 +1268,7 @@
               {/each}
             </ul>
           </details>
-          <details class="fold" open={opened.has("work:特別依頼")}>
+          <details class="fold" data-fold="work:特別依頼" open={opened.has("work:特別依頼")}>
             <summary onclick={(event) => toggle(event, "work:特別依頼")}
               >{@render chevron()}
               <h3>特別依頼</h3></summary
@@ -1246,7 +1279,11 @@
           </details>
           <h2 class="category">月末</h2>
           {#each snapshot.month_end ?? [] as shop (shop.name)}
-            <details class="fold" open={opened.has(`work:月末:${shop.name}`)}>
+            <details
+              class="fold"
+              data-fold={`work:月末:${shop.name}`}
+              open={opened.has(`work:月末:${shop.name}`)}
+            >
               <summary onclick={(event) => toggle(event, `work:月末:${shop.name}`)}
                 >{@render chevron()}
                 <h3>

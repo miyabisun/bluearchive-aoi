@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// The screens told by their title, by the title.
-pub const TITLES: [&str; 1] = ["学園交流会"];
+pub const TITLES: [&str; 2] = ["学園交流会", "指名手配"];
 
 /// Where the title is written, in units (see `screen::unit`), kept to the
 /// top. Measured on 2026-11-06 at 2370x1333: "学園交流会" from 0.150 to 0.326
@@ -33,8 +33,9 @@ const GAP: f32 = 0.011;
 /// Parts of the letters smaller than this share of the unit squared are specks.
 const SPECK: f32 = 6.0 / (1250.0 * 1250.0);
 /// No letter of the title lies farther than this from the word's. Measured on
-/// 2026-11-06 over the fixtures: 学園交流会 drawn from 1500 to 2222 wide within
-/// 10.8, the nearest other screen's title (アイテム) 85 or farther.
+/// 2026-11-06 over the fixtures: 学園交流会 and 指名手配 drawn from 1500 to 2222
+/// wide within 10.8 of their own titles, 61 or farther from each other's, and
+/// the nearest other screen's title (アイテム) 68 or farther.
 const WORST: f32 = 24.0;
 
 /// The title's dark letters on the light top bar.

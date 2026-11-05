@@ -1934,21 +1934,103 @@ test("the work tab opens the fold of the screen or month-end shop the game comes
     .click();
   for (let i = 0; i < 3; i++) await at(scrimmage);
   await expect(fold(/^学園交流会$/)).not.toHaveAttribute("open");
-  // Each month-end shop opens its own fold: the 指名手配 shop's, not the daily stages'.
+  // Each month-end shop opens its own fold, the one before closing: the 指名手配 shop's,
+  // not the daily stages'.
   for (const name of shops) {
     await at({ kind: "shop", name }, reading("shops"));
     await expect(fold(new RegExp(`^ショップ: ${name}`))).toHaveAttribute("open", "");
+    await expect(page.locator(".work details[open]")).toHaveCount(1);
   }
   await expect(fold(/^指名手配$/)).not.toHaveAttribute("open");
-  // A shop the tab has no fold for opens nothing.
+  // The 指名手配 stages, told by the screen's title, open the daily fold.
+  await at({ kind: "screen", name: "指名手配" });
+  await expect(fold(/^指名手配$/)).toHaveAttribute("open", "");
+  // A shop the tab has no fold for opens nothing and closes nothing.
   await at({ kind: "shop", name: "カケラ(文字)" }, reading("shops"));
-  await expect(page.locator(".work details[open]")).toHaveCount(shops.length);
+  await expect(page.locator(".work details[open]")).toHaveCount(1);
+  await expect(fold(/^指名手配$/)).toHaveAttribute("open", "");
   // While another tab is open, the game coming there opens nothing.
   await at(null);
   await page.getByRole("tab", { name: "アイテム" }).click();
   await at(scrimmage);
   await page.getByRole("tab", { name: "お仕事" }).click();
   await expect(fold(/^学園交流会$/)).not.toHaveAttribute("open");
+});
+
+test("the work tab shows the fold the game comes to at its top, others closed, unless the menu says not to", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 900, height: 600 });
+  const card = (i) => ({
+    id: 20000 + i,
+    name: `品${i}`,
+    icon: "",
+    coin: 0,
+    left: 1,
+    price: 10,
+    amount: 1,
+    reserved: false,
+    barred: false,
+    held: null,
+    eleph: false,
+    rarity: "N",
+  });
+  const month_end = ["総力戦", "大決戦", "合同火力演習", "指名手配", "熟達証書"].map((name, i) => ({
+    name,
+    read_at: i === 0 ? "2026-11-01 11:32:00" : null,
+    coins: [{ name: "総力戦コイン", icon: "", held: { exact: 600 }, need: 0, short: false }],
+    cards: i === 0 ? Array.from({ length: 40 }, (_, j) => card(j)) : [],
+  }));
+  const snapshot = { status: { state: "other_screen" }, items, equipment, kinds, work, month_end };
+  const at = (place) => page.evaluate((s) => window.__AOI_PUSH__(s), { ...snapshot, place });
+  const fold = (name) =>
+    page.locator(".work details", { has: page.locator("summary h3", { hasText: name }) });
+  const frame = page.locator(".table-scroll.work");
+  const top = (locator) => locator.evaluate((e) => e.getBoundingClientRect().top);
+  await open(page, snapshot, "お仕事");
+  // Opened by hand, the long ones push the month-end shops out of sight.
+  for (const name of [/^任務 Normal$/, /^特別依頼$/, /^学園交流会$/]) {
+    await fold(name).locator("summary").click();
+  }
+  // The game comes to the 総力戦 shop: the others close, and its heading comes to the frame's top.
+  await at({ kind: "shop", name: "総力戦" });
+  await expect(page.locator(".work details[open]")).toHaveCount(1);
+  await expect(fold(/^ショップ: 総力戦/)).toHaveAttribute("open", "");
+  await expect
+    .poll(async () => Math.abs((await top(fold(/^ショップ: 総力戦/))) - (await top(frame))))
+    .toBeLessThan(2);
+  // Held as frames come.
+  for (let i = 0; i < 3; i++) await at({ kind: "shop", name: "総力戦" });
+  await expect(page.locator(".work details[open]")).toHaveCount(1);
+  // The menu turns it off: する at first.
+  await page.getByRole("button", { name: "メニュー" }).click();
+  const group = page.getByRole("group", { name: "お仕事の自動開閉" });
+  await expect(group.getByRole("menuitemradio")).toHaveText(["する", "しない"]);
+  await expect(group.getByRole("menuitemradio", { name: "する" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await group.getByRole("menuitemradio", { name: "しない" }).click();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  // Off, the game coming to a screen opens, closes and scrolls nothing.
+  await fold(/^任務 Normal$/)
+    .locator("summary")
+    .click();
+  const scrolled = await frame.evaluate((e) => e.scrollTop);
+  await at(null);
+  await at({ kind: "screen", name: "学園交流会" });
+  await at({ kind: "shop", name: "大決戦" });
+  await expect(page.locator(".work details[open]")).toHaveCount(2);
+  await expect(fold(/^学園交流会$/)).not.toHaveAttribute("open");
+  await expect(fold(/^ショップ: 大決戦/)).not.toHaveAttribute("open");
+  expect(await frame.evaluate((e) => e.scrollTop)).toBe(scrolled);
+  // Kept for the next start.
+  await page.reload();
+  await page.getByRole("button", { name: "メニュー" }).click();
+  await expect(group.getByRole("menuitemradio", { name: "しない" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
 });
 
 test("keeps the tab chosen when the game shows another list", async ({ page }) => {

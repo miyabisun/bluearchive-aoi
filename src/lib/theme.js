@@ -18,6 +18,17 @@ export const CURSORS = [
 
 const KEY = "aoi-theme";
 const CURSOR_KEY = "aoi-cursor";
+const WORK_FOLLOW_KEY = "aoi-work-follow";
+
+/**
+ * Whether the work tab follows the game (the user's of 2026-11-06 「お仕事の自動開閉」): opens the fold
+ * of the screen the game comes to, closing the others and bringing it to the top, or leaves the folds
+ * as they are.
+ */
+export const WORK_FOLLOW = [
+  { id: "on", name: "する" },
+  { id: "off", name: "しない" },
+];
 
 /** What was kept under `key`, `fallback` when nothing was or it cannot be read. */
 function recall(key, fallback) {
@@ -58,4 +69,14 @@ export function storedCursor() {
 /** Keeps the cursor chosen for the next start. */
 export function keepCursor(cursor) {
   remember(CURSOR_KEY, cursor);
+}
+
+/** Whether the work tab follows the game, as chosen before: it does when nothing was or it cannot be read. */
+export function storedWorkFollow() {
+  return recall(WORK_FOLLOW_KEY, "on");
+}
+
+/** Keeps whether the work tab follows the game for the next start. */
+export function keepWorkFollow(follow) {
+  remember(WORK_FOLLOW_KEY, follow);
 }
