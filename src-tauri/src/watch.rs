@@ -67,6 +67,15 @@ pub enum Screen {
     Shops,
 }
 
+/// Where the game is, for the window to follow (its work tab opens what the
+/// game shows): a shop by its name, or a screen by its title (see `title`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "name", rename_all = "snake_case")]
+pub enum Place {
+    Shop(&'static str),
+    Screen(&'static str),
+}
+
 /// A student seen, for the window.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct StudentRow {
@@ -83,6 +92,8 @@ pub enum Update {
     Students(Vec<StudentRow>),
     Credits(u64),
     Shops(Vec<ShopRow>),
+    /// Where the game is now, or nowhere the window follows.
+    Place(Option<Place>),
     Phone(Link),
     Cast(Cast),
 }
@@ -242,31 +253,49 @@ fn shops_changed(recognizer: &Recognizer, shelves: &mut Shelves, items: &mut Tal
 /// Frames between two readings of the credits (about two a second).
 const CREDITS_EVERY: u32 = 15;
 
-/// The credits read, taken once `CONFIRM` readings in a row agree.
-struct Credits {
-    known: Option<u64>,
-    streak: Option<(u64, u8)>,
+/// What the frames show, taken once `CONFIRM` readings in a row agree: a
+/// frame read otherwise now and then changes nothing.
+struct Steady<T> {
+    known: T,
+    streak: Option<(T, u8)>,
 }
 
-impl Credits {
-    /// Take one reading; the credits when they are taken and differ from the
-    /// known ones.
-    fn observe(&mut self, read: Option<u64>) -> Option<u64> {
-        let read = read?;
+impl<T: Clone + PartialEq> Steady<T> {
+    fn new(known: T) -> Self {
+        Self {
+            known,
+            streak: None,
+        }
+    }
+
+    /// Take one reading; what is taken when it differs from the known.
+    fn observe(&mut self, read: T) -> Option<T> {
         let count = match &mut self.streak {
             Some((value, count)) if *value == read => {
                 *count = count.saturating_add(1);
                 *count
             }
             _ => {
-                self.streak = Some((read, 1));
+                self.streak = Some((read.clone(), 1));
                 1
             }
         };
-        (count == CONFIRM && self.known != Some(read)).then(|| {
-            self.known = Some(read);
+        (count == CONFIRM && self.known != read).then(|| {
+            self.known = read.clone();
             read
         })
+    }
+}
+
+/// The credits read, taken as `Steady`; a frame they read nothing from does
+/// not part the readings.
+struct Credits(Steady<Option<u64>>);
+
+impl Credits {
+    /// Take one reading; the credits when they are taken and differ from the
+    /// known ones.
+    fn observe(&mut self, read: Option<u64>) -> Option<u64> {
+        self.0.observe(Some(read?)).flatten()
     }
 }
 
@@ -370,6 +399,7 @@ struct Read {
     roster: Roster,
     credits: Credits,
     shelves: Shelves,
+    place: Steady<Option<Place>>,
 }
 
 impl Read {
@@ -383,10 +413,8 @@ impl Read {
                 ),
             ]),
             roster: Roster::seeded(kept.students),
-            credits: Credits {
-                known: kept.credits,
-                streak: None,
-            },
+            credits: Credits(Steady::new(kept.credits)),
+            place: Steady::new(None),
             shelves: Shelves::seeded(kept.shops),
         }
     }
@@ -414,6 +442,14 @@ impl Read {
             && let Some(changed) = self.credits.observe(recognizer.read_credits(&shot))
         {
             board.changed(Update::Credits(changed));
+        }
+        let place = match &read {
+            Some(Shown::Shop(seen)) => Some(Place::Shop(seen.shop)),
+            Some(_) => None,
+            None => recognizer.read_title(&shot).map(Place::Screen),
+        };
+        if let Some(place) = self.place.observe(place) {
+            board.changed(Update::Place(place));
         }
         board.update(|seen| {
             seen.sight = read.as_ref().map_or(Sight::Other, |frame| {
@@ -482,7 +518,7 @@ impl Watcher {
 
 #[cfg(test)]
 mod tests {
-    use super::{Game, Screen, Seen, Sight, Status, status};
+    use super::{Game, Place, Screen, Seen, Sight, Status, Steady, status};
 
     /// One game is read at a time: the phone's while its screen comes in, by
     /// ADB or from a streaming app.
@@ -503,10 +539,7 @@ mod tests {
 
     #[test]
     fn the_credits_are_taken_once_readings_agree_and_change() {
-        let mut credits = super::Credits {
-            known: Some(100),
-            streak: None,
-        };
+        let mut credits = super::Credits(Steady::new(Some(100)));
         let reads = [Some(250), None, Some(250), Some(250), Some(250), Some(250)];
         let taken: Vec<Option<u64>> = reads.into_iter().map(|r| credits.observe(r)).collect();
         assert_eq!(taken, [None, None, None, Some(250), None, None]);
@@ -515,6 +548,27 @@ mod tests {
             .map(|r| credits.observe(r))
             .collect();
         assert_eq!(again, [None, None, None, None]);
+    }
+
+    /// Where the game is changes once frames agree on it, a shop or a screen
+    /// or nowhere followed; a frame read otherwise now and then is no change.
+    #[test]
+    fn the_place_is_taken_once_readings_agree_and_change() {
+        let (shop, title) = (
+            Some(Place::Shop("総力戦")),
+            Some(Place::Screen("学園交流会")),
+        );
+        let mut place = Steady::new(None);
+        let mut taken = |reads: &[Option<Place>]| -> Vec<Option<Option<Place>>> {
+            reads.iter().map(|&r| place.observe(r)).collect()
+        };
+        assert_eq!(
+            taken(&[shop, shop, shop, shop]),
+            [None, None, Some(shop), None]
+        );
+        assert_eq!(taken(&[None, shop, shop, shop]), [None, None, None, None]);
+        assert_eq!(taken(&[None, None, None]), [None, None, Some(None)]);
+        assert_eq!(taken(&[title, title, title]), [None, None, Some(title)]);
     }
 
     #[test]

@@ -25,7 +25,7 @@ use crate::{
     supply::ProcureLine,
     tally::Tally,
     update,
-    watch::{self, Status, StudentRow, Update},
+    watch::{self, Place, Status, StudentRow, Update},
     work::{HardCard, WorkRows},
 };
 
@@ -33,6 +33,8 @@ use crate::{
 #[derive(Debug, Clone, Serialize)]
 pub struct Snapshot {
     status: Status,
+    /// Where the game is, for the work tab to open what it shows.
+    place: Option<Place>,
     items: Vec<Row>,
     equipment: Vec<Row>,
     students: Vec<StudentRow>,
@@ -101,6 +103,7 @@ impl Snapshot {
         };
         let mut snapshot = Self {
             status: Status::NoGame,
+            place: None,
             items: rows(List::Items, &kept.items),
             equipment: rows(List::Equipment, &kept.equipment),
             students: watch::student_rows(recognizer, &kept.students),
@@ -526,6 +529,8 @@ pub fn run(context: tauri::Context) {
                         snapshot.phone = link;
                     } else if let Some(Update::Cast(cast)) = update {
                         snapshot.cast = cast;
+                    } else if let Some(Update::Place(place)) = update {
+                        snapshot.place = place;
                     } else if let Some(update) = update {
                         let read = Some(now());
                         match update {
@@ -547,7 +552,9 @@ pub fn run(context: tauri::Context) {
                             }
                             // Each shop carries when it was read.
                             Update::Shops(rows) => snapshot.shops = rows,
-                            Update::Phone(_) | Update::Cast(_) => unreachable!("taken above"),
+                            Update::Phone(_) | Update::Cast(_) | Update::Place(_) => {
+                                unreachable!("taken above")
+                            }
                         }
                         snapshot.rework(&planner);
                         snapshot.keep_error = keep_in(&places, &snapshot)

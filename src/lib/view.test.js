@@ -15,6 +15,7 @@ import {
   tierCell,
   unknownText,
   behindText,
+  workFold,
   commissionRows,
   currencyRows,
   currencyCoins,
@@ -536,6 +537,24 @@ describe("plan", () => {
         { id: 10, name: "アル", part: "level" },
       ]),
     ).toEqual(["ツムギ: EX・装備3", "アル: Lv"]);
+  });
+});
+
+describe("the work tab follows the game", () => {
+  const monthEnd = ["総力戦", "大決戦", "合同火力演習", "指名手配", "熟達証書"].map((name) => ({
+    name,
+  }));
+  it("opens the fold of the screen or the month-end shop the game shows", () => {
+    expect(workFold({ kind: "screen", name: "学園交流会" }, monthEnd)).toBe("work:学園交流会");
+    expect(workFold({ kind: "shop", name: "総力戦" }, monthEnd)).toBe("work:月末:総力戦");
+    expect(workFold({ kind: "shop", name: "熟達証書" }, monthEnd)).toBe("work:月末:熟達証書");
+    // The 指名手配 shop, not the daily 指名手配 stages.
+    expect(workFold({ kind: "shop", name: "指名手配" }, monthEnd)).toBe("work:月末:指名手配");
+  });
+  it("opens nothing where the work tab has no fold for it", () => {
+    expect(workFold({ kind: "shop", name: "カケラ(文字)" }, monthEnd)).toBe(null);
+    expect(workFold({ kind: "screen", name: "任務" }, monthEnd)).toBe(null);
+    expect(workFold(null, monthEnd)).toBe(null);
   });
 });
 

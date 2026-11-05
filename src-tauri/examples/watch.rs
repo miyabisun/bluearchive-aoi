@@ -47,6 +47,7 @@ fn main() {
                         serde_json::to_string(&link).expect("the value serializes to JSON")
                     );
                 }
+                Some(aoi::watch::Update::Place(place)) => println!("{at:6.1}s place {place:?}"),
                 Some(aoi::watch::Update::Cast(Cast::Waiting { url, problem, .. })) => {
                     println!("{at:6.1}s waiting at {url} {problem:?}");
                 }

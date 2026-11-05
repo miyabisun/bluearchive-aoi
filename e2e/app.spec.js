@@ -1911,6 +1911,46 @@ test("reserves a month-end card by pressing it, kept as new frames come", async 
   await expect(page.locator(".work .tiers").first()).toBeHidden();
 });
 
+test("the work tab opens the fold of the screen or month-end shop the game comes to, once", async ({
+  page,
+}) => {
+  const shops = ["総力戦", "大決戦", "合同火力演習", "指名手配", "熟達証書"];
+  const month_end = shops.map((name) => ({ name, read_at: null, coins: [], cards: [] }));
+  const snapshot = { status: { state: "other_screen" }, items, equipment, kinds, work, month_end };
+  /** A frame of the game at `place`, as the watcher sends it. */
+  const at = (place, status = { state: "other_screen" }) =>
+    page.evaluate((s) => window.__AOI_PUSH__(s), { ...snapshot, place, status });
+  const fold = (name) =>
+    page.locator(".work details", { has: page.locator("summary h3", { hasText: name }) });
+  const scrimmage = { kind: "screen", name: "学園交流会" };
+  await open(page, snapshot, "お仕事");
+  await expect(page.locator(".work details[open]")).toHaveCount(0);
+  // The game comes to 学園交流会: its fold opens.
+  await at(scrimmage);
+  await expect(fold(/^学園交流会$/)).toHaveAttribute("open", "");
+  // Closed there by the user, it stays closed as frames of the same screen come.
+  await fold(/^学園交流会$/)
+    .locator("summary")
+    .click();
+  for (let i = 0; i < 3; i++) await at(scrimmage);
+  await expect(fold(/^学園交流会$/)).not.toHaveAttribute("open");
+  // Each month-end shop opens its own fold: the 指名手配 shop's, not the daily stages'.
+  for (const name of shops) {
+    await at({ kind: "shop", name }, reading("shops"));
+    await expect(fold(new RegExp(`^ショップ: ${name}`))).toHaveAttribute("open", "");
+  }
+  await expect(fold(/^指名手配$/)).not.toHaveAttribute("open");
+  // A shop the tab has no fold for opens nothing.
+  await at({ kind: "shop", name: "カケラ(文字)" }, reading("shops"));
+  await expect(page.locator(".work details[open]")).toHaveCount(shops.length);
+  // While another tab is open, the game coming there opens nothing.
+  await at(null);
+  await page.getByRole("tab", { name: "アイテム" }).click();
+  await at(scrimmage);
+  await page.getByRole("tab", { name: "お仕事" }).click();
+  await expect(fold(/^学園交流会$/)).not.toHaveAttribute("open");
+});
+
 test("keeps the tab chosen when the game shows another list", async ({ page }) => {
   const snapshot = { status: reading("items"), items, equipment, students };
   await open(page, snapshot, "生徒");

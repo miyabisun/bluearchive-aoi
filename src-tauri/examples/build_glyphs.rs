@@ -13,6 +13,7 @@
 //!   fixture's labels, but for at most one digit not yet known, are taken as
 //!   the game draws them; again, while that takes more.
 //! - The shops' names, as each shop's chosen menu entry draws them.
+//! - The screens' titles, as the top left draws them (`tests/fixtures/titles.json`).
 //! - The students' names, drawn with Noto Sans JP Regular, and the letters the
 //!   tuning screens draw of them.
 //!
@@ -40,6 +41,7 @@ use aoi::{
     },
     screen, shop,
     student::{self, Label, LevelLabel},
+    title,
 };
 use image::{
     Rgb, RgbImage,
@@ -172,6 +174,14 @@ struct ShopLabel {
     #[serde(default)]
     held: Option<Vec<Option<u64>>>,
     offers: Vec<OfferLabel>,
+}
+
+/// A screen labeled with the title its top left writes (`tests/fixtures/titles.json`).
+#[derive(Deserialize)]
+struct TitleLabel {
+    image: String,
+    role: String,
+    title: String,
 }
 
 #[derive(Deserialize)]
@@ -722,6 +732,21 @@ fn dark_digits_and_shops(
     }
 }
 
+/// Adds the screens' titles as the tuning screens' top left draws them.
+fn titles(bank: &mut Bank, labels: &[TitleLabel], open: &dyn Fn(&str) -> RgbImage) {
+    for label in labels.iter().filter(|l| l.role == "tune") {
+        let id = title::TITLES
+            .iter()
+            .position(|t| *t == label.title)
+            .expect("a title label names one of title::TITLES") as i64;
+        if let Some(word) =
+            title::ink(&open(&label.image)).and_then(|ink| entry(bank, id, &label.title, &ink))
+        {
+            bank.index.titles.push(word);
+        }
+    }
+}
+
 /// Drops the shop bar's letters as near a digit as `APART`: no reference, as a digit
 /// told as one would leave the number short.
 fn drop_bar_letters_near_digits(cuts: &mut Cuts) {
@@ -758,6 +783,7 @@ fn main() {
     let credits: Vec<CreditsLabel> = read_json(&dir.join("credits.json"));
     let plates: Vec<NameLabel> = read_json(&dir.join("names.json"));
     let shops: Vec<ShopLabel> = read_json(&dir.join("shops.json"));
+    let title_labels: Vec<TitleLabel> = read_json(&dir.join("titles.json"));
     let weights = ["Regular", "Medium", "Bold"].map(weight);
     // The fixtures' cards at their own size, and where their values were
     // found among their shapes.
@@ -808,10 +834,11 @@ fn main() {
         for &at in std::iter::once(&width).chain(between) {
             let open = drawn(at);
             student_styles(&mut cuts, &labels, &levels, &open);
-            // The shops' names once, as drawn at the width read.
+            // The shops' names and the titles once, as drawn at the width read.
             let mut words = Bank::default();
             let names_to = if at == width { &mut bank } else { &mut words };
             dark_digits_and_shops(&mut cuts, names_to, &credits, &shops, &open);
+            titles(names_to, &title_labels, &open);
             take_scaled_card_digits(&mut cuts, &at_window, &cards(&shops, &open));
         }
         stream_styles(&mut cuts, &labels, &levels, &dir, width);
@@ -837,11 +864,12 @@ fn main() {
         std::fs::write(root.join("data").join(index_file), index + "\n")
             .expect("the file is written");
         println!(
-            "{width}: {} tiles: {} names, {} letters of the game, {} shops",
+            "{width}: {} tiles: {} names, {} letters of the game, {} shops, {} titles",
             bank.tiles.len(),
             bank.index.names.len(),
             bank.index.letters.len(),
-            bank.index.shops.len()
+            bank.index.shops.len(),
+            bank.index.titles.len()
         );
     }
 }

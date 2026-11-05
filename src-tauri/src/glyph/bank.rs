@@ -47,6 +47,8 @@ pub struct Index {
     pub letters: BTreeMap<char, Vec<usize>>,
     /// The shops' names as the menu draws them.
     pub shops: Vec<Word>,
+    /// The screens' titles as their top left draws them (see `title`).
+    pub titles: Vec<Word>,
 }
 
 /// A word as `word::compare` takes it: what it stands for and how it reads,

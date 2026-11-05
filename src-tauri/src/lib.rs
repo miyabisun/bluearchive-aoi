@@ -31,6 +31,7 @@ pub mod strategy;
 pub mod student;
 pub mod supply;
 pub mod tally;
+pub mod title;
 pub mod update;
 pub mod video;
 pub mod watch;
@@ -1003,6 +1004,11 @@ impl Recognizer {
         let texts = self.texts(image);
         self.goods
             .read(image, &texts.glyphs, &texts.fonts, &self.prices)
+    }
+
+    /// The screen whose title the top left writes (see `title`).
+    pub fn read_title(&self, image: &RgbImage) -> Option<&'static str> {
+        title::read(image, &self.texts(image).glyphs)
     }
 
     pub fn students(&self) -> &[(i64, String)] {

@@ -76,6 +76,7 @@
     tierCell,
     unknownText,
     behindText,
+    workFold,
     updateText,
   } from "./lib/view.js";
 
@@ -177,6 +178,8 @@
 
   let snapshot = $state({
     status: { state: "no_game" },
+    /** Where the game is: a shop or a screen told by its title (none elsewhere). */
+    place: /** @type {any} */ (null),
     items: [],
     equipment: [],
     students: [],
@@ -321,6 +324,19 @@
     if (opened.has(key)) opened.delete(key);
     else opened.add(key);
   }
+
+  /**
+   * The work tab's fold of where the game is, opened as the game comes there while the
+   * tab is open (the user's 2026-11-06 「お仕事タブを開いている時は、各項目に画面遷移したらそのタブを開く」):
+   * once, so one the user closes there stays closed.
+   */
+  let followed = /** @type {string | null} */ (null);
+  $effect(() => {
+    const fold = workFold(snapshot.place, snapshot.month_end ?? []);
+    if (fold === followed) return;
+    followed = fold;
+    if (fold && view.tab === "work") opened.add(fold);
+  });
 
   const status = $derived(statusView(snapshot));
   const paused = $derived(snapshot.status.state === "paused");

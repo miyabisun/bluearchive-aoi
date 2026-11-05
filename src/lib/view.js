@@ -570,6 +570,24 @@ export function unknownText(rows) {
   return [...byStudent.values()].map(({ name, parts }) => `${name}: ${parts.join("・")}`);
 }
 
+/** The work tab's folds of the screens told by their title (`title::TITLES`). */
+const WORK_SCREENS = { 学園交流会: "work:学園交流会" };
+
+/**
+ * The work tab's fold for where the game is (`place`, the snapshot's): a screen
+ * told by its title, or a month-end shop among `monthEnd`; `null` where the tab
+ * has none.
+ * @param {{ kind: "shop" | "screen", name: string } | null} place
+ * @param {{ name: string }[]} monthEnd
+ */
+export function workFold(place, monthEnd) {
+  if (place?.kind === "screen") return WORK_SCREENS[place.name] ?? null;
+  if (place?.kind === "shop" && monthEnd.some((shop) => shop.name === place.name)) {
+    return `work:月末:${place.name}`;
+  }
+  return null;
+}
+
 /**
  * What the 育成 tab tells of the snapshot's `plan_behind`: when the reads it counts from were
  * ("11/03 14:37"), what was read otherwise since (students, shops, then 所持数) and that 再読込

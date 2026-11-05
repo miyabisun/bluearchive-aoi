@@ -9,7 +9,8 @@
 //! the shop screen is read from (`tests/fixtures/shops.json`); with `list`, the
 //! item or equipment list's panel, read with the list the screen names
 //! (`tests/fixtures/tablet.json`); with `name`, the name plate's name alone
-//! (`tests/fixtures/names.json`).
+//! (`tests/fixtures/names.json`); with `title`, the title at the top left
+//! (`tests/fixtures/titles.json`).
 
 use std::path::Path;
 
@@ -20,7 +21,7 @@ use aoi::{
     glyph::bank::Bank,
     grid,
     screen::{self, Region},
-    shop, student,
+    shop, student, title,
 };
 
 /// Room kept around each area, in units (see `screen::unit`).
@@ -46,6 +47,7 @@ fn kept(image: &image::RgbImage, only: Option<&str>) -> Vec<(f32, f32, f32, f32)
         Some("level") => vec![student::LEVEL],
         Some("name") => vec![student::NAME],
         Some("shop") => shop::areas(),
+        Some("title") => vec![title::AREA],
         Some(_) => vec![credit::NUMBER, credit::ICON],
         None => student::areas(),
     };
@@ -113,12 +115,12 @@ fn main() {
     let (from, to, only) = match &args[..] {
         [from, to] => (from, to, None),
         [from, to, only]
-            if ["level", "credit", "shop", "list", "name"].contains(&only.as_str()) =>
+            if ["level", "credit", "shop", "list", "name", "title"].contains(&only.as_str()) =>
         {
             (from, to, Some(only.as_str()))
         }
         _ => panic!(
-            "usage: mask_fixture <screenshot.png> <fixture.png> [level|credit|shop|list|name]"
+            "usage: mask_fixture <screenshot.png> <fixture.png> [level|credit|shop|list|name|title]"
         ),
     };
     let image = image::open(from).expect("the image opens").to_rgb8();
@@ -146,6 +148,12 @@ fn main() {
             student::level(&image, &fonts),
             student::level(&read, &fonts),
         );
+        assert_eq!(whole, part, "{from} reads otherwise once masked");
+        return save(&masked, to);
+    }
+    if only == Some("title") {
+        let (whole, part) = (title::ink(&image), title::ink(&read));
+        assert!(whole.is_some(), "{from} shows no title");
         assert_eq!(whole, part, "{from} reads otherwise once masked");
         return save(&masked, to);
     }
