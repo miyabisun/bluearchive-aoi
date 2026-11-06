@@ -80,12 +80,15 @@ jobs:
     env:
       ASSET: bluearchive-aoi-universal-apple-darwin.dmg
       APP: bluearchive-aoi.app
+      # GPUI's macOS part (gpui-pre-macos 0.3.11) calls Option::map_or_default, stable from Rust
+      # 1.98 (v0.3.0's dmg failed on 1.96): this job takes 1.98.1 over rust-toolchain.toml.
+      RUSTUP_TOOLCHAIN: 1.98.1
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.96.0
+        uses: dtolnay/rust-toolchain@1.98.1
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
