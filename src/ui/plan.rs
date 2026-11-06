@@ -211,6 +211,16 @@ impl Aoi {
                     .into_any_element(),
             );
             sections.extend(self.procure(theme, cx));
+            let candidates = view::bounty_candidates(&self.shown.plan, &self.shown.work.bounties);
+            if !candidates.is_empty() {
+                sections.push(
+                    section_title("日々の行動")
+                        .mt(SP_5)
+                        .mb(SP_2)
+                        .into_any_element(),
+                );
+                sections.push(daily(theme, &candidates).into_any_element());
+            }
         }
         super::scroll("plan-scroll", &self.content)
             .on_scroll(cx.listener(|this, _, _, cx| {
@@ -1048,6 +1058,60 @@ impl Aoi {
             .into_any_element(),
         )
     }
+}
+
+/// What falls short that the bounties (指名手配), played every day, drop: a line each, with the
+/// places that drop it (the user's of 2026-10-13 「毎日プレイ出来る「指名手配」の項目で…参加すべき
+/// ステージの候補を表示する」).
+fn daily(theme: &Theme, candidates: &[view::BountyCandidate]) -> impl IntoElement + use<> {
+    let rule = theme.border;
+    let head = div()
+        .flex()
+        .py(SP_2)
+        .border_b_1()
+        .border_color(rule)
+        .text_size(FS_SM)
+        .text_color(theme.muted)
+        .child(div().flex_1().child(text("足りないもの")))
+        .child(div().w(px(64.)).flex().justify_end().child(text("不足")))
+        .child(div().flex_1().pl(SP_3).child(text("指名手配")));
+    let rows = candidates.iter().map(|c| {
+        let at = format!("daily-{}", c.id);
+        div()
+            .flex()
+            .items_center()
+            .py(SP_2)
+            .border_b_1()
+            .border_color(rule)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(8. * 16.))
+                    .flex()
+                    .items_center()
+                    .gap(SP_2)
+                    .child(icons::icon(&c.icon, px(28.)))
+                    .child(read(format!("{at}-name"), c.name.clone())),
+            )
+            .child(
+                div()
+                    .w(px(64.))
+                    .flex()
+                    .justify_end()
+                    .font_features(tabular())
+                    .text_color(theme.danger)
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(read(format!("{at}-short"), c.short.clone())),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .pl(SP_3)
+                    .text_size(FS_SM)
+                    .child(read(format!("{at}-places"), c.places.join("・"))),
+            )
+    });
+    div().flex().flex_col().child(head).children(rows)
 }
 
 /// A target's column's width: the star's wider for its stars.

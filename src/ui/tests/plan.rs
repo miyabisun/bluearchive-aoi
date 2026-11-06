@@ -193,3 +193,42 @@ fn makes_up_what_is_short_by_hand_and_settles_it(cx: &mut TestAppContext) {
     assert!(!shows(vcx, "+20"), "リセット takes every payment back");
     assert!(!shows(vcx, "精算"), "nothing paid, no settlement");
 }
+
+#[gpui::test]
+fn names_the_bounties_to_play_for_what_falls_short(cx: &mut TestAppContext) {
+    let (_, core, vcx) = marked(cx);
+    let cell = |id: i64| crate::work::HeldCell {
+        id,
+        name: format!("item {id}"),
+        icon: format!("icon_{id}"),
+        held: None,
+        need: None,
+    };
+    set(&core, vcx, |s| {
+        s.plan = vec![crate::plan::NeedRow {
+            kind: Kind::Item,
+            id: 4033,
+            name: "最上級技術ノート（ゲヘナ）".to_owned(),
+            icon: "item_icon_skillbook_gehenna_3".to_owned(),
+            family: None,
+            need: 30,
+            have: Some(crate::plan::Held::Exact(12)),
+        }];
+        s.work.bounties = vec![
+            crate::work::PlaceRow {
+                name: "指名手配：ハイウェイ".to_owned(),
+                kinds: vec![[Some(cell(4033)), None, None, None]],
+            },
+            crate::work::PlaceRow {
+                name: "指名手配：砂漠の鉄道".to_owned(),
+                kinds: vec![[Some(cell(4033)), None, None, None]],
+            },
+        ];
+    });
+    assert!(shows(vcx, "日々の行動"), "the section");
+    assert!(shows(vcx, "18"), "how many are short");
+    assert!(
+        shows(vcx, "ハイウェイ・砂漠の鉄道"),
+        "the bounties that drop it"
+    );
+}

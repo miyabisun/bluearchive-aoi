@@ -2384,3 +2384,80 @@ fn cast_note_adds_what_went_wrong_with_the_last_stream_or_how_to_send_the_screen
     );
     assert_eq!(cast_note(&Cast::Off), None);
 }
+
+/// A line of the plan for an item: `need` against `have` held (none: never read).
+fn need_line(id: i64, name: &str, need: u64, have: Option<u64>) -> crate::plan::NeedRow {
+    crate::plan::NeedRow {
+        kind: crate::plan::Kind::Item,
+        id,
+        name: name.to_owned(),
+        icon: format!("icon_{id}"),
+        family: None,
+        need,
+        have: have.map(crate::plan::Held::Exact),
+    }
+}
+
+/// A bounty dropping the items `ids`, a kind each.
+fn bounty(name: &str, ids: &[i64]) -> crate::work::PlaceRow {
+    let cell = |id: i64| crate::work::HeldCell {
+        id,
+        name: format!("item {id}"),
+        icon: format!("icon_{id}"),
+        held: None,
+        need: None,
+    };
+    crate::work::PlaceRow {
+        name: name.to_owned(),
+        kinds: ids
+            .iter()
+            .map(|&id| [Some(cell(id)), None, None, None])
+            .collect(),
+    }
+}
+
+#[test]
+fn bounty_candidates_name_the_bounties_dropping_what_falls_short() {
+    let plan = [
+        need_line(4033, "最上級技術ノート（ゲヘナ）", 30, Some(12)),
+        need_line(3013, "上級戦術教育BD（ゲヘナ）", 10, Some(4)),
+    ];
+    let bounties = [
+        bounty("指名手配：ハイウェイ", &[4033]),
+        bounty("指名手配：砂漠の鉄道", &[3013, 4033]),
+        bounty("指名手配：教室", &[9999]),
+    ];
+    let found = bounty_candidates(&plan, &bounties);
+    let seen: Vec<(i64, &str, Vec<&str>)> = found
+        .iter()
+        .map(|c| {
+            (
+                c.id,
+                c.short.as_str(),
+                c.places.iter().map(String::as_str).collect(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        seen,
+        [
+            (4033, "18", vec!["ハイウェイ", "砂漠の鉄道"]),
+            (3013, "6", vec!["砂漠の鉄道"]),
+        ],
+        "each line short, in the plan's order, with the bounties that drop it"
+    );
+}
+
+#[test]
+fn bounty_candidates_leave_out_what_is_enough_unread_or_dropped_nowhere() {
+    let plan = [
+        need_line(4033, "enough", 30, Some(30)),
+        need_line(3013, "unread", 10, None),
+        need_line(8000, "nowhere", 5, Some(0)),
+    ];
+    let bounties = [bounty("指名手配：ハイウェイ", &[4033, 3013])];
+    assert!(
+        bounty_candidates(&plan, &bounties).is_empty(),
+        "nothing short and dropped by a bounty"
+    );
+}

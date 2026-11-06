@@ -2001,3 +2001,48 @@ pub fn qr_squares(modules: &[Vec<bool>]) -> Vec<(usize, usize)> {
 
 #[cfg(test)]
 mod tests;
+
+/// A line of the plan that falls short, with the bounties that drop it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BountyCandidate {
+    pub id: i64,
+    pub name: String,
+    pub icon: String,
+    /// How many are short.
+    pub short: String,
+    /// The bounties' places that drop it, as their names read without "指名手配：".
+    pub places: Vec<String>,
+}
+
+/// The plan's item lines short of what they need that a bounty drops, each with those bounties'
+/// places (the user's of 2026-10-13: 「毎日プレイ出来る「指名手配」の項目で学園の技術ノート・BDや
+/// オーパーツで参加すべきステージの候補を表示する」). Lines never read stay out: how short they fall
+/// is not known.
+pub fn bounty_candidates(plan: &[NeedRow], bounties: &[PlaceRow]) -> Vec<BountyCandidate> {
+    plan.iter()
+        .filter(|line| line.kind == crate::plan::Kind::Item)
+        .filter_map(|line| {
+            let held = line.have?.amount();
+            let short = line.need.checked_sub(held).filter(|&n| n > 0)?;
+            let places: Vec<String> = bounties
+                .iter()
+                .filter(|place| {
+                    place
+                        .kinds
+                        .iter()
+                        .flatten()
+                        .flatten()
+                        .any(|cell| cell.id == line.id)
+                })
+                .map(|place| place_name(&place.name).to_owned())
+                .collect();
+            (!places.is_empty()).then(|| BountyCandidate {
+                id: line.id,
+                name: line.name.clone(),
+                icon: line.icon.clone(),
+                short: exact(short),
+                places,
+            })
+        })
+        .collect()
+}
