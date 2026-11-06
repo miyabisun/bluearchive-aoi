@@ -17,5 +17,11 @@
     "title": "任務",
     "screen": "任務 Normal",
     "note": "2026-11-06 capture of the user's game (Windows Graphics Capture), 2370x1333, the 任務 screen's Area 14 with the Normal tab picked and the campaign 任務Normalで獲得できる報酬量が2倍. The top left and the campaign's label and first line alone kept."
+  },
+  {
+    "image": "titles/tokubetsu.png",
+    "role": "tune",
+    "title": "特別依頼",
+    "note": "2026-11-06 capture of the user's game (Windows Graphics Capture), 2370x1333, the 特別依頼 screen's Request Select. The top left alone kept, with the campaign's areas (another screen's, kept by mask_fixture)."
   }
 ]

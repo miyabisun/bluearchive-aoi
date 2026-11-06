@@ -17,7 +17,7 @@ use crate::{
 };
 
 /// The screens told by their title, by the title.
-pub const TITLES: [&str; 3] = ["学園交流会", "指名手配", "任務"];
+pub const TITLES: [&str; 4] = ["学園交流会", "指名手配", "任務", "特別依頼"];
 
 /// Where the title is written, in units (see `screen::unit`), kept to the
 /// top. Measured on 2026-11-06 at 2370x1333: "学園交流会" from 0.150 to 0.326
@@ -35,11 +35,13 @@ const GAP: f32 = 0.011;
 /// Parts of the letters smaller than this share of the unit squared are specks.
 const SPECK: f32 = 6.0 / (1250.0 * 1250.0);
 /// No letter of the title lies farther than this from the word's. Measured on
-/// 2026-11-06 over the fixtures: 学園交流会, 指名手配 and 任務 drawn from 1500
-/// to 2222 wide within 14.2 of their own titles, 61 or farther from each
-/// other's, and every other screen's top left 53 or farther (a phone's student
-/// screen, nearest 任務).
-const WORST: f32 = 24.0;
+/// 2026-11-06 over the fixtures: 学園交流会, 指名手配, 任務 and 特別依頼 drawn
+/// from 1500 to 2370 wide by 10 within 24.5 of their own titles (特別依頼 at
+/// 1740: the tops of 特 and 別, kept in the 1600 bank's word, fall out there
+/// and the tiles shift, the mean 12.7), 60 or farther from each other's, and
+/// every other screen's top left 53 or farther (a phone's student screen,
+/// nearest 任務).
+const WORST: f32 = 32.0;
 
 /// The title's dark letters on the light top bar.
 fn dark(c: [u8; 3]) -> bool {

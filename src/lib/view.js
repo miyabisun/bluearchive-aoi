@@ -575,6 +575,7 @@ const WORK_SCREENS = {
   学園交流会: "work:学園交流会",
   指名手配: "work:指名手配",
   "任務 Normal": "work:任務",
+  特別依頼: "work:特別依頼",
 };
 
 /**
