@@ -3,9 +3,9 @@
 ## Item data
 
 Names and icons of items and equipment, and student names, come from a snapshot of
-[SchaleDB](https://schaledb.com) built into the exe (`src-tauri/data/schaledb`). A few
+[SchaleDB](https://schaledb.com) built into the exe (`data/schaledb`). A few
 items and students SchaleDB lacks, and a few icons the game draws unlike SchaleDB, are
-added in `src-tauri/data/extra`, cut from the game; a student added there is told by name
+added in `data/extra`, cut from the game; a student added there is told by name
 alone, under an id of Aoi's own below zero, until SchaleDB lists them. Then they go by
 SchaleDB's id and what was read of them moves with them; they stay in the list, as each
 student there takes the id of their place in it.
@@ -30,7 +30,7 @@ changed, the workflow releases them the same day, untested (the user's choice of
 pushes would not start.
 
 The shops' prices, how many come with a purchase and the monthly limits are written in
-`src-tauri/data/shops.yaml`, from the [Blue Archive wiki](https://bluearchive.wiki/wiki/Shop);
+`data/shops.yaml`, from the [Blue Archive wiki](https://bluearchive.wiki/wiki/Shop);
 a good they do not cover shows `@?`. In カケラ(文字) an eleph costs its student's rate,
 read off the card (1 to 5 fragments).
 
@@ -51,8 +51,8 @@ tells where a badge is and whether there is one, over its whole area. An equipme
 is not read: the slot is taken at its tier's top level.
 
 The references are a glyph bank for each width the texts are read at (`screen::WIDTHS`): grey
-16x16 tiles in `src-tauri/data/glyphs-<width>.png`, and what each tile stands for in
-`src-tauri/data/glyphs-<width>.json`. The students' names in it are
+16x16 tiles in `data/glyphs-<width>.png`, and what each tile stands for in
+`data/glyphs-<width>.json`. The students' names in it are
 drawn with Noto Sans JP, the free font nearest the game's, with the game's own letters
 from the fixtures standing in where there are some. Rebuild the bank after the fixtures or
 SchaleDB's students change, with Noto Sans JP's Regular, Medium and Bold
@@ -61,11 +61,10 @@ SchaleDB's students change, with Noto Sans JP's Regular, Medium and Bold
 SIL Open Font License) in a folder:
 
 ```powershell
-cd src-tauri
 cargo run --release --example build_glyphs -- <folder of the fonts>
 ```
 
-The lists' counts have references of their own (`src-tauri/data/digits.json`), from the
+The lists' counts have references of their own (`data/digits.json`), from the
 fixtures and from a collection of a tablet's screens as scrcpy streams them (each with the
 screen as screencap gives it, which labels them), kept outside the repository for its size:
 

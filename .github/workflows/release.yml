@@ -30,41 +30,31 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.96.0
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
 
-      - name: Check that the commit releases package.json's version
+      - name: Check that the commit releases Cargo.toml's version
         id: tag
         shell: pwsh
         run: |
-          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $version = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages[0].version
           $subject = git log -1 --format=%s
           if ($subject -ne "release: v$version") {
-            throw "commit '$subject' does not release package.json version $version"
+            throw "commit '$subject' does not release Cargo.toml version $version"
           }
           "tag=v$version" >> $env:GITHUB_OUTPUT
 
       - name: Build the app
-        run: |
-          npm ci
-          npm run tauri build -- --no-bundle
+        run: cargo build --release --locked
 
       - name: Package the exe and its SHA-256
         shell: pwsh
         run: |
           New-Item -ItemType Directory dist-release | Out-Null
-          Copy-Item src-tauri\target\release\bluearchive-aoi.exe "dist-release\$env:ASSET"
+          Copy-Item target\release\bluearchive-aoi.exe "dist-release\$env:ASSET"
           $hash = (Get-FileHash "dist-release\$env:ASSET" -Algorithm SHA256).Hash.ToLowerInvariant()
           [IO.File]::WriteAllText("$PWD\dist-release\$env:ASSET.sha256", "$hash  $env:ASSET`n")
           Get-Content "dist-release\$env:ASSET.sha256"
@@ -82,21 +72,17 @@ jobs:
           }
           gh release create $env:TAG "dist-release\$env:ASSET" "dist-release\$env:ASSET.sha256" --title $env:TAG --generate-notes --verify-tag
 
-  # The universal macOS app joins the release the Windows job published.
+  # The universal macOS app joins the release the Windows job published: both
+  # architectures in one binary, in an .app signed ad hoc, on a disk image.
   macos:
     needs: publish
     runs-on: macos-latest
     env:
       ASSET: bluearchive-aoi-universal-apple-darwin.dmg
+      APP: bluearchive-aoi.app
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.96.0
@@ -105,19 +91,41 @@ jobs:
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
 
-      # tauri.macos.conf.json bundles the app into a disk image, signed ad hoc.
-      - name: Build the app
+      - name: Build the app for both architectures
         run: |
-          npm ci
-          npm run tauri build -- --target universal-apple-darwin
+          cargo build --release --locked --target aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+
+      - name: Bundle the app and sign it ad hoc
+        env:
+          TAG: ${{ needs.publish.outputs.tag }}
+        run: |
+          mkdir -p "dist/$APP/Contents/MacOS" "dist/$APP/Contents/Resources"
+          lipo -create -output "dist/$APP/Contents/MacOS/bluearchive-aoi" \
+            target/aarch64-apple-darwin/release/bluearchive-aoi \
+            target/x86_64-apple-darwin/release/bluearchive-aoi
+          sed "s/__VERSION__/${TAG#v}/g" Info.plist > "dist/$APP/Contents/Info.plist"
+          plutil -lint "dist/$APP/Contents/Info.plist"
+          iconset="$RUNNER_TEMP/icon.iconset"
+          mkdir "$iconset"
+          for size in 16 32 128 256 512; do
+            sips -z $size $size icons/icon.png --out "$iconset/icon_${size}x${size}.png" > /dev/null
+            double=$((size * 2))
+            if [ $double -le 512 ]; then
+              sips -z $double $double icons/icon.png --out "$iconset/icon_${size}x${size}@2x.png" > /dev/null
+            fi
+          done
+          iconutil -c icns "$iconset" -o "dist/$APP/Contents/Resources/icon.icns"
+          codesign --force --deep --sign - "dist/$APP"
+          codesign --verify --verbose "dist/$APP"
+          lipo -info "dist/$APP/Contents/MacOS/bluearchive-aoi"
 
       - name: Package the disk image and its SHA-256
         run: |
+          ln -s /Applications dist/Applications
           mkdir dist-release
-          cp src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg "dist-release/$ASSET"
+          hdiutil create -volname bluearchive-aoi -srcfolder dist -ov -format UDZO "dist-release/$ASSET"
           cd dist-release
           shasum -a 256 "$ASSET" > "$ASSET.sha256"
           cat "$ASSET.sha256"

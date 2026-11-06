@@ -5,7 +5,7 @@
 # and the stages' names. Called by update.ps1.
 #   powershell -File tools/schaledb/stages.ps1
 $ErrorActionPreference = 'Stop'
-$root = Join-Path $PSScriptRoot '..\..\src-tauri\data\schaledb'
+$root = Join-Path $PSScriptRoot '..\..\data\schaledb'
 Add-Type -AssemblyName System.Web.Extensions
 
 function Get-Json($url) {

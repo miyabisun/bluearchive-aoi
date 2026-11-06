@@ -540,13 +540,24 @@ pub const IDENTIFIER: &str = "io.github.miyabisun.bluearchive-aoi";
 /// Where the app keeps what it read, its settings and its exports: the app's data folder
 /// (`%APPDATA%\io.github.miyabisun.bluearchive-aoi` on Windows, where the Tauri versions kept
 /// them) and `Documents\Aoi`.
+///
+/// `AOI_DATA_DIR` puts all of them in that folder instead (`state.json`, `settings.json`, the
+/// exports under `Aoi`): to start the app on a copy of a user's `state.json` without touching
+/// the user's own, as the screens are compared before and after a change.
 pub fn places() -> Result<Places, String> {
-    let data = dirs::data_dir()
-        .ok_or("アプリのデータの置き場所が分かりません")?
-        .join(IDENTIFIER);
-    let documents = dirs::document_dir()
-        .ok_or("ドキュメントフォルダが分かりません")?
-        .join("Aoi");
+    let (data, documents) = if let Some(dir) = std::env::var_os("AOI_DATA_DIR") {
+        let dir = PathBuf::from(dir);
+        (dir.clone(), dir.join("Aoi"))
+    } else {
+        (
+            dirs::data_dir()
+                .ok_or("アプリのデータの置き場所が分かりません")?
+                .join(IDENTIFIER),
+            dirs::document_dir()
+                .ok_or("ドキュメントフォルダが分かりません")?
+                .join("Aoi"),
+        )
+    };
     Ok(Places {
         state: data.join("state.json"),
         latest: documents.join("aoi.yaml"),

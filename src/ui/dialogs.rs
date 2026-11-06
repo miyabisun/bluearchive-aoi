@@ -15,13 +15,11 @@ use super::{
 };
 use crate::{android::Link, broadcast::Cast, view};
 
-/// Modules of light margin a QR code needs around it to be read.
-const QR_QUIET: usize = 4;
-
 /// A QR code of `modules` (rows, dark ones true), black on white whatever the theme (a phone
 /// reads it so), 240 px square with its quiet zone.
-fn qr(modules: Vec<Vec<bool>>, label: &str) -> impl IntoElement {
-    let side = modules.len() + 2 * QR_QUIET;
+fn qr(modules: &[Vec<bool>], label: &str) -> impl IntoElement {
+    let side = modules.len() + 2 * view::QR_QUIET;
+    let squares = view::qr_squares(modules);
     div()
         .id(SharedString::from(format!("qr-{label}")))
         .role(Role::Image)
@@ -36,18 +34,14 @@ fn qr(modules: Vec<Vec<bool>>, label: &str) -> impl IntoElement {
                 move |bounds, (), window, _| {
                     let unit = bounds.size.width / side as f32;
                     window.paint_quad(fill(bounds, rgb(0x00ff_ffff)));
-                    for (y, row) in modules.iter().enumerate() {
-                        for (x, dark) in row.iter().enumerate() {
-                            if *dark {
-                                let at = point(
-                                    bounds.origin.x + unit * (x + QR_QUIET) as f32,
-                                    bounds.origin.y + unit * (y + QR_QUIET) as f32,
-                                );
-                                // A hair over a unit, so neighbours meet without seams.
-                                let cell = gpui::Bounds::new(at, size(unit + px(0.5), unit + px(0.5)));
-                                window.paint_quad(fill(cell, rgb(0x0000_0000)));
-                            }
-                        }
+                    for &(x, y) in &squares {
+                        let at = point(
+                            bounds.origin.x + unit * x as f32,
+                            bounds.origin.y + unit * y as f32,
+                        );
+                        // A hair over a unit, so neighbours meet without seams.
+                        let cell = gpui::Bounds::new(at, size(unit + px(0.5), unit + px(0.5)));
+                        window.paint_quad(fill(cell, rgb(0x0000_0000)));
                     }
                 },
             )
@@ -102,7 +96,7 @@ impl Aoi {
                 .into_any_element(),
         ];
         if let Link::Pairing { qr: modules } = &phone {
-            parts.push(qr(modules.clone(), "ペア設定の QR コード").into_any_element());
+            parts.push(qr(modules, "ペア設定の QR コード").into_any_element());
             parts.push(
                 steps(&[
                     "スマホの「設定」→「デバイス情報」→「ビルド番号」を 7 回タップする（初回だけ）",
@@ -226,7 +220,7 @@ impl Aoi {
                 CastCode::Moblin => (moblin.clone(), "Moblin に取り込む QR コード"),
                 CastCode::Url => (plain.clone(), "配信先の URL の QR コード"),
             };
-            parts.push(qr(modules, label).into_any_element());
+            parts.push(qr(&modules, label).into_any_element());
             parts.push(
                 div()
                     .mb(SP_3)

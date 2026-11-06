@@ -6,7 +6,7 @@
 # app read only this snapshot, never the network.
 #   powershell -File tools/schaledb/update.ps1
 $ErrorActionPreference = 'Stop'
-$root = Join-Path $PSScriptRoot '..\..\src-tauri\data\schaledb'
+$root = Join-Path $PSScriptRoot '..\..\data\schaledb'
 Add-Type -AssemblyName System.Web.Extensions
 
 # The JSON at `$url`, read as UTF-8 whatever the response says.

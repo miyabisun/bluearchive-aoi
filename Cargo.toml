@@ -21,6 +21,8 @@ gpui_platform = { package = "gpui-pre-platform", version = "=0.3.11" }
 # Where the app keeps what it read and its settings, and where it writes the YAML.
 dirs = "6"
 anyhow = "1"
+# NFKC, to match a search typed in full-width forms.
+icu_normalizer = { version = "2", default-features = false, features = ["compiled_data"] }
 unicode-segmentation = "1"
 futures = "0.3"
 # The local date and time in the name and heading of an export.

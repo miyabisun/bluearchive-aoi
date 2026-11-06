@@ -5,6 +5,7 @@
 mod dialogs;
 mod equipment;
 mod items;
+mod parts;
 mod plan;
 mod shops;
 mod students;
@@ -17,7 +18,7 @@ pub mod icons;
 mod tests;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
     time::Duration,
 };
@@ -137,6 +138,8 @@ pub struct Aoi {
     equipment_sub: equipment::Sub,
     menu_open: bool,
     menu_focus: FocusHandle,
+    /// The window's own focus, where it starts (the search field is not focused at start).
+    root_focus: FocusHandle,
     /// Whether the cursor can be changed here (Windows), so the menu offers it.
     cursor_shown: bool,
     query: Entity<TextInput>,
@@ -152,7 +155,7 @@ pub struct Aoi {
     followed: Option<String>,
     /// What is paid from each source for each line short (`line|source`), the user's choice,
     /// kept while the plan counts from the same reading (`plan_version`).
-    payments: HashMap<String, u32>,
+    payments: BTreeMap<String, u64>,
     paid_for: u32,
     star_menu: Option<StarMenu>,
     /// The fields of the targets being typed, by student and column.
@@ -173,7 +176,7 @@ impl Aoi {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let query = cx.new(|cx| TextInput::new("名前で検索", "", cx));
+        let query = cx.new(|cx| TextInput::new("", "", cx));
         cx.subscribe(&query, |_, _, _: &text_input::Changed, cx| cx.notify())
             .detach();
         let shown = core.snapshot();
@@ -201,6 +204,7 @@ impl Aoi {
             equipment_sub: equipment::Sub::All,
             menu_open: false,
             menu_focus: cx.focus_handle(),
+            root_focus: cx.focus_handle(),
             cursor_shown,
             query,
             sort_by: students::Column::Level,
@@ -210,7 +214,7 @@ impl Aoi {
             toast_timer: None,
             opened: HashSet::new(),
             followed: None,
-            payments: HashMap::new(),
+            payments: BTreeMap::new(),
             paid_for,
             star_menu: None,
             target_fields: HashMap::new(),
@@ -239,7 +243,7 @@ impl Aoi {
     /// once, so one the user closes there stays closed. The others close and it comes to the top
     /// (「他の項目は全て閉じる」「画面上部に表示させる」); none of it while the menu says not to.
     fn follow_work(&mut self) {
-        let fold = view::work_fold(self.shown.place.as_ref(), &self.shown.month_end);
+        let fold = view::work_fold(self.shown.place.clone(), &self.shown.month_end);
         if fold == self.followed {
             return;
         }
@@ -283,7 +287,7 @@ impl Aoi {
     /// version (with the button to take it) and a failure stay in the page.
     fn check_update(&mut self, cx: &mut Context<Self>) {
         self.update = None;
-        self.notify_toast(Some(&view::update_text_checking()), true, cx);
+        self.notify_toast(Some(&view::update_text(&view::UpdateState::Checking)), true, cx);
         let found = cx.background_executor().spawn(async { crate::app::check_update() });
         cx.spawn(async move |this, cx| {
             let found = found.await;
@@ -293,7 +297,13 @@ impl Aoi {
                     this.update = Some(UpdateState::Available(found));
                 }
                 Ok(found) => {
-                    this.notify_toast(Some(&view::update_text_latest(&found.current)), false, cx);
+                    this.notify_toast(
+                        Some(&view::update_text(&view::UpdateState::Latest {
+                            current: found.current.clone(),
+                        })),
+                        false,
+                        cx,
+                    );
                 }
                 Err(error) => {
                     this.notify_toast(None, false, cx);
@@ -398,6 +408,7 @@ impl Aoi {
                 };
                 div()
                     .id(SharedString::from(format!("tab-{}", tab.id())))
+                    .debug_selector(move || format!("tab:{}", tab.name()))
                     .role(gpui::Role::Tab)
                     .aria_label(name)
                     .aria_selected(selected)
@@ -432,24 +443,24 @@ impl Aoi {
                         cx.notify();
                     }))
             }));
-        let status = view::status_view(&self.shown);
+        let status = view::status_view(&self.shown.status, &self.shown.phone, &self.shown.cast);
         let paused = matches!(self.shown.status, crate::watch::Status::Paused);
         let (lamp, words) = match status.tone {
             view::Tone::Active => (theme.accent, theme.on_surface),
             view::Tone::Danger => (theme.danger, theme.danger),
             view::Tone::Paused => (theme.danger, theme.on_surface),
-            view::Tone::Idle => (theme.muted, theme.muted),
+            _ => (theme.muted, theme.muted),
         };
-        let source = match status.source {
-            Some(view::Source::Window) => Some(Glyph::Window),
-            Some(view::Source::Phone) => Some(Glyph::Phone),
-            Some(view::Source::Cast) => Some(Glyph::Cast),
-            None => None,
-        };
+        let source = status.source.map(|source| match source {
+            view::Capture::Window => Glyph::Window,
+            view::Capture::Phone => Glyph::Phone,
+            view::Capture::Cast => Glyph::Cast,
+        });
         let border = theme.border;
         let hover = theme.muted;
         let badge = div()
             .id("status")
+            .debug_selector(|| "status".to_owned())
             .role(gpui::Role::Button)
             .aria_label(status.label.clone())
             .aria_description(status.title.clone())
@@ -491,6 +502,7 @@ impl Aoi {
             }));
         let menu_button = div()
             .id("menu-button")
+            .debug_selector(|| "menu-button".to_owned())
             .role(gpui::Role::Button)
             .aria_label("メニュー")
             .aria_expanded(self.menu_open)
@@ -689,7 +701,11 @@ impl Aoi {
         }
         match self.update.clone() {
             Some(UpdateState::Failed(error)) => notices.push(
-                widgets::error(theme, "update-error", view::update_text_failed(&error))
+                widgets::error(
+                    theme,
+                    "update-error",
+                    view::update_text(&view::UpdateState::Failed { error }),
+                )
                     .into_any_element(),
             ),
             Some(UpdateState::Available(check)) => {
@@ -702,7 +718,10 @@ impl Aoi {
                     widgets::quiet(
                         theme,
                         "update",
-                        view::update_text_available(&check.current, check.latest.as_deref()),
+                        view::update_text(&view::UpdateState::Available {
+                            current: check.current.clone(),
+                            latest: check.latest.clone().unwrap_or_default(),
+                        }),
                     )
                     .flex()
                     .items_center()
@@ -718,7 +737,9 @@ impl Aoi {
                 widgets::quiet(
                     theme,
                     "update",
-                    view::update_text_installing(check.latest.as_deref()),
+                    view::update_text(&view::UpdateState::Installing {
+                        latest: check.latest.clone().unwrap_or_default(),
+                    }),
                 )
                 .into_any_element(),
             ),
@@ -729,29 +750,30 @@ impl Aoi {
 }
 
 impl Focusable for Aoi {
-    fn focus_handle(&self, cx: &App) -> FocusHandle {
-        self.query.read(cx).focus_handle(cx)
+    fn focus_handle(&self, _cx: &App) -> FocusHandle {
+        self.root_focus.clone()
     }
 }
 
 impl Render for Aoi {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx);
         let header = self.header(&theme, cx);
         let notices = self.notices(&theme, cx);
         let content = match self.tab {
-            Tab::Items => self.items_tab(&theme, cx),
-            Tab::Equipment => self.equipment_tab(&theme, cx),
-            Tab::Shops => self.shops_tab(&theme, cx),
-            Tab::Students => self.students_tab(&theme, cx),
-            Tab::Plan => self.plan_tab(&theme, cx),
-            Tab::Work => self.work_tab(&theme, cx),
+            Tab::Items => self.items_tab(&theme, window, cx),
+            Tab::Equipment => self.equipment_tab(&theme, window, cx),
+            Tab::Shops => self.shops_tab(&theme, window, cx),
+            Tab::Students => self.students_tab(&theme, window, cx),
+            Tab::Plan => self.plan_tab(&theme, window, cx),
+            Tab::Work => self.work_tab(&theme, window, cx),
         };
         let dialog = self.dialog.map(|d| self.dialog_view(d, &theme, cx));
         let star_menu = self.star_menu.and_then(|m| self.star_menu_view(m, &theme, cx));
         div()
             .id("aoi")
             .key_context("Aoi")
+            .track_focus(&self.root_focus)
             .on_action(cx.listener(|_, _: &FocusNext, window, cx| window.focus_next(cx)))
             .on_action(cx.listener(|_, _: &FocusPrev, window, cx| window.focus_prev(cx)))
             .on_action(cx.listener(|this, _: &Escape, _, cx| {
@@ -779,7 +801,11 @@ impl Render for Aoi {
                     .flex_col()
                     .flex_1()
                     .min_h_0()
-                    .p(SP_4)
+                    .w_full()
+                    .max_w(px(WINDOW.0))
+                    .mx_auto()
+                    .pt(SP_4)
+                    .px(SP_3)
                     .children(notices)
                     .child(content),
             )
@@ -874,4 +900,101 @@ pub fn run(recognizer: Arc<Recognizer>, places: Places) {
             })
             .detach();
         });
+}
+
+/// A tab's sub-tabs over a rule; narrower than they are, they scroll sideways.
+pub fn subtabs<T: Copy + PartialEq + 'static>(
+    theme: &Theme,
+    id: &str,
+    choices: &[(T, &'static str)],
+    chosen: T,
+    on_choose: impl Fn(&T, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let on_choose = std::rc::Rc::new(on_choose);
+    div()
+        .id(SharedString::from(format!("subtabs-{id}")))
+        .role(gpui::Role::TabList)
+        .aria_label("分類")
+        .flex()
+        .flex_none()
+        .mb(SP_3)
+        .overflow_x_scroll()
+        .border_b_1()
+        .border_color(theme.border)
+        .children(choices.iter().map(|&(choice, name)| {
+            let selected = choice == chosen;
+            let on_choose = on_choose.clone();
+            div()
+                .id(SharedString::from(format!("sub-{id}-{name}")))
+                .debug_selector(move || format!("sub:{name}"))
+                .role(gpui::Role::Tab)
+                .aria_label(name)
+                .aria_selected(selected)
+                .tab_stop(true)
+                .flex_none()
+                .px(SP_3)
+                .py(SP_1)
+                .mb(px(-1.))
+                .border_b_2()
+                .border_color(if selected {
+                    theme.accent
+                } else {
+                    gpui::transparent_black()
+                })
+                .text_size(FS_SM)
+                .text_color(if selected { theme.on_surface } else { theme.muted })
+                .when(selected, |t| t.font_weight(FontWeight::SEMIBOLD))
+                .whitespace_nowrap()
+                .cursor_pointer()
+                .child(name)
+                .on_click(move |_, window, cx| on_choose(&choice, window, cx))
+        }))
+}
+
+/// The box a tab's content scrolls in, under what stays above it.
+pub fn scroll(id: &str, handle: &ScrollHandle) -> gpui::Stateful<gpui::Div> {
+    div()
+        .id(SharedString::from(id.to_owned()))
+        .flex_1()
+        .min_h_0()
+        .overflow_y_scroll()
+        .track_scroll(handle)
+}
+
+/// The search field with its caption over it.
+pub fn search(theme: &Theme, field: &Entity<TextInput>) -> impl IntoElement {
+    let border = theme.border;
+    div()
+        .flex()
+        .flex_col()
+        .flex_none()
+        .gap(SP_1)
+        .mb(SP_4)
+        .child(div().text_size(FS_CAPTION).text_color(theme.muted).child("名前で検索"))
+        .child(
+            div()
+                .id("search")
+                .debug_selector(|| "search".to_owned())
+                .role(gpui::Role::SearchInput)
+                .aria_label("名前で検索")
+                .h(px(40.))
+                .px(SP_3)
+                .border_1()
+                .border_color(border)
+                .rounded(RADIUS_SM)
+                .bg(theme.surface)
+                .child(field.clone()),
+        )
+}
+
+/// The face a tile is painted: a rarity's tier colour, or an eleph's pink.
+pub fn face_color(theme: &Theme, face: Option<view::Face>) -> Option<gpui::Hsla> {
+    use crate::icon::Rarity;
+    face.map(|face| match face {
+        view::Face::Rarity(Rarity::N) => theme.tiers[0],
+        view::Face::Rarity(Rarity::R) => theme.tiers[1],
+        view::Face::Rarity(Rarity::SR) => theme.tiers[2],
+        view::Face::Rarity(Rarity::SSR) => theme.tiers[3],
+        view::Face::Eleph => theme.eleph,
+    })
 }

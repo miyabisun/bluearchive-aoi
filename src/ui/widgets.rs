@@ -73,8 +73,10 @@ pub fn menu_item(
     disabled: bool,
 ) -> Stateful<Div> {
     let hover = theme.wash_base;
+    let selector = format!("menu-{id}");
     div()
-        .id(SharedString::from(format!("menu-{id}")))
+        .id(SharedString::from(selector.clone()))
+        .debug_selector(move || selector.clone())
         .role(if checked.is_some() {
             Role::MenuItemRadio
         } else {
@@ -115,8 +117,10 @@ pub fn menu_item(
 /// A failure in the page: danger on danger-subtle (`error-banner`).
 pub fn error(theme: &Theme, id: &str, message: impl Into<SharedString>) -> Stateful<Div> {
     let message = message.into();
+    let selector = id.to_owned();
     div()
         .id(SharedString::from(id.to_owned()))
+        .debug_selector(move || selector.clone())
         .role(Role::Alert)
         .aria_label(message.clone())
         .flex_none()
@@ -132,8 +136,10 @@ pub fn error(theme: &Theme, id: &str, message: impl Into<SharedString>) -> State
 /// A quiet line in the page: body-sm, muted.
 pub fn quiet(theme: &Theme, id: &str, message: impl Into<SharedString>) -> Stateful<Div> {
     let message = message.into();
+    let selector = id.to_owned();
     div()
         .id(SharedString::from(id.to_owned()))
+        .debug_selector(move || selector.clone())
         .role(Role::Status)
         .aria_label(message.clone())
         .flex_none()

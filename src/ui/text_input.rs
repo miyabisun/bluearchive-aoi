@@ -33,6 +33,7 @@ actions!(
         Paste,
         Cut,
         Copy,
+        Submit,
     ]
 );
 
@@ -661,6 +662,7 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::paste))
             .on_action(cx.listener(Self::cut))
             .on_action(cx.listener(Self::copy))
+            .on_action(cx.listener(Self::submit))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
@@ -674,6 +676,12 @@ impl Render for TextInput {
 pub struct Changed;
 
 impl EventEmitter<Changed> for TextInput {}
+
+/// Raised on Enter, unless the IME is composing (its Enter is the IME's).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Submitted;
+
+impl EventEmitter<Submitted> for TextInput {}
 
 impl TextInput {
     pub fn new(placeholder: impl Into<SharedString>, text: &str, cx: &mut Context<Self>) -> Self {
@@ -694,6 +702,22 @@ impl TextInput {
         &self.content
     }
 
+    /// Puts `text` in place of what is there, the cursor at its end.
+    pub fn set_text(&mut self, text: &str, cx: &mut Context<Self>) {
+        if self.content.as_ref() != text {
+            self.content = text.to_owned().into();
+            self.selected_range = text.len()..text.len();
+            self.marked_range = None;
+            cx.notify();
+        }
+    }
+
+    fn submit(&mut self, _: &Submit, _window: &mut Window, cx: &mut Context<Self>) {
+        if !self.is_composing() {
+            cx.emit(Submitted);
+        }
+    }
+
     /// Whether the IME is composing, so that Enter belongs to it.
     pub fn is_composing(&self) -> bool {
         self.marked_range.is_some()
@@ -710,12 +734,13 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("right", Right, context),
         KeyBinding::new("shift-left", SelectLeft, context),
         KeyBinding::new("shift-right", SelectRight, context),
-        KeyBinding::new("secondary-a", SelectAll, context),
-        KeyBinding::new("secondary-v", Paste, context),
-        KeyBinding::new("secondary-c", Copy, context),
-        KeyBinding::new("secondary-x", Cut, context),
+        KeyBinding::new(if cfg!(target_os = "macos") { "cmd-a" } else { "ctrl-a" }, SelectAll, context),
+        KeyBinding::new(if cfg!(target_os = "macos") { "cmd-v" } else { "ctrl-v" }, Paste, context),
+        KeyBinding::new(if cfg!(target_os = "macos") { "cmd-c" } else { "ctrl-c" }, Copy, context),
+        KeyBinding::new(if cfg!(target_os = "macos") { "cmd-x" } else { "ctrl-x" }, Cut, context),
         KeyBinding::new("home", Home, context),
         KeyBinding::new("end", End, context),
+        KeyBinding::new("enter", Submit, context),
     ]);
 }
 

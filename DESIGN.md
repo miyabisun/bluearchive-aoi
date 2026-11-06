@@ -14,22 +14,22 @@ colors:
   wash-base: "#f6efe0"
 typography:
   title:
-    fontFamily: system-ui
+    fontFamily: OS の UI フォント
     fontSize: 17px
     fontWeight: 600
     lineHeight: 1.3
   body:
-    fontFamily: system-ui
+    fontFamily: OS の UI フォント
     fontSize: 16px
     fontWeight: 400
     lineHeight: 1.6
   body-sm:
-    fontFamily: system-ui
+    fontFamily: OS の UI フォント
     fontSize: 14px
     fontWeight: 400
     lineHeight: 1.5
   caption:
-    fontFamily: system-ui
+    fontFamily: OS の UI フォント
     fontSize: 12px
     fontWeight: 400
     lineHeight: 1.4
@@ -73,8 +73,8 @@ Sumi family の共通原本（rust-svelte-template の DESIGN.md、2026-10-11 �
 ## Colors
 
 暗色は Sumi、明色は Kinari とし、既定は OS の明暗設定に従う。メニューで ライト・ダーク・自動 を選べ、選択は
-次回の起動にも残す（2026-10-13 の user の依頼「テーマ切り替え: ライト・ダーク・自動」）。`:root` を Sumi にし、
-`prefers-color-scheme: light` かつ `data-theme="dark"` でないとき、または `data-theme="light"` のとき Kinari にする。
+次回の起動にも残す（2026-10-13 の user の依頼「テーマ切り替え: ライト・ダーク・自動」）。自動では OS の明暗が変われば
+その場で切り替える。色は `src/ui/theme.rs` の一箇所に置く。
 
 | 役割 | Kinari | Sumi |
 |---|---|---|
@@ -98,7 +98,7 @@ Sumi family の共通原本（rust-svelte-template の DESIGN.md、2026-10-11 �
 状態は色だけに頼らず、バッジの文字で示す。失敗は danger の文字で原因を書く。
 状態バッジは押すと読み取りを一時中断し、ランプを danger にして「一時中断」と書く。もう一度押すと再開する
 （2026-10-13 の user の依頼「クリックすると左のランプを赤く点灯させ、「一時中断」に変化」）。バッジはボタンとして
-aria-pressed とフォーカスを持ち、見た目は状態バッジのまま。
+押された状態（UI Automation の Toggle）とフォーカスを持ち、見た目は状態バッジのまま。
 ランプは取り込み元（ゲームのウィンドウ・スマホ・配信アプリ）のアイコンとし、取り込み元の名前とフレームレートは
 バッジに書かずホバーで示す（2026-10-16 の user の依頼「今何とつながっているのか？の情報も分かるようにして欲しい」
 「現状でももう横幅使いすぎ」）。
@@ -109,7 +109,7 @@ accent はどの tier と eleph の面にも 4.5:1 以上で載る。warn（オ�
 
 ## Typography
 
-書体は system-ui。アプリ名は title（17px / 600）、表と案内は body（16px）、
+書体は OS の UI フォント（Windows は Yu Gothic UI）。アプリ名は title（17px / 600）、表と案内は body（16px）、
 状態バッジ・列見出し・失敗の原因は body-sm（14px）、検索欄のラベルは caption（12px、muted）。
 個数は等幅数字で右にそろえ、桁区切りを入れる。
 
@@ -321,7 +321,7 @@ accent はどの tier と eleph の面にも 4.5:1 以上で載る。warn（オ�
   読めない欄は「?」、生徒が持たないもの（未解放の固有武器、愛用品なし）は「—」で区別する。
 - 生徒の表の列見出し（生徒名を除く）は押すとその列の降順に並べ替えるボタンにする（2026-10-12 の user の依頼
   「ヘッダークリックで降順で並べ直す」）。見た目は見出しの文字のままとし、並べている列だけ on-surface・600 にして
-  caption の「▼」を添える（aria-sort も付ける）。
+  caption の「▼」を添える（UI Automation の説明にも「降順」と書く）。
 - 集計が無いときは表と検索欄を出さず、読ませる方法を一文で示す。
   検索の不一致は「一致する項目がありません」と示し、集計が空の場合と区別する。
 - キャプチャの失敗と、読み取り結果の保存・読み戻しの失敗は、本文の先頭に error-banner で原因を出す。通常時に場所を予約しない。

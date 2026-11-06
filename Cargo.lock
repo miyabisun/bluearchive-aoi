@@ -627,6 +627,7 @@ dependencies = [
  "futures",
  "gpui-pre",
  "gpui-pre-platform",
+ "icu_normalizer",
  "image",
  "libadb",
  "mdns-sd",

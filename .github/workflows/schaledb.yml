@@ -4,7 +4,7 @@ name: SchaleDB
 # days later. Each day the SchaleDB snapshot is refreshed (tools/schaledb/update.ps1);
 # where the students changed, the glyph banks are rebuilt so their names read
 # (build_glyphs); and the change is committed to the branch run on. Nothing is
-# tested here: the next release ships it through the local pre-push gate (npm run verify),
+# tested here: the next release ships it through the local pre-push gate (cargo fmt, clippy, test),
 # but for new students, which main releases the same day untested (the user's choice of
 # 2026-10-30: 「Actionsだけ・テスト無し」).
 on:
@@ -39,9 +39,9 @@ jobs:
         id: changed
         shell: pwsh
         run: |
-          git add -A src-tauri/data
+          git add -A data
           "data=$([bool](git diff --cached --name-only))" >> $env:GITHUB_OUTPUT
-          "students=$([bool](git diff --cached --name-only -- src-tauri/data/schaledb/students.json))" >> $env:GITHUB_OUTPUT
+          "students=$([bool](git diff --cached --name-only -- data/schaledb/students.json))" >> $env:GITHUB_OUTPUT
 
       - name: Set up Rust
         if: steps.changed.outputs.students == 'True'
@@ -50,8 +50,6 @@ jobs:
       - name: Cache Rust dependencies
         if: steps.changed.outputs.students == 'True'
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
 
       - name: Fetch Noto Sans JP
         if: steps.changed.outputs.students == 'True'
@@ -71,7 +69,6 @@ jobs:
 
       - name: Rebuild the glyph banks
         if: steps.changed.outputs.students == 'True'
-        working-directory: src-tauri
         run: cargo run --release --example build_glyphs -- "$env:RUNNER_TEMP\fonts"
 
       - name: Commit the refresh
@@ -80,7 +77,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A src-tauri/data
+          git add -A data
           git commit -m "chore: refresh the SchaleDB snapshot"
           git push origin "HEAD:$env:GITHUB_REF_NAME"
 
@@ -96,7 +93,7 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           $version = ./tools/release/bump-patch.ps1
           if (git ls-remote --tags origin "refs/tags/v$version") { throw "v$version is already tagged" }
-          git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock
+          git add Cargo.toml Cargo.lock
           git commit -m "release: v$version"
           git tag "v$version"
           git push origin HEAD:main "v$version"

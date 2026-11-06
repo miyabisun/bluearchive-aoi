@@ -58,4 +58,4 @@ See [docs/dev](docs/dev/README.md).
 ## License
 
 MIT ([LICENSE](LICENSE)). The bundled scrcpy server is under the Apache License 2.0
-([src-tauri/vendor/scrcpy](src-tauri/vendor/scrcpy)).
+([vendor/scrcpy](vendor/scrcpy)).
