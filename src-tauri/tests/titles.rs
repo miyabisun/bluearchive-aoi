@@ -1,6 +1,7 @@
 //! The screens told by the title at their top left (`aoi::title`), against
-//! screenshots labeled with it (`tests/fixtures/titles.json`) and every other
-//! fixture, whose screens write another title or none.
+//! screenshots labeled with it and the screen read where the title tells more
+//! than one (`tests/fixtures/titles.json`), and every other fixture, whose
+//! screens write another title or none.
 
 mod common;
 
@@ -13,6 +14,7 @@ use serde::Deserialize;
 struct Fixture {
     image: String,
     title: String,
+    screen: Option<String>,
 }
 
 fn fixtures_dir() -> PathBuf {
@@ -28,8 +30,8 @@ fn open(path: &Path) -> image::RgbImage {
     image::open(path).expect("the image opens").to_rgb8()
 }
 
-/// A labeled screen reads as its title at its own size and drawn at the
-/// widths a window, a phone or a tablet draws the game at.
+/// A labeled screen reads as its title (or its screen) at its own size and
+/// drawn at the widths a window, a phone or a tablet draws the game at.
 #[test]
 fn a_screen_reads_as_its_title_at_every_width() {
     let recognizer = recognizer();
@@ -38,19 +40,45 @@ fn a_screen_reads_as_its_title_at_every_width() {
             .unwrap();
     let mut wrong = Vec::new();
     for fixture in &fixtures {
+        let screen = Some(fixture.screen.as_deref().unwrap_or(&fixture.title));
         let image = open(&fixtures_dir().join(&fixture.image));
         let read = recognizer.read_title(&aoi::screen::normalize(&image));
-        if read != Some(fixture.title.as_str()) {
+        if read != screen {
             wrong.push(format!("{} own size: {read:?}", fixture.image));
         }
         for width in [2222, 2100, 1920, 1760, 1600, 1550, 1500] {
             let read = recognizer.read_title(&common::drawn_at(&image, width));
-            if read != Some(fixture.title.as_str()) {
+            if read != screen {
                 wrong.push(format!("{} at {width}: {read:?}", fixture.image));
             }
         }
     }
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
+}
+
+/// The 任務 screen tells no screen where it shows no campaign: with the label
+/// or the text after it hidden under the band's navy, the title alone.
+#[test]
+fn the_mission_screen_without_its_campaign_reads_as_no_screen() {
+    use aoi::{campaign, student};
+    let recognizer = recognizer();
+    let image = open(&fixtures_dir().join("titles/ninmu-normal.png"));
+    let image = aoi::screen::normalize(&image).into_owned();
+    assert_eq!(recognizer.read_title(&image), Some("任務 Normal"));
+    let parts = [
+        campaign::LABEL_AREA,
+        campaign::text_area(campaign::TEXTS[0].to),
+    ];
+    for (i, area) in parts.into_iter().enumerate() {
+        let mut hidden = image.clone();
+        let (x0, y0, x1, y1) = student::rect(&hidden, area).expect("the part lies on the screen");
+        for y in y0..y1 {
+            for x in x0..x1 {
+                hidden.put_pixel(x, y, image::Rgb([36, 47, 70]));
+            }
+        }
+        assert_eq!(recognizer.read_title(&hidden), None, "part {i} hidden");
+    }
 }
 
 /// No other fixture's screen (the lists, the student screen, the shops, the

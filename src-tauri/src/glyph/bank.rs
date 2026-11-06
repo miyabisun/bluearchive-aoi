@@ -49,6 +49,9 @@ pub struct Index {
     pub shops: Vec<Word>,
     /// The screens' titles as their top left draws them (see `title`).
     pub titles: Vec<Word>,
+    /// The 任務 screen's campaign label and its texts' starts as the game draws
+    /// them (see `campaign`).
+    pub campaign: Vec<Word>,
 }
 
 /// A word as `word::compare` takes it: what it stands for and how it reads,

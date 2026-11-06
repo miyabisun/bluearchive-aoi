@@ -33,7 +33,7 @@ use std::{collections::BTreeMap, path::Path};
 
 use ab_glyph::{Font, FontVec, PxScale, ScaleFont};
 use aoi::{
-    credit,
+    campaign, credit,
     glyph::{
         self, Style,
         bank::{Bank, Word, glyph_tile},
@@ -182,6 +182,7 @@ struct TitleLabel {
     image: String,
     role: String,
     title: String,
+    screen: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -739,10 +740,31 @@ fn titles(bank: &mut Bank, labels: &[TitleLabel], open: &dyn Fn(&str) -> RgbImag
             .iter()
             .position(|t| *t == label.title)
             .expect("a title label names one of title::TITLES") as i64;
-        if let Some(word) =
-            title::ink(&open(&label.image)).and_then(|ink| entry(bank, id, &label.title, &ink))
-        {
+        let image = open(&label.image);
+        if let Some(word) = title::ink(&image).and_then(|ink| entry(bank, id, &label.title, &ink)) {
             bank.index.titles.push(word);
+        }
+        // The campaign the screen shows, where it is told by one (the label
+        // once).
+        for (i, text) in campaign::TEXTS.iter().enumerate() {
+            if label.screen.as_deref() != Some(text.screen) {
+                continue;
+            }
+            if !bank
+                .index
+                .campaign
+                .iter()
+                .any(|w| w.text == campaign::LABEL)
+            {
+                let word = campaign::label(&image)
+                    .and_then(|ink| entry(bank, 0, campaign::LABEL, &ink))
+                    .expect("the campaign's label shows");
+                bank.index.campaign.push(word);
+            }
+            let word = campaign::text(&image, text.to)
+                .and_then(|ink| entry(bank, i as i64 + 1, text.start, &ink))
+                .expect("the campaign's text shows");
+            bank.index.campaign.push(word);
         }
     }
 }
@@ -864,12 +886,13 @@ fn main() {
         std::fs::write(root.join("data").join(index_file), index + "\n")
             .expect("the file is written");
         println!(
-            "{width}: {} tiles: {} names, {} letters of the game, {} shops, {} titles",
+            "{width}: {} tiles: {} names, {} letters of the game, {} shops, {} titles, {} campaign words",
             bank.tiles.len(),
             bank.index.names.len(),
             bank.index.letters.len(),
             bank.index.shops.len(),
-            bank.index.titles.len()
+            bank.index.titles.len(),
+            bank.index.campaign.len()
         );
     }
 }

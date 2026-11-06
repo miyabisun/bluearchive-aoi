@@ -10,5 +10,12 @@
     "role": "tune",
     "title": "指名手配",
     "note": "2026-11-06 capture of the user's game (Windows Graphics Capture), 2370x1333, the 指名手配 screen's Location Select. The top left alone kept."
+  },
+  {
+    "image": "titles/ninmu-normal.png",
+    "role": "tune",
+    "title": "任務",
+    "screen": "任務 Normal",
+    "note": "2026-11-06 capture of the user's game (Windows Graphics Capture), 2370x1333, the 任務 screen's Area 14 with the Normal tab picked and the campaign 任務Normalで獲得できる報酬量が2倍. The top left and the campaign's label and first line alone kept."
   }
 ]

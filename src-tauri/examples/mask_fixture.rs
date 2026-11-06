@@ -9,15 +9,15 @@
 //! the shop screen is read from (`tests/fixtures/shops.json`); with `list`, the
 //! item or equipment list's panel, read with the list the screen names
 //! (`tests/fixtures/tablet.json`); with `name`, the name plate's name alone
-//! (`tests/fixtures/names.json`); with `title`, the title at the top left
-//! (`tests/fixtures/titles.json`).
+//! (`tests/fixtures/names.json`); with `title`, the title at the top left and
+//! the 任務 screen's campaign (`tests/fixtures/titles.json`).
 
 use std::path::Path;
 
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 
 use aoi::{
-    Recognizer, credit,
+    Recognizer, campaign, credit,
     glyph::bank::Bank,
     grid,
     screen::{self, Region},
@@ -47,7 +47,10 @@ fn kept(image: &image::RgbImage, only: Option<&str>) -> Vec<(f32, f32, f32, f32)
         Some("level") => vec![student::LEVEL],
         Some("name") => vec![student::NAME],
         Some("shop") => shop::areas(),
-        Some("title") => vec![title::AREA],
+        Some("title") => [title::AREA, campaign::LABEL_AREA]
+            .into_iter()
+            .chain(campaign::TEXTS.iter().map(|t| campaign::text_area(t.to)))
+            .collect(),
         Some(_) => vec![credit::NUMBER, credit::ICON],
         None => student::areas(),
     };
@@ -155,6 +158,18 @@ fn main() {
         let (whole, part) = (title::ink(&image), title::ink(&read));
         assert!(whole.is_some(), "{from} shows no title");
         assert_eq!(whole, part, "{from} reads otherwise once masked");
+        assert_eq!(
+            campaign::label(&image),
+            campaign::label(&read),
+            "{from}'s label reads otherwise"
+        );
+        for t in &campaign::TEXTS {
+            let (whole, part) = (campaign::text(&image, t.to), campaign::text(&read, t.to));
+            assert_eq!(
+                whole, part,
+                "{from}'s campaign text reads otherwise once masked"
+            );
+        }
         return save(&masked, to);
     }
     if only == Some("name") {

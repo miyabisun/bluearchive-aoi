@@ -570,8 +570,12 @@ export function unknownText(rows) {
   return [...byStudent.values()].map(({ name, parts }) => `${name}: ${parts.join("・")}`);
 }
 
-/** The work tab's folds of the screens told by their title (`title::TITLES`). */
-const WORK_SCREENS = { 学園交流会: "work:学園交流会", 指名手配: "work:指名手配" };
+/** The work tab's folds of the screens told by their title (`title::read`). */
+const WORK_SCREENS = {
+  学園交流会: "work:学園交流会",
+  指名手配: "work:指名手配",
+  "任務 Normal": "work:任務",
+};
 
 /**
  * The work tab's fold for where the game is (`place`, the snapshot's): a screen

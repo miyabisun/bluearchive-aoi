@@ -175,7 +175,7 @@ pub fn rect(image: &RgbImage, area: Area) -> Option<Rect> {
         .then_some((x0 as u32, y0 as u32, x1 as u32, y1 as u32))
 }
 
-fn luminance(c: [u8; 3]) -> f32 {
+pub(crate) fn luminance(c: [u8; 3]) -> f32 {
     0.299 * f32::from(c[0]) + 0.587 * f32::from(c[1]) + 0.114 * f32::from(c[2])
 }
 
