@@ -152,9 +152,19 @@ pub fn open_page() -> Result<(), String> {
 
 /// Removes the exe an update kept aside, once the updated one runs.
 pub fn clean_up() {
-    if let Ok(exe) = std::env::current_exe() {
-        let _ = std::fs::remove_file(aside(&exe));
-    }
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let old = aside(&exe);
+    // The version that started this one may still be ending, its exe in use: try for a while.
+    std::thread::spawn(move || {
+        for _ in 0..60 {
+            if std::fs::remove_file(&old).is_ok() || !old.exists() {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    });
 }
 
 #[cfg(test)]
