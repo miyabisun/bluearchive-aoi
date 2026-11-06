@@ -2008,7 +2008,7 @@ pub struct BountyCandidate {
     pub id: i64,
     pub name: String,
     pub icon: String,
-    /// How many are short.
+    /// How many are short ("?" for a line never read).
     pub short: String,
     /// The bounties' places that drop it, as their names read without "指名手配：".
     pub places: Vec<String>,
@@ -2016,14 +2016,16 @@ pub struct BountyCandidate {
 
 /// The plan's item lines short of what they need that a bounty drops, each with those bounties'
 /// places (the user's of 2026-10-13: 「毎日プレイ出来る「指名手配」の項目で学園の技術ノート・BDや
-/// オーパーツで参加すべきステージの候補を表示する」). Lines never read stay out: how short they fall
-/// is not known.
+/// オーパーツで参加すべきステージの候補を表示する」). A line never read is kept, its shortfall "?".
 pub fn bounty_candidates(plan: &[NeedRow], bounties: &[PlaceRow]) -> Vec<BountyCandidate> {
     plan.iter()
         .filter(|line| line.kind == crate::plan::Kind::Item)
         .filter_map(|line| {
-            let held = line.have?.amount();
-            let short = line.need.checked_sub(held).filter(|&n| n > 0)?;
+            // A line never read may fall short: how short is not known.
+            let short = match line.have {
+                Some(held) => exact(line.need.checked_sub(held.amount()).filter(|&n| n > 0)?),
+                None => "?".to_owned(),
+            };
             let places: Vec<String> = bounties
                 .iter()
                 .filter(|place| {
@@ -2040,7 +2042,7 @@ pub fn bounty_candidates(plan: &[NeedRow], bounties: &[PlaceRow]) -> Vec<BountyC
                 id: line.id,
                 name: line.name.clone(),
                 icon: line.icon.clone(),
-                short: exact(short),
+                short,
                 places,
             })
         })

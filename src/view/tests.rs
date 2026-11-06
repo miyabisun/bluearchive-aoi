@@ -2449,15 +2449,23 @@ fn bounty_candidates_name_the_bounties_dropping_what_falls_short() {
 }
 
 #[test]
-fn bounty_candidates_leave_out_what_is_enough_unread_or_dropped_nowhere() {
+fn bounty_candidates_leave_out_what_is_enough_or_dropped_nowhere() {
     let plan = [
         need_line(4033, "enough", 30, Some(30)),
-        need_line(3013, "unread", 10, None),
         need_line(8000, "nowhere", 5, Some(0)),
     ];
-    let bounties = [bounty("指名手配：ハイウェイ", &[4033, 3013])];
+    let bounties = [bounty("指名手配：ハイウェイ", &[4033])];
     assert!(
         bounty_candidates(&plan, &bounties).is_empty(),
         "nothing short and dropped by a bounty"
     );
+}
+
+#[test]
+fn bounty_candidates_keep_what_was_never_read_its_shortfall_unknown() {
+    let plan = [need_line(3013, "unread", 10, None)];
+    let bounties = [bounty("指名手配：ハイウェイ", &[3013])];
+    let found = bounty_candidates(&plan, &bounties);
+    assert_eq!(found.len(), 1, "a line never read may fall short");
+    assert_eq!(found[0].short, "?", "how short is not known");
 }
