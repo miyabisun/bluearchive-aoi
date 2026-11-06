@@ -81,6 +81,44 @@ fn the_mission_screen_without_its_campaign_reads_as_no_screen() {
     }
 }
 
+/// The shop screen tells the 通常アイテム shop by the menu's choice alone: with
+/// a month-end shop chosen there (each shops fixture's menu over it), no screen;
+/// those are told by their offers (`aoi::shop`).
+#[test]
+fn the_shop_screen_with_another_shop_chosen_reads_as_no_screen() {
+    use aoi::{shop, student};
+    let recognizer = recognizer();
+    let image = open(&fixtures_dir().join("titles/shop-normal.png"));
+    let image = aoi::screen::normalize(&image).into_owned();
+    assert_eq!(
+        recognizer.read_title(&image),
+        Some("ショップ: 通常アイテム")
+    );
+    let mut read = Vec::new();
+    for entry in std::fs::read_dir(fixtures_dir().join("shops")).unwrap() {
+        let path = entry.unwrap().path();
+        // Drawn as wide as the 通常アイテム screen was captured.
+        let other = common::drawn_at(&open(&path), 2370);
+        assert_eq!(other.dimensions(), image.dimensions(), "{}", path.display());
+        let mut chosen = image.clone();
+        for area in shop::areas() {
+            let (x0, y0, x1, y1) =
+                student::rect(&chosen, area).expect("the menu lies on the screen");
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    chosen.put_pixel(x, y, *other.get_pixel(x, y));
+                }
+            }
+        }
+        // The other shop's choice shows there, so it is what tells no screen.
+        assert!(shop::menu_ink(&chosen).is_some(), "{}", path.display());
+        if let Some(screen) = recognizer.read_title(&chosen) {
+            read.push(format!("{}: {screen}", path.display()));
+        }
+    }
+    assert!(read.is_empty(), "\n{}", read.join("\n"));
+}
+
 /// No other fixture's screen (the lists, the student screen, the shops, the
 /// home screen, phones' and tablets' alike) reads as a title.
 #[test]

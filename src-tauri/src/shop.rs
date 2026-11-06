@@ -39,6 +39,12 @@ pub const SHOPS: [&str; 6] = [
     "熟達証書",
 ];
 
+/// The shops told by the menu's choice alone, for where the game is (see
+/// `title`): their offers are not kept, and their cards show no bar to read
+/// them by. Each as the menu names it and the screen it is; their words follow
+/// `SHOPS`' among the bank's shops (ids from `SHOPS.len()`).
+pub const TOLD: [(&str, &str); 1] = [("通常アイテム", "ショップ: 通常アイテム")];
+
 /// Where the parts of the screen lie, in units (window heights at 16:9, see
 /// `screen::unit`; measured on 2026-10-12 at 2222x1250 over the six shops).
 /// Rows count from the top, but for the ends of the menu and of the cards'
@@ -92,7 +98,10 @@ const LIGHT: u8 = 160;
 /// over the shop fixtures: an entry lies within 4 of its own shop's name in a
 /// window (a capture the names were not cut from), within 15 on a phone,
 /// scaled up to the references (see `screen::normalize`), and 54 or farther
-/// from any other's.
+/// from any other's. On 2026-11-06, the titles' 通常アイテム fixture (see
+/// `TOLD`) drawn from 1500 to 2370 wide by 10: within 16.2 of its own, 59 or
+/// farther from any other's, and every shops fixture so drawn 62 or farther
+/// from it.
 const MENU_WORST: f32 = 24.0;
 /// Parts of the menu's letters smaller than this share of the window height
 /// squared are specks.
@@ -426,6 +435,21 @@ pub fn card_area(image: &RgbImage, bar: &Bar) -> Option<(f32, f32, f32, f32)> {
 /// The letters of the chosen menu entry, when the menu shows one.
 pub fn menu_ink(image: &RgbImage) -> Option<Ink> {
     entry_ink(image, menu_entry(image)?)
+}
+
+/// The screen of the shop the menu has chosen, among `TOLD`: its name nearer
+/// to one of theirs than to any kept shop's.
+pub fn told(image: &RgbImage, glyphs: &Bank) -> Option<&'static str> {
+    let none = BTreeMap::new();
+    let named = word::nearest(
+        &menu_ink(image)?,
+        &glyphs.index.shops,
+        &glyphs.tiles,
+        &none,
+        MENU_WORST,
+    )?;
+    let told = usize::try_from(named.id).ok()?.checked_sub(SHOPS.len())?;
+    TOLD.get(told).map(|&(_, screen)| screen)
 }
 
 /// The letters of the chosen menu entry, whose rows are `(top, bottom)`.

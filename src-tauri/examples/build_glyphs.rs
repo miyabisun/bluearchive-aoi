@@ -733,7 +733,8 @@ fn dark_digits_and_shops(
     }
 }
 
-/// Adds the screens' titles as the tuning screens' top left draws them.
+/// Adds the screens' titles as the tuning screens' top left draws them, with
+/// the 任務 screen's campaign and the shop told by the menu's choice.
 fn titles(bank: &mut Bank, labels: &[TitleLabel], open: &dyn Fn(&str) -> RgbImage) {
     for label in labels.iter().filter(|l| l.role == "tune") {
         let id = title::TITLES
@@ -765,6 +766,17 @@ fn titles(bank: &mut Bank, labels: &[TitleLabel], open: &dyn Fn(&str) -> RgbImag
                 .and_then(|ink| entry(bank, i as i64 + 1, text.start, &ink))
                 .expect("the campaign's text shows");
             bank.index.campaign.push(word);
+        }
+        // The shop the menu has chosen, where the screen is told by it.
+        for (i, &(name, screen)) in shop::TOLD.iter().enumerate() {
+            if label.screen.as_deref() != Some(screen) {
+                continue;
+            }
+            let id = (shop::SHOPS.len() + i) as i64;
+            let word = shop::menu_ink(&image)
+                .and_then(|ink| entry(bank, id, name, &ink))
+                .expect("the shop's menu shows its choice");
+            bank.index.shops.push(word);
         }
     }
 }

@@ -551,6 +551,10 @@ describe("the work tab follows the game", () => {
     // The 任務 screen showing the Normal campaign: the 任務 fold (Normal's).
     expect(workFold({ kind: "screen", name: "任務 Normal" }, monthEnd)).toBe("work:任務");
     expect(workFold({ kind: "screen", name: "特別依頼" }, monthEnd)).toBe("work:特別依頼");
+    // The shop screen with 通常アイテム chosen: the daily fold.
+    expect(workFold({ kind: "screen", name: "ショップ: 通常アイテム" }, monthEnd)).toBe(
+      "work:通常アイテム",
+    );
     expect(workFold({ kind: "shop", name: "総力戦" }, monthEnd)).toBe("work:月末:総力戦");
     expect(workFold({ kind: "shop", name: "熟達証書" }, monthEnd)).toBe("work:月末:熟達証書");
     // The 指名手配 shop, not the daily 指名手配 stages.

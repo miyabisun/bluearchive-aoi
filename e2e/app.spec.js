@@ -1945,6 +1945,10 @@ test("the work tab opens the fold of the screen or month-end shop the game comes
   // The 指名手配 stages, told by the screen's title, open the daily fold.
   await at({ kind: "screen", name: "指名手配" });
   await expect(fold(/^指名手配$/)).toHaveAttribute("open", "");
+  // The shop screen with 通常アイテム chosen opens the daily fold.
+  await at({ kind: "screen", name: "ショップ: 通常アイテム" });
+  await expect(fold(/^ショップ: 通常アイテム$/)).toHaveAttribute("open", "");
+  await expect(page.locator(".work details[open]")).toHaveCount(1);
   // The 特別依頼 screen opens its fold.
   await at({ kind: "screen", name: "特別依頼" });
   await expect(fold(/^特別依頼$/)).toHaveAttribute("open", "");

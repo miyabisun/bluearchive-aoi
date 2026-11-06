@@ -43,7 +43,8 @@ names are told among the names that can be there, whole, and so is the title at 
 left ("学園交流会"), which tells the work tab where the game is when no list, student or shop is read
 (the titles are taken from the game's own drawing in `tests/fixtures/titles.json`; the 任務
 screen, "任務" on its Normal and Hard tabs alike, is told by its campaign's label and text, read so
-too up to the rate). A video keeps the colour at half
+too up to the rate, and the shop screen of a shop whose offers are not read, 通常アイテム, by the
+name its menu has chosen). A video keeps the colour at half
 the resolution of the brightness (4:2:0), so the student screen's coloured texts (a tier, an
 ability release, the weapon level's white fill) are cut out by their brightness; the colour only
 tells where a badge is and whether there is one, over its whole area. An equipment slot's level

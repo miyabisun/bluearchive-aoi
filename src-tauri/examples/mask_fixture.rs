@@ -9,8 +9,8 @@
 //! the shop screen is read from (`tests/fixtures/shops.json`); with `list`, the
 //! item or equipment list's panel, read with the list the screen names
 //! (`tests/fixtures/tablet.json`); with `name`, the name plate's name alone
-//! (`tests/fixtures/names.json`); with `title`, the title at the top left and
-//! the 任務 screen's campaign (`tests/fixtures/titles.json`).
+//! (`tests/fixtures/names.json`); with `title`, the title at the top left, the
+//! 任務 screen's campaign and the shop screen's menu (`tests/fixtures/titles.json`).
 
 use std::path::Path;
 
@@ -50,6 +50,7 @@ fn kept(image: &image::RgbImage, only: Option<&str>) -> Vec<(f32, f32, f32, f32)
         Some("title") => [title::AREA, campaign::LABEL_AREA]
             .into_iter()
             .chain(campaign::TEXTS.iter().map(|t| campaign::text_area(t.to)))
+            .chain(shop::areas())
             .collect(),
         Some(_) => vec![credit::NUMBER, credit::ICON],
         None => student::areas(),
@@ -170,6 +171,11 @@ fn main() {
                 "{from}'s campaign text reads otherwise once masked"
             );
         }
+        assert_eq!(
+            shop::menu_ink(&image),
+            shop::menu_ink(&read),
+            "{from}'s shop menu reads otherwise once masked"
+        );
         return save(&masked, to);
     }
     if only == Some("name") {
