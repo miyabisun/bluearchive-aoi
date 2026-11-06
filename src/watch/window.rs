@@ -202,9 +202,44 @@ fn capture(
     Capture::start_free_threaded(settings).map_err(|err| err.to_string())
 }
 
+/// Keeps Windows from running the app at efficiency speeds (`EcoQoS`) while its window is not in
+/// front: the frames then take longer to read, and more of the CPU's time. On 2026-11-07 the
+/// GPUI window (v0.4.0) was slowed so, reading the same frames at 178% of a core against 147%.
+fn run_at_full_speed() {
+    use windows_sys::Win32::System::Threading::{
+        GetCurrentProcess, PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        PROCESS_POWER_THROTTLING_EXECUTION_SPEED, PROCESS_POWER_THROTTLING_STATE,
+        ProcessPowerThrottling, SetProcessInformation,
+    };
+    // Controlled (the mask), and off (the state).
+    let state = PROCESS_POWER_THROTTLING_STATE {
+        Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        ControlMask: PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
+        StateMask: 0,
+    };
+    #[allow(clippy::cast_possible_truncation)] // A dozen bytes.
+    let size = size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32;
+    // SAFETY: the state outlives the call, which reads `size` bytes of it.
+    let ok = unsafe {
+        SetProcessInformation(
+            GetCurrentProcess(),
+            ProcessPowerThrottling,
+            (&raw const state).cast(),
+            size,
+        )
+    };
+    if ok == 0 {
+        eprintln!(
+            "Windows may slow the reading down: {}",
+            std::io::Error::last_os_error()
+        );
+    }
+}
+
 /// Looks for the game's window every `LOOK_INTERVAL`, captures it into
 /// `latest`, and tells the frame rate of the `frames` read.
 pub(super) fn look(board: &Board, latest: &Arc<Latest>, frames: &AtomicU32) {
+    run_at_full_speed();
     let mut session: Option<(Window, CaptureControl<Capture, CaptureError>)> = None;
     let mut since = Instant::now();
     board.update(|_| {});
