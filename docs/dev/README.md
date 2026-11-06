@@ -67,7 +67,8 @@ git config core.hooksPath .githooks         # run those three before pushing mai
 
 The window's tests drive it in GPUI's test context (`src/ui/tests`) over what a test keeps and
 reports in place of the game; what the window derives for display is tested in `src/view.rs`.
-On Linux (where the gate may run) GPUI builds without a window system: the tests need none.
+The window's tests need no window system: on Linux the gate builds GPUI without its Wayland and
+X11 features (checked on Ubuntu 24.04 under WSL with nothing installed beyond Rust).
 
 `AOI_DATA_DIR=<folder>` starts the app on that folder instead of the user's: `state.json` and
 `settings.json` read from and kept there, exports under `Aoi` in it. Copy a user's

@@ -191,3 +191,28 @@ fn marks_a_student_for_training_from_the_student_tab(cx: &mut TestAppContext) {
         "the training tab lists the student"
     );
 }
+
+#[gpui::test]
+fn keeps_the_student_headings_over_their_columns_when_scrolled(cx: &mut TestAppContext) {
+    let (_, core, vcx) = open(cx, &Kept::default());
+    set(&core, vcx, |s| {
+        s.students = (1..=60)
+            .map(|i| trained(i, &format!("生徒{i}"), |_| {}))
+            .collect();
+    });
+    click(vcx, "tab:生徒");
+    let heading =
+        |vcx: &mut gpui::VisualTestContext| super::bounds(vcx, "text:絆").expect("絆").top();
+    let first =
+        |vcx: &mut gpui::VisualTestContext| super::bounds(vcx, "text:生徒1").map(|b| b.top());
+    let (top, row) = (heading(vcx), first(vcx));
+    let at = super::bounds(vcx, "text:生徒2").expect("a row").center();
+    vcx.simulate_event(gpui::ScrollEvent {
+        position: at,
+        delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.), gpui::px(-400.))),
+        ..Default::default()
+    });
+    vcx.run_until_parked();
+    assert_eq!(heading(vcx), top, "the headings stay where they were");
+    assert_ne!(first(vcx), row, "the rows moved under them");
+}

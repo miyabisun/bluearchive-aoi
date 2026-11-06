@@ -284,9 +284,23 @@ impl Aoi {
             .flex_1()
             .min_h_0()
             .child(search)
+            // The headings stay over their columns: the table scrolls sideways as one, and the
+            // rows up and down under the headings.
             .child(
-                super::scroll("students-scroll", &self.content)
-                    .child(div().min_w(px(640.)).child(head).children(rows)),
+                div()
+                    .id("students-x")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_x_scroll()
+                    .child(
+                        div()
+                            .min_w(px(640.))
+                            .h_full()
+                            .flex()
+                            .flex_col()
+                            .child(head)
+                            .child(super::scroll("students-scroll", &self.content).children(rows)),
+                    ),
             )
             .into_any_element()
     }
