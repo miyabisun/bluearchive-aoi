@@ -2002,7 +2002,7 @@ pub fn qr_squares(modules: &[Vec<bool>]) -> Vec<(usize, usize)> {
 #[cfg(test)]
 mod tests;
 
-/// A line of the plan that falls short, with the bounties that drop it.
+/// A line of the plan that falls short, with the daily places that drop it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BountyCandidate {
     pub id: i64,
@@ -2010,40 +2010,61 @@ pub struct BountyCandidate {
     pub icon: String,
     /// How many are short ("?" for a line never read).
     pub short: String,
-    /// The bounties' places that drop it, as their names read without "指名手配：".
+    /// The places that drop it, the one making up the most lines short first, as their names read
+    /// without "指名手配：" or "学園交流会：".
     pub places: Vec<String>,
 }
 
-/// The plan's item lines short of what they need that a bounty drops, each with those bounties'
-/// places (the user's of 2026-10-13: 「毎日プレイ出来る「指名手配」の項目で学園の技術ノート・BDや
+/// The plan's lines short of what they need that a daily place drops (the bounties, 指名手配, and
+/// the scrimmages, 学園交流会), each with those places, the one making up the most lines short first
+/// (the user's of 2026-10-13: 「毎日プレイ出来る「指名手配」の項目で学園の技術ノート・BDや
 /// オーパーツで参加すべきステージの候補を表示する」). A line never read is kept, its shortfall "?".
-pub fn bounty_candidates(plan: &[NeedRow], bounties: &[PlaceRow]) -> Vec<BountyCandidate> {
-    plan.iter()
-        .filter(|line| line.kind == crate::plan::Kind::Item)
+pub fn bounty_candidates(plan: &[NeedRow], places: &[PlaceRow]) -> Vec<BountyCandidate> {
+    let drops = |place: &PlaceRow, id: i64| {
+        place
+            .kinds
+            .iter()
+            .flatten()
+            .flatten()
+            .any(|cell| cell.id == id)
+    };
+    // A line never read may fall short: how short is not known.
+    let short: Vec<(&NeedRow, String)> = plan
+        .iter()
         .filter_map(|line| {
-            // A line never read may fall short: how short is not known.
             let short = match line.have {
                 Some(held) => exact(line.need.checked_sub(held.amount()).filter(|&n| n > 0)?),
                 None => "?".to_owned(),
             };
-            let places: Vec<String> = bounties
+            Some((line, short))
+        })
+        .collect();
+    // How many of the lines short each place drops: the more, the sooner it is played.
+    let covers: Vec<usize> = places
+        .iter()
+        .map(|place| {
+            short
                 .iter()
-                .filter(|place| {
-                    place
-                        .kinds
-                        .iter()
-                        .flatten()
-                        .flatten()
-                        .any(|cell| cell.id == line.id)
-                })
-                .map(|place| place_name(&place.name).to_owned())
+                .filter(|(line, _)| drops(place, line.id))
+                .count()
+        })
+        .collect();
+    short
+        .iter()
+        .filter_map(|(line, short)| {
+            let mut found: Vec<usize> = (0..places.len())
+                .filter(|&p| drops(&places[p], line.id))
                 .collect();
-            (!places.is_empty()).then(|| BountyCandidate {
+            found.sort_by_key(|&p| std::cmp::Reverse(covers[p]));
+            (!found.is_empty()).then(|| BountyCandidate {
                 id: line.id,
                 name: line.name.clone(),
                 icon: line.icon.clone(),
-                short,
-                places,
+                short: short.clone(),
+                places: found
+                    .into_iter()
+                    .map(|p| place_name(&places[p].name).to_owned())
+                    .collect(),
             })
         })
         .collect()

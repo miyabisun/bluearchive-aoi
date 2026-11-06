@@ -2441,10 +2441,10 @@ fn bounty_candidates_name_the_bounties_dropping_what_falls_short() {
     assert_eq!(
         seen,
         [
-            (4033, "18", vec!["ハイウェイ", "砂漠の鉄道"]),
+            (4033, "18", vec!["砂漠の鉄道", "ハイウェイ"]),
             (3013, "6", vec!["砂漠の鉄道"]),
         ],
-        "each line short, in the plan's order, with the bounties that drop it"
+        "each line short, in the plan's order, with the bounties that drop it, the one dropping more lines first"
     );
 }
 
@@ -2468,4 +2468,39 @@ fn bounty_candidates_keep_what_was_never_read_its_shortfall_unknown() {
     let found = bounty_candidates(&plan, &bounties);
     assert_eq!(found.len(), 1, "a line never read may fall short");
     assert_eq!(found[0].short, "?", "how short is not known");
+}
+
+#[test]
+fn bounty_candidates_put_first_the_place_making_up_the_most_shortfalls() {
+    let plan = [
+        need_line(4033, "notes", 30, Some(12)),
+        need_line(3013, "bd", 10, Some(4)),
+        need_line(9001, "oopart", 4, Some(0)),
+    ];
+    let places = [
+        bounty("指名手配：ハイウェイ", &[4033]),
+        bounty("指名手配：砂漠の鉄道", &[4033, 3013, 9001]),
+        bounty("学園交流会：トリニティ", &[9001]),
+    ];
+    let found = bounty_candidates(&plan, &places);
+    let first: Vec<&str> = found.iter().map(|c| c.places[0].as_str()).collect();
+    assert_eq!(
+        first,
+        ["砂漠の鉄道", "砂漠の鉄道", "砂漠の鉄道"],
+        "the place dropping three lines short comes first for each"
+    );
+    let oopart = &found[2];
+    assert_eq!(
+        oopart.places,
+        ["砂漠の鉄道", "トリニティ"],
+        "a scrimmage counts as a daily place too"
+    );
+}
+
+#[test]
+fn bounty_candidates_take_any_line_a_place_drops_whatever_its_kind() {
+    let mut line = need_line(5000, "a piece", 3, Some(1));
+    line.kind = crate::plan::Kind::Equipment;
+    let found = bounty_candidates(&[line], &[bounty("指名手配：教室", &[5000])]);
+    assert_eq!(found.len(), 1, "a line of equipment a place drops counts");
 }

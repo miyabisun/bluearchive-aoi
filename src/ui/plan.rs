@@ -211,7 +211,11 @@ impl Aoi {
                     .into_any_element(),
             );
             sections.extend(self.procure(theme, cx));
-            let candidates = view::bounty_candidates(&self.shown.plan, &self.shown.work.bounties);
+            let places: Vec<crate::work::PlaceRow> = (self.shown.work.bounties.iter())
+                .chain(&self.shown.work.scrimmages)
+                .cloned()
+                .collect();
+            let candidates = view::bounty_candidates(&self.shown.plan, &places);
             if !candidates.is_empty() {
                 sections.push(
                     section_title("日々の行動")
@@ -1060,8 +1064,8 @@ impl Aoi {
     }
 }
 
-/// What falls short that the bounties (指名手配), played every day, drop: a line each, with the
-/// places that drop it (the user's of 2026-10-13 「毎日プレイ出来る「指名手配」の項目で…参加すべき
+/// What falls short that the daily places (指名手配, 学園交流会) drop: a line each, with the places
+/// that drop it, the one making up the most first (the user's of 2026-10-13 「毎日プレイ出来る「指名手配」の項目で…参加すべき
 /// ステージの候補を表示する」).
 fn daily(theme: &Theme, candidates: &[view::BountyCandidate]) -> impl IntoElement + use<> {
     let rule = theme.border;
@@ -1074,7 +1078,7 @@ fn daily(theme: &Theme, candidates: &[view::BountyCandidate]) -> impl IntoElemen
         .text_color(theme.muted)
         .child(div().flex_1().child(text("足りないもの")))
         .child(div().w(px(64.)).flex().justify_end().child(text("不足")))
-        .child(div().flex_1().pl(SP_3).child(text("指名手配")));
+        .child(div().flex_1().pl(SP_3).child(text("指名手配・学園交流会")));
     let rows = candidates.iter().map(|c| {
         let at = format!("daily-{}", c.id);
         div()
