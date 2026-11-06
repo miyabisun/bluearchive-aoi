@@ -62,13 +62,21 @@ impl Aoi {
             Sub::Ooparts => self.ooparts(theme).into_any_element(),
             Sub::Currency => self.currency(theme, window).into_any_element(),
         };
+        // Every item a list of its own, scrolling by itself; the tables in the frame's scroll.
+        let body = if sub == Sub::All {
+            body
+        } else {
+            super::scroll("items-scroll", &self.content)
+                .child(body)
+                .into_any_element()
+        };
         div()
             .flex()
             .flex_col()
             .flex_1()
             .min_h_0()
             .child(subtabs)
-            .child(super::scroll("items-scroll", &self.content).child(body))
+            .child(body)
             .into_any_element()
     }
 
@@ -115,16 +123,22 @@ impl Aoi {
                 sold: false,
             })
             .collect();
+        let id = if items {
+            "item-tiles"
+        } else {
+            "equipment-tiles"
+        };
         div()
             .flex()
             .flex_col()
+            .flex_1()
+            .min_h_0()
             .child(search)
-            .child(parts::tiles(
-                theme,
-                parts::content_width(window),
-                tiles,
-                |_| None,
-            ))
+            .child(
+                parts::tiles_list(id, parts::content_width(window), tiles)
+                    .flex_1()
+                    .min_h_0(),
+            )
             .into_any_element()
     }
 

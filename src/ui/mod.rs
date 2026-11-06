@@ -857,7 +857,18 @@ impl Render for Aoi {
                     .pt(SP_4)
                     .px(SP_3)
                     .children(notices)
-                    .child(content),
+                    // The tab's pictures are kept while it shows, and dropped as another opens.
+                    .child(
+                        gpui::image_cache(gpui::retain_all(SharedString::from(format!(
+                            "images-{:?}-{:?}-{:?}",
+                            self.tab, self.items_sub, self.equipment_sub
+                        ))))
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .min_h_0()
+                        .child(content),
+                    ),
             )
             .when_some(self.toast.clone(), |root, toast| {
                 root.child(

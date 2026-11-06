@@ -74,19 +74,46 @@ pub fn tiles_at(
                 .gap(SP_2)
                 .children(row.into_iter().map(|(i, tile)| {
                     let below = under(i);
-                    tile_view(theme, column, tile, below)
+                    tile_view(theme, column, &tile, below)
                 })),
         );
     }
     div().flex().flex_col().gap(SP_2).children(rows)
 }
 
+/// Tiles in a grid of columns at least 64 px wide filling `width`, as a list that draws only the
+/// rows in sight: an item list holds hundreds, and the icons of the rows never seen are never
+/// loaded. It scrolls up and down by itself.
+pub fn tiles_list(id: &str, width: Pixels, tiles: Vec<Tile>) -> gpui::UniformList {
+    let (count, column) = columns(width, px(64.), SP_2);
+    let tiles = std::rc::Rc::new(tiles);
+    let rows = tiles.len().div_ceil(count);
+    gpui::uniform_list(
+        SharedString::from(id.to_owned()),
+        rows,
+        move |range, _window, cx| {
+            let theme = Theme::get(cx);
+            range
+                .map(|row| {
+                    let start = row * count;
+                    let end = (start + count).min(tiles.len());
+                    div().flex().gap(SP_2).pb(SP_2).children(
+                        tiles[start..end]
+                            .iter()
+                            .map(|tile| tile_view(&theme, column, tile, None)),
+                    )
+                })
+                .collect()
+        },
+    )
+}
+
 fn tile_view(
     theme: &Theme,
     width: Pixels,
-    tile: Tile,
+    tile: &Tile,
     below: Option<AnyElement>,
-) -> impl IntoElement {
+) -> impl IntoElement + use<> {
     let surface = theme.surface;
     let label = |words: String, color: Hsla| {
         div()
@@ -107,7 +134,7 @@ fn tile_view(
         .flex()
         .justify_center()
         .child(icons::icon(&tile.icon, px(64.)).when(tile.sold, |i| i.grayscale(true)))
-        .when_some(tile.badge, |p, badge| {
+        .when_some(tile.badge.clone(), |p, badge| {
             p.child(label(badge, theme.muted).left(px(2.)))
         })
         .when_some(tile.count.clone(), |p, count| {
@@ -135,7 +162,7 @@ fn tile_view(
         .rounded(RADIUS_SM)
         .bg(tile.face.unwrap_or(theme.wash_base))
         .when(tile.sold, |t| t.opacity(0.55))
-        .tooltip(tooltip(tile.title))
+        .tooltip(tooltip(tile.title.clone()))
         .child(picture)
         .children(below)
 }

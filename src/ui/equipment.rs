@@ -67,7 +67,13 @@ impl Aoi {
             .flex_1()
             .min_h_0()
             .child(subtabs)
-            .child(super::scroll("equipment-scroll", &self.content).child(body))
+            .child(if sub == Sub::All {
+                body
+            } else {
+                super::scroll("equipment-scroll", &self.content)
+                    .child(body)
+                    .into_any_element()
+            })
             .into_any_element()
     }
 

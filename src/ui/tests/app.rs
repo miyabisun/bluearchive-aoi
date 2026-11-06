@@ -98,9 +98,23 @@ fn lists_the_item_tally_in_order_and_narrows_it_by_name(cx: &mut TestAppContext)
         "the status says what is read"
     );
     assert!(has(vcx, "tile-1002"), "every item a tile");
-    assert!(has(vcx, "tile-1119"), "down to the last");
     assert!(shows(vcx, "1,994"), "counts with separators");
     assert!(shows(vcx, "51K"), "thousands as K");
+    // Only the rows in sight are drawn; scrolled down, the last comes.
+    assert!(
+        !has(vcx, "tile-1119"),
+        "the last row out of sight is not drawn"
+    );
+    let at = super::bounds(vcx, "tile-1002").expect("a tile").center();
+    for _ in 0..10 {
+        vcx.simulate_event(gpui::ScrollEvent {
+            position: at,
+            delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.), gpui::px(-800.))),
+            ..Default::default()
+        });
+    }
+    vcx.run_until_parked();
+    assert!(has(vcx, "tile-1119"), "down to the last");
 
     click(vcx, "search");
     keys(vcx, "ｱ ｲ ﾃ ﾑ 1 1");
