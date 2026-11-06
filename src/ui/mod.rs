@@ -111,6 +111,23 @@ pub enum UpdateState {
     Failed(String),
 }
 
+/// How the window asks for the latest release and takes it: GitHub's in the app, a test's own
+/// in the tests.
+#[derive(Clone, Copy)]
+pub struct Updates {
+    pub check: fn() -> Result<UpdateCheck, String>,
+    pub apply: fn() -> Result<(), String>,
+}
+
+impl Default for Updates {
+    fn default() -> Self {
+        Self {
+            check: crate::app::check_update,
+            apply: crate::app::apply_update,
+        }
+    }
+}
+
 /// A dialog over the window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dialog {
@@ -151,10 +168,11 @@ pub struct Aoi {
     /// The last export: the path, or why it failed.
     exported: Option<Result<String, String>>,
     update: Option<UpdateState>,
+    pub updates: Updates,
     toast: Option<SharedString>,
     toast_timer: Option<Task<()>>,
     /// The folds opened by hand, by key: kept here, so the snapshots of every frame leave them.
-    opened: HashSet<String>,
+    pub(crate) opened: HashSet<String>,
     /// The work tab's fold the game came to last (see `follow_work`).
     followed: Option<String>,
     /// What is paid from each source for each line short (`line|source`), the user's choice,
@@ -214,6 +232,7 @@ impl Aoi {
             sort_by: students::Column::Level,
             exported: None,
             update: None,
+            updates: Updates::default(),
             toast: None,
             toast_timer: None,
             opened: HashSet::new(),
@@ -296,9 +315,8 @@ impl Aoi {
             true,
             cx,
         );
-        let found = cx
-            .background_executor()
-            .spawn(async { crate::app::check_update() });
+        let check = self.updates.check;
+        let found = cx.background_executor().spawn(async move { check() });
         cx.spawn(async move |this, cx| {
             let found = found.await;
             let _ = this.update(cx, |this, cx| match found {
@@ -334,9 +352,8 @@ impl Aoi {
             self.update = Some(UpdateState::Installing(check.clone()));
             cx.notify();
         }
-        let applied = cx
-            .background_executor()
-            .spawn(async { crate::app::apply_update() });
+        let apply = self.updates.apply;
+        let applied = cx.background_executor().spawn(async move { apply() });
         cx.spawn(async move |this, cx| {
             let applied = applied.await;
             let _ = this.update(cx, |this, cx| match applied {
@@ -923,7 +940,7 @@ pub fn run(recognizer: Arc<Recognizer>, places: Places) {
                 .parent()
                 .map(std::path::Path::to_path_buf)
                 .unwrap_or_default();
-            let core = Arc::new(Core::new(recognizer, places, &kept, trouble, changed));
+            let core = Arc::new(Core::new(recognizer, places, &kept, trouble, changed, true));
             core.watch(kept, phone_dir);
             let _ = open(core, changes, settings, cx);
             cx.on_window_closed(|cx, _| {
@@ -998,9 +1015,15 @@ pub fn scroll(id: &str, handle: &ScrollHandle) -> gpui::Stateful<gpui::Div> {
         .track_scroll(handle)
 }
 
-/// The search field with its caption over it.
-pub fn search(theme: &Theme, field: &Entity<TextInput>) -> impl IntoElement {
-    let border = theme.border;
+/// The search field with its caption over it; its border the accent while it has the focus.
+pub fn search(
+    theme: &Theme,
+    field: &Entity<TextInput>,
+    window: &Window,
+    cx: &App,
+) -> impl IntoElement {
+    let focused = field.read(cx).focus_handle(cx).is_focused(window);
+    let border = if focused { theme.accent } else { theme.border };
     div()
         .flex()
         .flex_col()

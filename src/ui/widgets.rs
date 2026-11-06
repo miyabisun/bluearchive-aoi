@@ -167,8 +167,10 @@ pub fn outlined_button(theme: &Theme, id: &str, label: &str, primary: bool) -> S
         (theme.border, theme.on_surface)
     };
     let focused = if primary { theme.accent } else { theme.muted };
+    let selector = id.to_owned();
     div()
         .id(SharedString::from(id.to_owned()))
+        .debug_selector(move || selector.clone())
         .role(Role::Button)
         .aria_label(label.to_owned())
         .tab_stop(true)
@@ -188,8 +190,10 @@ pub fn outlined_button(theme: &Theme, id: &str, label: &str, primary: bool) -> S
 /// and Space on it) opens and closes the fold. Its text cannot be selected, so a double click
 /// opens and closes it and selects nothing.
 pub fn fold_title(theme: &Theme, key: &str, open: bool) -> Stateful<Div> {
+    let selector = format!("fold-{key}");
     div()
-        .id(SharedString::from(format!("fold-{key}")))
+        .id(SharedString::from(selector.clone()))
+        .debug_selector(move || selector.clone())
         .role(Role::Button)
         .aria_expanded(open)
         .tab_stop(true)

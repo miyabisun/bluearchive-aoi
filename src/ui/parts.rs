@@ -110,13 +110,17 @@ fn tile_view(
         .when_some(tile.badge, |p, badge| {
             p.child(label(badge, theme.muted).left(px(2.)))
         })
-        .when_some(tile.count, |p, count| {
+        .when_some(tile.count.clone(), |p, count| {
             p.child(label(count, theme.on_surface).right(px(2.)))
         });
     div()
         .id(SharedString::from(format!("tile-{}", tile.key)))
         .role(Role::ListItem)
-        .aria_label(tile.title.clone())
+        // What UI Automation reads: the name, then the count (as the tile shows it).
+        .aria_label(match &tile.count {
+            Some(count) => format!("{} {count}", tile.title.replace('\n', " ")),
+            None => tile.title.replace('\n', " "),
+        })
         .debug_selector({
             let key = tile.key.clone();
             move || format!("tile-{key}")

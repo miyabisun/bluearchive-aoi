@@ -2,7 +2,11 @@
 //! the counterparts of the Playwright suite (`e2e/app.spec.js` before GPUI).
 
 mod app;
+mod menu;
+mod plan;
+mod shops;
 mod students;
+mod work;
 
 use std::sync::{
     Arc, OnceLock,
@@ -57,7 +61,14 @@ pub fn open_with<'a>(
         super::bind_keys(cx);
     });
     let (changed, changes) = mpsc::unbounded();
-    let core = Arc::new(Core::new(recognizer(), places(), kept, None, changed));
+    let core = Arc::new(Core::new(
+        recognizer(),
+        places(),
+        kept,
+        None,
+        changed,
+        false,
+    ));
     let shown = core.clone();
     let (aoi, vcx) =
         cx.add_window_view(move |window, cx| Aoi::new(shown, changes, settings, window, cx));

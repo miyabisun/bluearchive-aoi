@@ -31,7 +31,7 @@ impl Aoi {
         let query = self.query.read(cx).text().to_owned();
         let searching = !query.trim().is_empty();
         let shops = view::filter_shops(&self.shown.shops, &query);
-        let search = super::search(theme, &self.query);
+        let search = super::search(theme, &self.query, window, cx);
         if shops.is_empty() {
             return div()
                 .flex()

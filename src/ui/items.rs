@@ -88,7 +88,7 @@ impl Aoi {
             &self.shown.equipment
         };
         let shown = view::filter_rows(rows, &query);
-        let search = super::search(theme, &self.query);
+        let search = super::search(theme, &self.query, window, cx);
         if shown.is_empty() {
             return div()
                 .flex()

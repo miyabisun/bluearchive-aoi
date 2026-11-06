@@ -358,25 +358,28 @@ pub struct Core {
     latest: Mutex<Snapshot>,
     recognizer: Arc<Recognizer>,
     pub places: Places,
-    highlight: Highlight,
+    /// Windows' arrow cursor in the colour chosen; none where it is left alone (the tests).
+    highlight: Option<Highlight>,
     watcher: OnceLock<watch::Watcher>,
     changed: UnboundedSender<()>,
 }
 
 impl Core {
-    /// The window's data as it starts from what was `kept` (and why it could not be, if so).
+    /// The window's data as it starts from what was `kept` (and why it could not be, if so);
+    /// with `cursor`, the menu's cursor is put in for Windows' own.
     pub fn new(
         recognizer: Arc<Recognizer>,
         places: Places,
         kept: &Kept,
         keep_error: Option<String>,
         changed: UnboundedSender<()>,
+        cursor: bool,
     ) -> Self {
         Self {
             latest: Mutex::new(Snapshot::starting(&recognizer, kept, keep_error)),
             recognizer,
             places,
-            highlight: Highlight::start(),
+            highlight: cursor.then(Highlight::start),
             watcher: OnceLock::new(),
             changed,
         }
@@ -521,7 +524,9 @@ impl Core {
     /// Puts the arrow in `palette` in for Windows' arrow cursor, or Windows' own back
     /// (none); whether the cursor can be changed here (Windows only).
     pub fn set_cursor(&self, palette: Option<Palette>) -> bool {
-        self.highlight.set(palette);
+        if let Some(highlight) = &self.highlight {
+            highlight.set(palette);
+        }
         cfg!(windows)
     }
 }
@@ -529,7 +534,9 @@ impl Core {
 impl Drop for Core {
     /// Windows' own cursor back as the app ends: it is changed only while the app runs.
     fn drop(&mut self) {
-        self.highlight.set(None);
+        if let Some(highlight) = &self.highlight {
+            highlight.set(None);
+        }
     }
 }
 

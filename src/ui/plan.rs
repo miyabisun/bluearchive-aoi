@@ -16,7 +16,7 @@ use super::{
     students::stars,
     text_input::{self, TextInput},
     theme::{FS_CAPTION, FS_MD, FS_SM, RADIUS_SM, SP_1, SP_2, SP_3, SP_4, SP_5, Theme, tabular},
-    widgets::{outlined_button, text, tooltip},
+    widgets::{outlined_button, read, text, tooltip},
 };
 use crate::{plan::Target, view};
 
@@ -307,6 +307,7 @@ impl Aoi {
                         let open = self.star_menu.is_some_and(|m| m.id == id);
                         let picker = div()
                             .id(SharedString::from(format!("star-pick-{id}")))
+                            .debug_selector(move || format!("star-pick-{id}"))
                             .role(Role::Button)
                             .aria_label(format!("{name}の星の目標"))
                             .aria_expanded(open)
@@ -383,6 +384,7 @@ impl Aoi {
                             .child(
                                 div()
                                     .id(SharedString::from(format!("target-{id}-{column}")))
+                                    .debug_selector(move || format!("target-{id}-{column}"))
                                     .role(Role::SpinButton)
                                     .aria_label(format!("{name}の{label}の目標"))
                                     .w(px(3. * 16.))
@@ -467,6 +469,8 @@ impl Aoi {
         let rest = plan.rest.iter().map(|line| {
             let cells = view::need_cells(line);
             let (color, weight) = tone(cells.enough);
+            let at = format!("need-{:?}-{}", line.kind, line.id);
+            let cell = |part: &str, words: &str| read(format!("{at}-{part}"), words.to_owned());
             div()
                 .flex()
                 .py(SP_2)
@@ -476,14 +480,14 @@ impl Aoi {
                     div()
                         .flex_1()
                         .min_w(px(8. * 16.))
-                        .child(text(cells.name.clone())),
+                        .child(cell("name", &cells.name)),
                 )
-                .child(fit(text(cells.need.clone()).into_any_element()))
-                .child(fit(text(cells.have.clone()).into_any_element()))
+                .child(fit(cell("need", &cells.need).into_any_element()))
+                .child(fit(cell("have", &cells.have).into_any_element()))
                 .child(fit(div()
                     .text_color(color)
                     .font_weight(weight)
-                    .child(text(cells.short.clone()))
+                    .child(cell("short", &cells.short))
                     .into_any_element()))
         });
         let families = (!plan.families.is_empty()).then(|| {
@@ -734,6 +738,10 @@ impl Aoi {
                                 "chip-{}-{}",
                                 line.key, chip.key
                             )))
+                            .debug_selector({
+                                let selector = format!("chip-{}-{}", line.key, chip.key);
+                                move || selector.clone()
+                            })
                             .role(Role::Button)
                             .aria_label(format!("{} {}", chip.title, chip.text))
                             .tab_stop(true)
@@ -835,13 +843,23 @@ impl Aoi {
                                     .when(!line.icon.is_empty(), |w| {
                                         w.child(icons::icon(&line.icon, px(28.)))
                                     })
-                                    .child(text(line.name.clone())),
+                                    .child(read(
+                                        format!("procure-{}-name", line.key),
+                                        line.name.clone(),
+                                    )),
                             )
-                            .child(fit(text(line.short.clone()).into_any_element()))
+                            .child(fit(read(
+                                format!("procure-{}-short", line.key),
+                                line.short.clone(),
+                            )
+                            .into_any_element()))
                             .child(fit(div()
                                 .text_color(color)
                                 .font_weight(weight)
-                                .child(text(line.left.clone()))
+                                .child(read(
+                                    format!("procure-{}-left", line.key),
+                                    line.left.clone(),
+                                ))
                                 .into_any_element())),
                     )
                     .child(div().flex().flex_wrap().px(SP_2).pb(SP_2).children(chips))
@@ -983,6 +1001,7 @@ impl Aoi {
                                 let target = row.target;
                                 div()
                                     .id(SharedString::from(format!("star-{star}")))
+                                    .debug_selector(move || format!("star-{star}"))
                                     .role(Role::MenuItemRadio)
                                     .aria_label(view::star_name(star))
                                     .aria_toggled(if checked {

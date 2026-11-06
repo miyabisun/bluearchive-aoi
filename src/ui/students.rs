@@ -76,7 +76,7 @@ impl Aoi {
     pub(super) fn students_tab(
         &mut self,
         theme: &Theme,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         if self.shown.students.is_empty() {
@@ -85,7 +85,7 @@ impl Aoi {
         let query = self.query.read(cx).text().to_owned();
         let found = view::filter_rows(&self.shown.students, &query);
         let shown = view::sort_students(found, self.sort_by.key());
-        let search = super::search(theme, &self.query);
+        let search = super::search(theme, &self.query, window, cx);
         if shown.is_empty() {
             return div()
                 .flex()
