@@ -2,8 +2,8 @@
 //! as tiles, what each coin buys under each.
 
 use gpui::{
-    AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, Role,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
+    Role, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px,
 };
 
@@ -19,7 +19,12 @@ use crate::view;
 pub const EMPTY: &str = "ブルーアーカイブのショップで総力戦・大決戦・カケラ(文字)・合同火力演習・指名手配・熟達証書を開いて下まで送ると、品ごとにあと何回買えるかがここに並びます。";
 
 impl Aoi {
-    pub(super) fn shops_tab(&mut self, theme: &Theme, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn shops_tab(
+        &mut self,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         if self.shown.shops.is_empty() {
             return super::widgets::empty(theme, "shops", EMPTY).into_any_element();
         }
@@ -32,7 +37,11 @@ impl Aoi {
                 .flex()
                 .flex_col()
                 .child(search)
-                .child(super::widgets::empty(theme, "no-match", "一致する項目がありません"))
+                .child(super::widgets::empty(
+                    theme,
+                    "no-match",
+                    "一致する項目がありません",
+                ))
                 .into_any_element();
         }
         let width = parts::content_width(window);
@@ -51,13 +60,18 @@ impl Aoi {
                     .font_features(tabular())
                     .children(shop.coins.iter().map(|coin| {
                         div()
-                            .id(SharedString::from(format!("coin-{}-{}", shop.name, coin.name)))
+                            .id(SharedString::from(format!(
+                                "coin-{}-{}",
+                                shop.name, coin.name
+                            )))
                             .tooltip(tooltip(coin.name.clone()))
                             .flex()
                             .items_center()
                             .gap(px(2.))
                             .child(icons::icon(&coin.icon, px(20.)))
-                            .child(text(coin.held.map_or_else(|| "?".to_owned(), view::format_count)))
+                            .child(text(
+                                coin.held.map_or_else(|| "?".to_owned(), view::format_count),
+                            ))
                     }));
                 let title = fold_title(theme, &format!("shop-{}", shop.name), open)
                     .aria_label(shop.name.clone())
@@ -80,9 +94,10 @@ impl Aoi {
                                     .font_features(tabular())
                                     .child(text(read_at)),
                             )
-                            .when(view::shop_stale(shop.resets, &shop.read_at, &crate::keep::now()), |h| {
-                                h.child(div().text_size(FS_SM).child(text("前の月の値")))
-                            }),
+                            .when(
+                                view::shop_stale(shop.resets, &shop.read_at, &crate::keep::now()),
+                                |h| h.child(div().text_size(FS_SM).child(text("前の月の値"))),
+                            ),
                     )
                     .child(held)
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -103,45 +118,53 @@ impl Aoi {
                                 title: good.name.clone(),
                                 badge: None,
                                 count: (!tile.amount.is_empty()).then(|| tile.amount.clone()),
-                                face: super::face_color(theme, view::good_face(good.eleph, good.rarity)),
+                                face: super::face_color(
+                                    theme,
+                                    view::good_face(good.eleph, good.rarity),
+                                ),
                                 sold: good.sold,
                             }
                         })
                         .collect();
-                    let offers: Vec<Vec<Option<view::OfferText>>> =
-                        shop.goods.iter().map(|good| view::good_tile(good).offers).collect();
+                    let offers: Vec<Vec<Option<view::OfferText>>> = shop
+                        .goods
+                        .iter()
+                        .map(|good| view::good_tile(good).offers)
+                        .collect();
                     let coins = shop.coins.clone();
                     let muted = theme.muted;
                     let (count, column) = parts::columns(width, px(112.), SP_2);
                     let _ = count;
-                    div().mt(SP_1).child(parts::tiles_at(theme, width, px(112.), tiles, move |i| {
-                        let offers = offers.get(i)?;
-                        Some(
-                            div()
-                                .w(column)
-                                .flex()
-                                .flex_col()
-                                .gap(px(2.))
-                                .children(offers.iter().enumerate().map(|(c, offer)| {
-                                    div()
-                                        .min_h(px(18.))
-                                        .flex()
-                                        .justify_center()
-                                        .items_center()
-                                        .gap(px(2.))
-                                        .text_size(FS_CAPTION)
-                                        .font_features(tabular())
-                                        .whitespace_nowrap()
-                                        .when_some(offer.as_ref(), |line, offer| {
-                                            let coin = &coins[c];
-                                            line.when(offer.sold, |l| l.text_color(muted))
-                                                .child(icons::icon(&coin.icon, px(18.)))
-                                                .child(text(offer.text.clone()))
-                                        })
-                                }))
-                                .into_any_element(),
-                        )
-                    }))
+                    div()
+                        .mt(SP_1)
+                        .child(parts::tiles_at(theme, width, px(112.), tiles, move |i| {
+                            let offers = offers.get(i)?;
+                            Some(
+                                div()
+                                    .w(column)
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(2.))
+                                    .children(offers.iter().enumerate().map(|(c, offer)| {
+                                        div()
+                                            .min_h(px(18.))
+                                            .flex()
+                                            .justify_center()
+                                            .items_center()
+                                            .gap(px(2.))
+                                            .text_size(FS_CAPTION)
+                                            .font_features(tabular())
+                                            .whitespace_nowrap()
+                                            .when_some(offer.as_ref(), |line, offer| {
+                                                let coin = &coins[c];
+                                                line.when(offer.sold, |l| l.text_color(muted))
+                                                    .child(icons::icon(&coin.icon, px(18.)))
+                                                    .child(text(offer.text.clone()))
+                                            })
+                                    }))
+                                    .into_any_element(),
+                            )
+                        }))
                 });
                 div()
                     .id(SharedString::from(format!("shop-{}", shop.name)))

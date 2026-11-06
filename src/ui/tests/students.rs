@@ -23,7 +23,10 @@ fn hoshino() -> StudentRow {
             rarity: Some(5),
             bond: Some(34),
             skills: [Some(5), Some(10), Some(10), Some(10)],
-            weapon: Some(Some(Weapon { level: 60, stars: 4 })),
+            weapon: Some(Some(Weapon {
+                level: 60,
+                stars: 4,
+            })),
             equipment: [Some(Gear { tier: 10 }); 3],
             gear: Some(2),
             ability: [Some(25), Some(0), Some(25)],
@@ -55,7 +58,10 @@ pub fn trained(id: i64, name: &str, change: impl FnOnce(&mut Training)) -> Stude
         rarity: Some(5),
         bond: Some(20),
         skills: [Some(5), Some(10), Some(10), Some(10)],
-        weapon: Some(Some(Weapon { level: 1, stars: 0 })),
+        weapon: Some(Some(Weapon {
+            level: 60,
+            stars: 4,
+        })),
         equipment: [Some(Gear { tier: 10 }); 3],
         gear: Some(0),
         ability: [Some(0); 3],
@@ -91,7 +97,15 @@ fn shows_the_students_read_from_the_student_screen(cx: &mut TestAppContext) {
     for words in ["ホシノ", "90", "5MMM", "T10/10/10", "T2", "25/0/25", "34"] {
         assert!(shows(vcx, words), "ホシノ's {words}");
     }
-    for words in ["アカネ（バニーガール）", "?", "2336", "T4/?/3", "—", "0/0/0", "20"] {
+    for words in [
+        "アカネ（バニーガール）",
+        "?",
+        "2336",
+        "T4/?/3",
+        "—",
+        "0/0/0",
+        "20",
+    ] {
         assert!(shows(vcx, words), "アカネ's {words}");
     }
     // The star counts on into the unique weapon's, drawn as the game's.
@@ -116,7 +130,10 @@ fn orders_students_by_level_star_and_bond_or_by_the_column_chosen(cx: &mut TestA
             }),
             trained(2, "ミカ", |t| {
                 t.bond = Some(43);
-                t.weapon = Some(Some(Weapon { level: 30, stars: 1 }));
+                t.weapon = Some(Some(Weapon {
+                    level: 30,
+                    stars: 1,
+                }));
             }),
             trained(3, "ヒナ", |t| {
                 t.rarity = Some(4);
@@ -135,7 +152,11 @@ fn orders_students_by_level_star_and_bond_or_by_the_column_chosen(cx: &mut TestA
         names.sort_by(|a, b| a.0.partial_cmp(&b.0).expect("tops compare"));
         names.into_iter().map(|(_, n)| n).collect::<Vec<_>>()
     };
-    assert_eq!(order(vcx), ["ホシノ", "ミカ", "ヒナ", "アル"], "by level, then star and bond");
+    assert_eq!(
+        order(vcx),
+        ["ホシノ", "ミカ", "ヒナ", "アル"],
+        "by level, then star and bond"
+    );
     click(vcx, "text:星");
     assert_eq!(order(vcx), ["ホシノ", "アル", "ミカ", "ヒナ"], "by star");
     click(vcx, "text:絆");
@@ -147,7 +168,9 @@ fn counts_the_students_read_on_their_tab(cx: &mut TestAppContext) {
     let (_, core, vcx) = open(cx, &Kept::default());
     assert!(!shows(vcx, "\u{a0}0"), "no count before any is read");
     set(&core, vcx, |s| {
-        s.students = (1..=42).map(|i| trained(i, &format!("生徒{i}"), |_| {})).collect();
+        s.students = (1..=42)
+            .map(|i| trained(i, &format!("生徒{i}"), |_| {}))
+            .collect();
     });
     assert!(shows(vcx, "\u{a0}42"), "the students read, on the tab");
 }
@@ -163,5 +186,8 @@ fn marks_a_student_for_training_from_the_student_tab(cx: &mut TestAppContext) {
         "marked for training"
     );
     click(vcx, "tab:育成");
-    assert!(shows(vcx, "アカネ（バニーガール）"), "the training tab lists the student");
+    assert!(
+        shows(vcx, "アカネ（バニーガール）"),
+        "the training tab lists the student"
+    );
 }

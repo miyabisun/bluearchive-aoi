@@ -2,9 +2,9 @@
 //! their counts, a kind's tiers on their colours, and how many students what is held raises.
 
 use gpui::{
-    StyledImage as _, AnyElement, Div, FontWeight, Hsla, InteractiveElement as _, IntoElement, ParentElement as _,
-    Pixels, Role, SharedString, StatefulInteractiveElement as _, Styled as _, div,
-    prelude::FluentBuilder as _, px,
+    AnyElement, Div, FontWeight, Hsla, InteractiveElement as _, IntoElement, ParentElement as _,
+    Pixels, Role, SharedString, StatefulInteractiveElement as _, Styled as _, StyledImage as _,
+    div, prelude::FluentBuilder as _, px,
 };
 
 use super::{
@@ -45,29 +45,48 @@ pub struct Tile {
 
 /// Tiles in a grid of columns at least 64 px wide (a 64 px icon, its padding over), 8 px apart,
 /// filling `width`.
-pub fn tiles(theme: &Theme, width: Pixels, tiles: Vec<Tile>, under: impl Fn(usize) -> Option<AnyElement>) -> Div {
+pub fn tiles(
+    theme: &Theme,
+    width: Pixels,
+    tiles: Vec<Tile>,
+    under: impl Fn(usize) -> Option<AnyElement>,
+) -> Div {
     tiles_at(theme, width, px(64.), tiles, under)
 }
 
 /// Tiles in a grid of columns at least `min` wide, 8 px apart, filling `width`; `under` adds
 /// what goes under a tile's icon (a good's offers).
-pub fn tiles_at(theme: &Theme, width: Pixels, min: Pixels, tiles: Vec<Tile>, under: impl Fn(usize) -> Option<AnyElement>) -> Div {
+pub fn tiles_at(
+    theme: &Theme,
+    width: Pixels,
+    min: Pixels,
+    tiles: Vec<Tile>,
+    under: impl Fn(usize) -> Option<AnyElement>,
+) -> Div {
     let (count, column) = columns(width, min, SP_2);
     let mut rows = Vec::new();
     let mut tiles = tiles.into_iter().enumerate().peekable();
     while tiles.peek().is_some() {
         let row: Vec<_> = tiles.by_ref().take(count).collect();
         rows.push(
-            div().flex().gap(SP_2).children(row.into_iter().map(|(i, tile)| {
-                let below = under(i);
-                tile_view(theme, column, tile, below)
-            })),
+            div()
+                .flex()
+                .gap(SP_2)
+                .children(row.into_iter().map(|(i, tile)| {
+                    let below = under(i);
+                    tile_view(theme, column, tile, below)
+                })),
         );
     }
     div().flex().flex_col().gap(SP_2).children(rows)
 }
 
-fn tile_view(theme: &Theme, width: Pixels, tile: Tile, below: Option<AnyElement>) -> impl IntoElement {
+fn tile_view(
+    theme: &Theme,
+    width: Pixels,
+    tile: Tile,
+    below: Option<AnyElement>,
+) -> impl IntoElement {
     let surface = theme.surface;
     let label = |words: String, color: Hsla| {
         div()
@@ -87,10 +106,10 @@ fn tile_view(theme: &Theme, width: Pixels, tile: Tile, below: Option<AnyElement>
         .relative()
         .flex()
         .justify_center()
-        .child(
-            icons::icon(&tile.icon, px(64.)).when(tile.sold, |i| i.grayscale(true)),
-        )
-        .when_some(tile.badge, |p, badge| p.child(label(badge, theme.muted).left(px(2.))))
+        .child(icons::icon(&tile.icon, px(64.)).when(tile.sold, |i| i.grayscale(true)))
+        .when_some(tile.badge, |p, badge| {
+            p.child(label(badge, theme.muted).left(px(2.)))
+        })
         .when_some(tile.count, |p, count| {
             p.child(label(count, theme.on_surface).right(px(2.)))
         });
@@ -131,7 +150,13 @@ pub fn tone_color(theme: &Theme, tone: Option<view::Tone>) -> Option<Hsla> {
 /// A tier's cell on its colour: the icon at its own shape on the left (its name on hover, or
 /// the name and what each set holds for a sum of boxes), the count at the right, 10 px in from
 /// each side; empty where the kind has no such tier.
-pub fn tier_cell(theme: &Theme, id: &str, tier: usize, cell: Option<&HeldCell>, parts: Option<&str>) -> AnyElement {
+pub fn tier_cell(
+    theme: &Theme,
+    id: &str,
+    tier: usize,
+    cell: Option<&HeldCell>,
+    parts: Option<&str>,
+) -> AnyElement {
     let base = div()
         .flex_1()
         .min_w_0()
@@ -141,7 +166,10 @@ pub fn tier_cell(theme: &Theme, id: &str, tier: usize, cell: Option<&HeldCell>, 
     let Some(cell) = cell else {
         return base.into_any_element();
     };
-    let title = parts.map_or_else(|| cell.name.clone(), |parts| format!("{}\n{parts}", cell.name));
+    let title = parts.map_or_else(
+        || cell.name.clone(),
+        |parts| format!("{}\n{parts}", cell.name),
+    );
     let tone = view::held_tone(cell.held, cell.need);
     let held = view::held_text(cell.held);
     base.id(SharedString::from(format!("{id}-{}", cell.id)))
@@ -154,7 +182,11 @@ pub fn tier_cell(theme: &Theme, id: &str, tier: usize, cell: Option<&HeldCell>, 
                 .items_center()
                 .justify_between()
                 .gap(SP_2)
-                .child(icons::icon(&cell.icon, px(40.)).w(px(50.)).object_fit(gpui::ObjectFit::Contain))
+                .child(
+                    icons::icon(&cell.icon, px(40.))
+                        .w(px(50.))
+                        .object_fit(gpui::ObjectFit::Contain),
+                )
                 .child(
                     div()
                         .font_features(tabular())
@@ -169,7 +201,12 @@ pub fn tier_cell(theme: &Theme, id: &str, tier: usize, cell: Option<&HeldCell>, 
 }
 
 /// A row of a kind's four tiers.
-pub fn tier_row(theme: &Theme, id: &str, cells: &[Option<HeldCell>], parts: Option<&[Option<String>]>) -> Div {
+pub fn tier_row(
+    theme: &Theme,
+    id: &str,
+    cells: &[Option<HeldCell>],
+    parts: Option<&[Option<String>]>,
+) -> Div {
     div().flex().gap(px(0.)).children((0..4).map(|tier| {
         let cell = cells.get(tier).and_then(Option::as_ref);
         let part = parts.and_then(|p| p.get(tier)).and_then(Option::as_deref);
@@ -179,7 +216,13 @@ pub fn tier_row(theme: &Theme, id: &str, cells: &[Option<HeldCell>], parts: Opti
 
 /// How many students what is held raises, at a row's right end, and how in two lines under it:
 /// the exp held, then over what one takes.
-pub fn raise_cell(theme: &Theme, students: &str, numerator: &str, denominator: &str, color: Option<Hsla>) -> Div {
+pub fn raise_cell(
+    theme: &Theme,
+    students: &str,
+    numerator: &str,
+    denominator: &str,
+    color: Option<Hsla>,
+) -> Div {
     div()
         .w(px(104.))
         .flex_none()
@@ -192,7 +235,7 @@ pub fn raise_cell(theme: &Theme, students: &str, numerator: &str, denominator: &
         .child(
             div()
                 .font_weight(FontWeight::BOLD)
-                .when_some(color, |s, c| s.text_color(c))
+                .when_some(color, gpui::Styled::text_color)
                 .child(text(students.to_owned())),
         )
         .child(

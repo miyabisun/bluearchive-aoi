@@ -19,8 +19,11 @@ pub enum ThemeChoice {
 
 impl ThemeChoice {
     /// The menu's choices, in order, with their names.
-    pub const ALL: [(Self, &'static str); 3] =
-        [(Self::Light, "ライト"), (Self::Dark, "ダーク"), (Self::Auto, "自動")];
+    pub const ALL: [(Self, &'static str); 3] = [
+        (Self::Light, "ライト"),
+        (Self::Dark, "ダーク"),
+        (Self::Auto, "自動"),
+    ];
 }
 
 /// The mouse cursor (the user's of 2026-11-03): Windows' own (the default), or an

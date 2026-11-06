@@ -2,8 +2,8 @@
 //! ooparts, and the currencies (the user's of 2026-10-21).
 
 use gpui::{
-    AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, Role,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
+    Role, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px,
 };
 
@@ -36,7 +36,12 @@ impl Sub {
 pub const EMPTY: &str = "ブルーアーカイブのアイテム一覧を「デフォルト」の昇順で開いてスクロールすると、見えたアイテムの個数がここに並びます。";
 
 impl Aoi {
-    pub(super) fn items_tab(&mut self, theme: &Theme, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn items_tab(
+        &mut self,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         if self.shown.items.is_empty() {
             return super::widgets::empty(theme, "items", EMPTY).into_any_element();
         }
@@ -69,7 +74,12 @@ impl Aoi {
 
     /// Every item or piece of equipment held, by its icon, the count at its corner and the
     /// name on hover, narrowed by the search.
-    pub(super) fn held_tiles(&mut self, theme: &Theme, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn held_tiles(
+        &mut self,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let items = self.tab == super::Tab::Items;
         let query = self.query.read(cx).text().to_owned();
         let rows = if items {
@@ -84,7 +94,11 @@ impl Aoi {
                 .flex()
                 .flex_col()
                 .child(search)
-                .child(super::widgets::empty(theme, "no-match", "一致する項目がありません"))
+                .child(super::widgets::empty(
+                    theme,
+                    "no-match",
+                    "一致する項目がありません",
+                ))
                 .into_any_element();
         }
         let tiles = shown
@@ -105,7 +119,12 @@ impl Aoi {
             .flex()
             .flex_col()
             .child(search)
-            .child(parts::tiles(theme, parts::content_width(window), tiles, |_| None))
+            .child(parts::tiles(
+                theme,
+                parts::content_width(window),
+                tiles,
+                |_| None,
+            ))
             .into_any_element()
     }
 
@@ -132,10 +151,17 @@ impl Aoi {
                 div()
                     .flex()
                     .child(emblem_column(div().into_any_element()))
-                    .child(div().flex_1().flex().children(cells.iter().map(|cell| match cell {
-                        Some(cell) => parts::tier_cell(theme, "secret", 3, Some(cell), None),
-                        None => div().flex_1().into_any_element(),
-                    })))
+                    .child(
+                        div()
+                            .flex_1()
+                            .flex()
+                            .children(cells.iter().map(|cell| match cell {
+                                Some(cell) => {
+                                    parts::tier_cell(theme, "secret", 3, Some(cell), None)
+                                }
+                                None => div().flex_1().into_any_element(),
+                            })),
+                    )
                     .into_any_element(),
             );
         }
@@ -189,7 +215,12 @@ impl Aoi {
                             .flex()
                             .flex_col()
                             .gap(px(2.))
-                            .child(tier_row(theme, &format!("bd-{}", school.icon), &school.bd, None))
+                            .child(tier_row(
+                                theme,
+                                &format!("bd-{}", school.icon),
+                                &school.bd,
+                                None,
+                            ))
                             .child(tier_row(
                                 theme,
                                 &format!("notes-{}", school.icon),
@@ -254,7 +285,12 @@ impl Aoi {
                     .text_color(theme.muted)
                     .child(text("コイン")),
             )
-            .child(parts::tiles(theme, parts::content_width(window), tiles, |_| None))
+            .child(parts::tiles(
+                theme,
+                parts::content_width(window),
+                tiles,
+                |_| None,
+            ))
     }
 }
 
@@ -262,60 +298,70 @@ impl Aoi {
 /// materials' rows): a title over the tiers or the credits held, the students it raises at the
 /// right; the one raising more green, fewer orange (red where `fewer_red`), the school to play
 /// first red.
-pub fn raise_rows(theme: &Theme, kind: &str, rows: &[view::RaiseRow], fewer_red: bool) -> impl IntoElement + use<> {
-    div().flex().flex_col().children(rows.iter().enumerate().map(|(i, row)| {
-        let color = match row.tone {
-            Some(view::Tone::More) => Some(theme.ok),
-            Some(view::Tone::Fewer) if fewer_red => Some(theme.danger),
-            Some(view::Tone::Fewer) => Some(theme.warn),
-            Some(view::Tone::First) => Some(theme.danger),
-            _ => None,
-        };
-        let title_color = if row.tone == Some(view::Tone::First) {
-            theme.danger
-        } else {
-            theme.muted
-        };
-        let held = match &row.held {
-            view::RaiseHeld::Tiers(tiers) => tier_row(theme, &format!("{kind}-{}", row.key), tiers, None)
-                .flex_1()
-                .into_any_element(),
-            view::RaiseHeld::Credits(credits) => div()
-                .flex_1()
-                .flex()
-                .items_center()
-                .gap(SP_2)
-                .py(SP_1)
-                .px(px(10.))
-                .bg(theme.tiers[0])
-                .child(icons::icon("currency_icon_gold", px(40.)).w(px(50.)))
-                .child(text(credits.clone()))
-                .into_any_element(),
-        };
-        div()
-            .id(SharedString::from(format!("{kind}-{}", row.key)))
-            .role(Role::Row)
-            .aria_label(row.title.clone())
-            .when_some(row.why.clone().filter(|w| !w.is_empty()), |r, why| {
-                r.tooltip(tooltip(why))
-            })
-            .flex()
-            .flex_col()
-            .child(
-                div()
-                    .pt(if i == 0 { SP_1 } else { SP_3 })
-                    .pb(SP_1)
-                    .text_size(FS_SM)
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(title_color)
-                    .child(text(row.title.clone())),
-            )
-            .child(
-                div()
+pub fn raise_rows(
+    theme: &Theme,
+    kind: &str,
+    rows: &[view::RaiseRow],
+    fewer_red: bool,
+) -> impl IntoElement + use<> {
+    div()
+        .flex()
+        .flex_col()
+        .children(rows.iter().enumerate().map(|(i, row)| {
+            let color = match row.tone {
+                Some(view::Tone::More) => Some(theme.ok),
+                Some(view::Tone::Fewer) if fewer_red => Some(theme.danger),
+                Some(view::Tone::Fewer) => Some(theme.warn),
+                Some(view::Tone::First) => Some(theme.danger),
+                _ => None,
+            };
+            let title_color = if row.tone == Some(view::Tone::First) {
+                theme.danger
+            } else {
+                theme.muted
+            };
+            let held = match &row.held {
+                view::RaiseHeld::Tiers(tiers) => {
+                    tier_row(theme, &format!("{kind}-{}", row.key), tiers, None)
+                        .flex_1()
+                        .into_any_element()
+                }
+                view::RaiseHeld::Credits(credits) => div()
+                    .flex_1()
                     .flex()
                     .items_center()
-                    .child(held)
-                    .child(raise_cell(theme, &row.students, &row.numerator, &row.denominator, color)),
-            )
-    }))
+                    .gap(SP_2)
+                    .py(SP_1)
+                    .px(px(10.))
+                    .bg(theme.tiers[0])
+                    .child(icons::icon("currency_icon_gold", px(40.)).w(px(50.)))
+                    .child(text(credits.clone()))
+                    .into_any_element(),
+            };
+            div()
+                .id(SharedString::from(format!("{kind}-{}", row.key)))
+                .role(Role::Row)
+                .aria_label(row.title.clone())
+                .when_some(row.why.clone().filter(|w| !w.is_empty()), |r, why| {
+                    r.tooltip(tooltip(why))
+                })
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .pt(if i == 0 { SP_1 } else { SP_3 })
+                        .pb(SP_1)
+                        .text_size(FS_SM)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(title_color)
+                        .child(text(row.title.clone())),
+                )
+                .child(div().flex().items_center().child(held).child(raise_cell(
+                    theme,
+                    &row.students,
+                    &row.numerator,
+                    &row.denominator,
+                    color,
+                )))
+        }))
 }

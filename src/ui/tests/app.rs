@@ -17,7 +17,8 @@ pub fn items() -> Vec<Row> {
         .map(|i| Row {
             id: 1000 + i,
             name: if i == 3 {
-                "とても長い名前の期間限定でない普通のアイテム（ゲヘナ・トリニティ・ミレニアム共通）".to_owned()
+                "とても長い名前の期間限定でない普通のアイテム（ゲヘナ・トリニティ・ミレニアム共通）"
+                    .to_owned()
             } else {
                 format!("アイテム{i}")
             },
@@ -45,10 +46,34 @@ pub fn equipment() -> Vec<Row> {
         eleph: false,
     };
     vec![
-        row(1, "初級強化珠", "equipment_icon_exp_0", None, Count::Exact(1383)),
-        row(1000, "無地のキャップ", "equipment_icon_hat_tier1", Some(1), Count::Exact(249)),
-        row(101_009, "ゲーミングヘルメットの設計図", "equipment_icon_hat_tier10_piece", Some(10), Count::Exact(17)),
-        row(501_000, "帽子の万能設計図", "equipment_icon_hat_useall_piece", None, Count::Thousands(51)),
+        row(
+            1,
+            "初級強化珠",
+            "equipment_icon_exp_0",
+            None,
+            Count::Exact(1383),
+        ),
+        row(
+            1000,
+            "無地のキャップ",
+            "equipment_icon_hat_tier1",
+            Some(1),
+            Count::Exact(249),
+        ),
+        row(
+            101_009,
+            "ゲーミングヘルメットの設計図",
+            "equipment_icon_hat_tier10_piece",
+            Some(10),
+            Count::Exact(17),
+        ),
+        row(
+            501_000,
+            "帽子の万能設計図",
+            "equipment_icon_hat_useall_piece",
+            None,
+            Count::Thousands(51),
+        ),
     ]
 }
 
@@ -68,7 +93,10 @@ fn lists_the_item_tally_in_order_and_narrows_it_by_name(cx: &mut TestAppContext)
         s.items = items();
         s.equipment = equipment();
     });
-    assert!(shows(vcx, "アイテムを集計中"), "the status says what is read");
+    assert!(
+        shows(vcx, "アイテムを集計中"),
+        "the status says what is read"
+    );
     assert!(has(vcx, "tile-1002"), "every item a tile");
     assert!(has(vcx, "tile-1119"), "down to the last");
     assert!(shows(vcx, "1,994"), "counts with separators");
@@ -80,9 +108,15 @@ fn lists_the_item_tally_in_order_and_narrows_it_by_name(cx: &mut TestAppContext)
     assert!(has(vcx, "tile-1110"), "アイテム110");
     assert!(!has(vcx, "tile-1012"), "the others go");
 
-    keys(vcx, "backspace backspace backspace backspace backspace backspace");
+    keys(
+        vcx,
+        "backspace backspace backspace backspace backspace backspace",
+    );
     keys(vcx, "z z z");
-    assert!(shows(vcx, "一致する項目がありません"), "a search finding nothing says so");
+    assert!(
+        shows(vcx, "一致する項目がありません"),
+        "a search finding nothing says so"
+    );
 }
 
 #[gpui::test]
@@ -108,7 +142,10 @@ fn guides_to_the_list_before_anything_is_read(cx: &mut TestAppContext) {
     assert!(shows(vcx, crate::ui::items::EMPTY), "how to read the items");
     assert!(!has(vcx, "search"), "no search before anything is read");
     click(vcx, "tab:装備");
-    assert!(has(vcx, "tile-101009"), "the equipment read shows on its tab");
+    assert!(
+        has(vcx, "tile-101009"),
+        "the equipment read shows on its tab"
+    );
 }
 
 #[gpui::test]
@@ -121,7 +158,10 @@ fn shows_why_the_capture_failed(cx: &mut TestAppContext) {
         s.items = items();
     });
     assert!(shows(vcx, "キャプチャ失敗"), "the status");
-    assert!(shows(vcx, "アクセスが拒否されました。"), "and why, in the page");
+    assert!(
+        shows(vcx, "アクセスが拒否されました。"),
+        "and why, in the page"
+    );
 }
 
 #[gpui::test]
@@ -168,10 +208,14 @@ fn tells_why_what_was_read_could_not_be_kept(cx: &mut TestAppContext) {
     let (_, core, vcx) = open(cx, &Kept::default());
     set(&core, vcx, |s| {
         s.items = items();
-        s.keep_error = Some("読み取り結果を保存できませんでした: ディスクがいっぱいです".to_owned());
+        s.keep_error =
+            Some("読み取り結果を保存できませんでした: ディスクがいっぱいです".to_owned());
     });
     assert!(
-        shows(vcx, "読み取り結果を保存できませんでした: ディスクがいっぱいです"),
+        shows(
+            vcx,
+            "読み取り結果を保存できませんでした: ディスクがいっぱいです"
+        ),
         "the failure stays in the page"
     );
 }
@@ -186,5 +230,9 @@ fn keeps_the_tab_chosen_when_the_game_shows_another_list(cx: &mut TestAppContext
     click(vcx, "tab:装備");
     report(&core, vcx, &reading(Screen::Items, 20.), None);
     let tab = aoi.read_with(vcx, |aoi, _| aoi.tab);
-    assert_eq!(tab, crate::ui::Tab::Equipment, "the tab stays as the user chose");
+    assert_eq!(
+        tab,
+        crate::ui::Tab::Equipment,
+        "the tab stays as the user chose"
+    );
 }

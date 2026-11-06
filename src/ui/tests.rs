@@ -10,10 +10,7 @@ use std::sync::{
 };
 
 use futures::channel::mpsc;
-use gpui::{
-    AppContext as _, Bounds, Entity, Modifiers, Pixels, TestAppContext, VisualTestContext, px,
-    size,
-};
+use gpui::{Bounds, Entity, Modifiers, Pixels, TestAppContext, VisualTestContext, px, size};
 
 use super::{Aoi, theme::Theme};
 use crate::{
@@ -50,11 +47,11 @@ fn places() -> Places {
 }
 
 /// The window, 720×820 as it opens, over `kept`, with the menu's `settings`.
-pub fn open_with(
-    cx: &mut TestAppContext,
+pub fn open_with<'a>(
+    cx: &'a mut TestAppContext,
     kept: &Kept,
     settings: Settings,
-) -> (Entity<Aoi>, Arc<Core>, &mut VisualTestContext) {
+) -> (Entity<Aoi>, Arc<Core>, &'a mut VisualTestContext) {
     cx.update(|cx| {
         cx.set_global(Theme::sumi());
         super::bind_keys(cx);

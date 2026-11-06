@@ -74,12 +74,11 @@ pub fn glyph(glyph: Glyph, size: Pixels, color: Hsla) -> Svg {
 }
 
 /// The stars the game draws, cut from its student screen by the reading's own inks
-/// (`student.rs`'s STAR and WEAPON_STAR, 2026-10-22 at 1240 high): a five-pointed star
+/// (`student.rs`'s STAR and `WEAPON_STAR`, 2026-10-22 at 1240 high): a five-pointed star
 /// with its rim and faces lit and shaded; the student's gold in an orange rim, the
 /// weapon's cyan in a grey-blue one. In the units of that ink box, with room for the rim.
 fn star(fill: (&str, &str), rim: &str, light: f32, shade: (&str, f32)) -> String {
-    const OUTLINE: &str =
-        "M14 0.69L18.33 9.45L28 10.86L21 17.68L22.65 27.31L14 22.77L5.35 27.31L7 17.68L0 10.86L9.67 9.45Z";
+    const OUTLINE: &str = "M14 0.69L18.33 9.45L28 10.86L21 17.68L22.65 27.31L14 22.77L5.35 27.31L7 17.68L0 10.86L9.67 9.45Z";
     const LIT: &str = "M14 15.41L9.67 9.45L14 0.69ZM14 15.41L18.33 9.45L28 10.86ZM14 15.41L21 17.68L22.65 27.31ZM14 15.41L14 22.77L5.35 27.31ZM14 15.41L7 17.68L0 10.86Z";
     const SHADED: &str = "M14 15.41L14 0.69L18.33 9.45ZM14 15.41L28 10.86L21 17.68ZM14 15.41L22.65 27.31L14 22.77ZM14 15.41L5.35 27.31L7 17.68ZM14 15.41L0 10.86L9.67 9.45Z";
     format!(

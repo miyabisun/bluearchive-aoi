@@ -734,10 +734,42 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("right", Right, context),
         KeyBinding::new("shift-left", SelectLeft, context),
         KeyBinding::new("shift-right", SelectRight, context),
-        KeyBinding::new(if cfg!(target_os = "macos") { "cmd-a" } else { "ctrl-a" }, SelectAll, context),
-        KeyBinding::new(if cfg!(target_os = "macos") { "cmd-v" } else { "ctrl-v" }, Paste, context),
-        KeyBinding::new(if cfg!(target_os = "macos") { "cmd-c" } else { "ctrl-c" }, Copy, context),
-        KeyBinding::new(if cfg!(target_os = "macos") { "cmd-x" } else { "ctrl-x" }, Cut, context),
+        KeyBinding::new(
+            if cfg!(target_os = "macos") {
+                "cmd-a"
+            } else {
+                "ctrl-a"
+            },
+            SelectAll,
+            context,
+        ),
+        KeyBinding::new(
+            if cfg!(target_os = "macos") {
+                "cmd-v"
+            } else {
+                "ctrl-v"
+            },
+            Paste,
+            context,
+        ),
+        KeyBinding::new(
+            if cfg!(target_os = "macos") {
+                "cmd-c"
+            } else {
+                "ctrl-c"
+            },
+            Copy,
+            context,
+        ),
+        KeyBinding::new(
+            if cfg!(target_os = "macos") {
+                "cmd-x"
+            } else {
+                "ctrl-x"
+            },
+            Cut,
+            context,
+        ),
         KeyBinding::new("home", Home, context),
         KeyBinding::new("end", End, context),
         KeyBinding::new("enter", Submit, context),

@@ -2,8 +2,8 @@
 //! training.
 
 use gpui::{
-    AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, Role,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
+    Role, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px,
 };
 
@@ -73,7 +73,12 @@ pub fn stars(key: &str, star: u8, size: gpui::Pixels) -> impl IntoElement {
 }
 
 impl Aoi {
-    pub(super) fn students_tab(&mut self, theme: &Theme, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn students_tab(
+        &mut self,
+        theme: &Theme,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         if self.shown.students.is_empty() {
             return super::widgets::empty(theme, "students", EMPTY).into_any_element();
         }
@@ -86,10 +91,15 @@ impl Aoi {
                 .flex()
                 .flex_col()
                 .child(search)
-                .child(super::widgets::empty(theme, "no-match", "一致する項目がありません"))
+                .child(super::widgets::empty(
+                    theme,
+                    "no-match",
+                    "一致する項目がありません",
+                ))
                 .into_any_element();
         }
-        let targeted: std::collections::HashSet<i64> = self.shown.targets.iter().map(|t| t.id).collect();
+        let targeted: std::collections::HashSet<i64> =
+            self.shown.targets.iter().map(|t| t.id).collect();
         let elephs: std::collections::HashMap<i64, crate::quantity::Count> = self
             .shown
             .items
@@ -100,10 +110,23 @@ impl Aoi {
         let rule = theme.border;
         let cell = |grow: bool| {
             let c = div().px(SP_2).py(SP_2).whitespace_nowrap();
-            if grow { c.flex_1().min_w(px(8. * 16.)).whitespace_normal() } else { c.flex_none() }
+            if grow {
+                c.flex_1().min_w(px(8. * 16.)).whitespace_normal()
+            } else {
+                c.flex_none()
+            }
         };
         // The column widths, as the table lays them out: the mark, then each column's.
-        let widths = [px(48.), px(52.), px(96.), px(72.), px(96.), px(64.), px(84.), px(40.)];
+        let widths = [
+            px(48.),
+            px(52.),
+            px(96.),
+            px(72.),
+            px(96.),
+            px(64.),
+            px(84.),
+            px(40.),
+        ];
         let sort_by = self.sort_by;
         let head = div()
             .flex()
@@ -115,38 +138,53 @@ impl Aoi {
             .text_color(theme.muted)
             .child(cell(false).w(widths[0]).child(text("育成")))
             .child(cell(true).child(text("生徒")))
-            .children(Column::ALL.into_iter().enumerate().map(|(i, (column, label, num))| {
-                let sorted = sort_by == column;
-                div()
-                    .id(SharedString::from(format!("sort-{label}")))
-                    .role(Role::ColumnHeader)
-                    .aria_label(label)
-                    .when(sorted, |h| h.aria_description("降順"))
-                    .tab_stop(true)
-                    .w(widths[i + 1])
-                    .flex_none()
-                    .flex()
-                    .when(num, |h| h.justify_end())
-                    .px(SP_2)
-                    .py(SP_2)
-                    .cursor_pointer()
-                    .when(sorted, |h| h.text_color(theme.on_surface).font_weight(FontWeight::SEMIBOLD))
-                    .child(text(label))
-                    .when(sorted, |h| h.child(div().ml(px(2.)).text_size(FS_CAPTION).child("▼")))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.sort_by = column;
-                        cx.notify();
-                    }))
-            }));
+            .children(
+                Column::ALL
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (column, label, num))| {
+                        let sorted = sort_by == column;
+                        div()
+                            .id(SharedString::from(format!("sort-{label}")))
+                            .role(Role::ColumnHeader)
+                            .aria_label(label)
+                            .when(sorted, |h| h.aria_description("降順"))
+                            .tab_stop(true)
+                            .w(widths[i + 1])
+                            .flex_none()
+                            .flex()
+                            .when(num, gpui::Styled::justify_end)
+                            .px(SP_2)
+                            .py(SP_2)
+                            .cursor_pointer()
+                            .when(sorted, |h| {
+                                h.text_color(theme.on_surface)
+                                    .font_weight(FontWeight::SEMIBOLD)
+                            })
+                            .child(text(label))
+                            .when(sorted, |h| {
+                                h.child(div().ml(px(2.)).text_size(FS_CAPTION).child("▼"))
+                            })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.sort_by = column;
+                                cx.notify();
+                            }))
+                    }),
+            );
         let rows = shown.iter().map(|row| {
             let cells = view::student_cells(&row.training);
             let marked = targeted.contains(&row.id);
             let id = row.id;
             let check = div()
                 .id(SharedString::from(format!("mark-{id}")))
+                .debug_selector(move || format!("mark-{id}"))
                 .role(Role::CheckBox)
                 .aria_label(format!("{}を育成対象にする", row.name))
-                .aria_toggled(if marked { gpui::Toggled::True } else { gpui::Toggled::False })
+                .aria_toggled(if marked {
+                    gpui::Toggled::True
+                } else {
+                    gpui::Toggled::False
+                })
                 .tab_stop(true)
                 .size(px(16.))
                 .flex()
@@ -155,7 +193,12 @@ impl Aoi {
                 .border_1()
                 .border_color(if marked { theme.accent } else { theme.muted })
                 .rounded(px(3.))
-                .when(marked, |c| c.bg(theme.accent).text_color(theme.surface).text_size(FS_CAPTION).child("✓"))
+                .when(marked, |c| {
+                    c.bg(theme.accent)
+                        .text_color(theme.surface)
+                        .text_size(FS_CAPTION)
+                        .child("✓")
+                })
                 .cursor_pointer()
                 .on_click(cx.listener(move |this, _, _, cx| {
                     let _ = this.core.set_target(id, (!marked).then(Target::default));
@@ -170,9 +213,22 @@ impl Aoi {
                 .items_center()
                 .border_b_1()
                 .border_color(rule)
-                .child(cell(false).w(widths[0]).flex().justify_center().child(check))
+                .child(
+                    cell(false)
+                        .w(widths[0])
+                        .flex()
+                        .justify_center()
+                        .child(check),
+                )
                 .child(cell(true).child(read("name", row.name.clone())))
-                .child(cell(false).w(widths[1]).flex().justify_end().font_features(tabular()).child(read("level", cells.level.clone())))
+                .child(
+                    cell(false)
+                        .w(widths[1])
+                        .flex()
+                        .justify_end()
+                        .font_features(tabular())
+                        .child(read("level", cells.level.clone())),
+                )
                 .child(
                     div()
                         .id(SharedString::from(format!("student-{id}-star")))
@@ -182,15 +238,43 @@ impl Aoi {
                         .py(SP_2)
                         .tooltip(tooltip(star_title))
                         .child(match cells.star {
-                            Some(star) => stars(&format!("student-{id}"), star, px(16.)).into_any_element(),
+                            Some(star) => {
+                                stars(&format!("student-{id}"), star, px(16.)).into_any_element()
+                            }
                             None => text("?").into_any_element(),
                         }),
                 )
-                .child(cell(false).w(widths[3]).font_features(tabular()).child(read("skills", cells.skills.clone())))
-                .child(cell(false).w(widths[4]).font_features(tabular()).child(read("equipment", cells.equipment.clone())))
-                .child(cell(false).w(widths[5]).child(read("gear", cells.gear.clone())))
-                .child(cell(false).w(widths[6]).font_features(tabular()).child(read("ability", cells.ability.clone())))
-                .child(cell(false).w(widths[7]).flex().justify_end().font_features(tabular()).child(read("bond", cells.bond.clone())))
+                .child(
+                    cell(false)
+                        .w(widths[3])
+                        .font_features(tabular())
+                        .child(read("skills", cells.skills.clone())),
+                )
+                .child(
+                    cell(false)
+                        .w(widths[4])
+                        .font_features(tabular())
+                        .child(read("equipment", cells.equipment.clone())),
+                )
+                .child(
+                    cell(false)
+                        .w(widths[5])
+                        .child(read("gear", cells.gear.clone())),
+                )
+                .child(
+                    cell(false)
+                        .w(widths[6])
+                        .font_features(tabular())
+                        .child(read("ability", cells.ability.clone())),
+                )
+                .child(
+                    cell(false)
+                        .w(widths[7])
+                        .flex()
+                        .justify_end()
+                        .font_features(tabular())
+                        .child(read("bond", cells.bond.clone())),
+                )
         });
         let _ = RADIUS_SM;
         let _ = SP_1;

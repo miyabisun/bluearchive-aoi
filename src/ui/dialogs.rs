@@ -68,7 +68,14 @@ fn steps(items: &[&str]) -> impl IntoElement {
 
 impl Aoi {
     /// A help that opens under its title, closed until opened (body-sm, muted).
-    fn help(&mut self, key: &str, title: &str, body: String, theme: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
+    fn help(
+        &mut self,
+        key: &str,
+        title: &str,
+        body: String,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let open = self.opened.contains(key);
         let key = key.to_owned();
         div()
@@ -121,7 +128,10 @@ impl Aoi {
             } else {
                 "読み取っても進まないとき"
             };
-            parts.push(self.help("phone-help", title, body, theme, cx).into_any_element());
+            parts.push(
+                self.help("phone-help", title, body, theme, cx)
+                    .into_any_element(),
+            );
         }
         let mut actions = Vec::new();
         match phone {
@@ -150,7 +160,7 @@ impl Aoi {
                     .into_any_element(),
             ),
         }
-        parts.push(self.dialog_actions(actions, theme, cx).into_any_element());
+        parts.push(Self::dialog_actions(actions, theme, cx).into_any_element());
         parts
     }
 
@@ -196,7 +206,11 @@ impl Aoi {
                         gpui::transparent_black()
                     })
                     .text_size(FS_SM)
-                    .text_color(if selected { theme.on_surface } else { theme.muted })
+                    .text_color(if selected {
+                        theme.on_surface
+                    } else {
+                        theme.muted
+                    })
                     .when(selected, |t| t.font_weight(FontWeight::SEMIBOLD))
                     .cursor_pointer()
                     .child(name.to_owned())
@@ -254,22 +268,27 @@ impl Aoi {
             );
         }
         let action = match cast {
-            Cast::Waiting { .. } | Cast::Receiving { .. } => outlined_button(theme, "stop-waiting", "やめる", false)
-                .on_click(cx.listener(|this, _, _, _| this.core.wait_for_stream(false))),
+            Cast::Waiting { .. } | Cast::Receiving { .. } => {
+                outlined_button(theme, "stop-waiting", "やめる", false)
+                    .on_click(cx.listener(|this, _, _, _| this.core.wait_for_stream(false)))
+            }
             Cast::Failed { .. } => outlined_button(theme, "wait-again", "もう一度", true)
                 .on_click(cx.listener(|this, _, _, _| this.core.wait_for_stream(true))),
             Cast::Off => outlined_button(theme, "wait", "待ち受ける", true)
                 .on_click(cx.listener(|this, _, _, _| this.core.wait_for_stream(true))),
         };
         parts.push(
-            self.dialog_actions(vec![action.into_any_element()], theme, cx)
-                .into_any_element(),
+            Self::dialog_actions(vec![action.into_any_element()], theme, cx).into_any_element(),
         );
         parts
     }
 
     /// A dialog's buttons at its right foot, the close button last.
-    fn dialog_actions(&mut self, mut actions: Vec<AnyElement>, theme: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
+    fn dialog_actions(
+        mut actions: Vec<AnyElement>,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         actions.push(
             outlined_button(theme, "close-dialog", "閉じる", false)
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -286,7 +305,12 @@ impl Aoi {
             .children(actions)
     }
 
-    pub(super) fn dialog_view(&mut self, dialog: Dialog, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn dialog_view(
+        &mut self,
+        dialog: Dialog,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let (title, body) = match dialog {
             Dialog::Phone => ("Androidとの通信", self.phone_dialog(theme, cx)),
             Dialog::Cast => ("配信アプリとの連携", self.cast_dialog(theme, cx)),

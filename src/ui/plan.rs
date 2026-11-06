@@ -5,9 +5,10 @@
 use std::time::Duration;
 
 use gpui::{
-    AppContext as _, Focusable as _, StyledImage as _, AnyElement, Bounds, Context, FontWeight, InteractiveElement as _, IntoElement, MouseButton,
-    ParentElement as _, Pixels, Role, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Window, anchored, deferred, div, point, prelude::FluentBuilder as _, px,
+    AnyElement, AppContext as _, Bounds, Context, Focusable as _, FontWeight,
+    InteractiveElement as _, IntoElement, MouseButton, ParentElement as _, Pixels, Role,
+    SharedString, StatefulInteractiveElement as _, Styled as _, StyledImage as _, Window, anchored,
+    deferred, div, point, prelude::FluentBuilder as _, px,
 };
 
 use super::{
@@ -67,7 +68,7 @@ pub fn retarget(target: &Target, part: Part, value: &str, max: u8) -> Target {
         .ok()
         .filter(|n| n.is_finite())
         .map_or(1, |n| n.round().clamp(1., f64::from(max)) as u8);
-    let mut target = target.clone();
+    let mut target = *target;
     match part {
         Part::Level => target.level = n,
         Part::Star => target.star = Some(n),
@@ -79,7 +80,9 @@ pub fn retarget(target: &Target, part: Part, value: &str, max: u8) -> Target {
 
 /// A student's training read for `part` ("?" unread).
 fn training_value(training: Option<&crate::student::Training>, part: Part) -> String {
-    let Some(t) = training else { return "?".to_owned() };
+    let Some(t) = training else {
+        return "?".to_owned();
+    };
     let shown = |v: Option<u8>| v.map_or_else(|| "?".to_owned(), |v| v.to_string());
     match part {
         Part::Level => shown(t.level),
@@ -93,7 +96,15 @@ impl Aoi {
     /// The field of a target's `part` for the student `id`, kept while it is typed in so the
     /// snapshots of every frame leave what is typed; it sets the target on Enter or as the focus
     /// leaves.
-    fn target_field(&mut self, id: i64, column: usize, value: u8, label: String, window: &mut Window, cx: &mut Context<Self>) -> gpui::Entity<TextInput> {
+    fn target_field(
+        &mut self,
+        id: i64,
+        column: usize,
+        value: u8,
+        label: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::Entity<TextInput> {
         if let Some(field) = self.target_fields.get(&(id, column)) {
             let field = field.clone();
             // Not being typed in: it shows the target as it is now.
@@ -103,17 +114,22 @@ impl Aoi {
             return field;
         }
         let field = cx.new(|cx| TextInput::new(label, &value.to_string(), cx));
-        let commit = move |this: &mut Self, field: &gpui::Entity<TextInput>, cx: &mut Context<Self>| {
-            let Some(row) = this.shown.targets.iter().find(|t| t.id == id) else { return };
-            let (part, _, max) = COLUMNS[column];
-            let typed = field.read(cx).text().to_owned();
-            let target = retarget(&row.target, part, &typed, max);
-            if target != row.target {
-                let _ = this.core.set_target(id, Some(target));
-            }
-        };
-        cx.subscribe(&field, move |this, field, _: &text_input::Submitted, cx| commit(this, &field, cx))
-            .detach();
+        let commit =
+            move |this: &mut Self, field: &gpui::Entity<TextInput>, cx: &mut Context<Self>| {
+                let Some(row) = this.shown.targets.iter().find(|t| t.id == id) else {
+                    return;
+                };
+                let (part, _, max) = COLUMNS[column];
+                let typed = field.read(cx).text().to_owned();
+                let target = retarget(&row.target, part, &typed, max);
+                if target != row.target {
+                    let _ = this.core.set_target(id, Some(target));
+                }
+            };
+        cx.subscribe(&field, move |this, field, _: &text_input::Submitted, cx| {
+            commit(this, &field, cx);
+        })
+        .detach();
         let blurred = field.read(cx).focus_handle(cx);
         cx.on_blur(&blurred, window, {
             let field = field.clone();
@@ -124,7 +140,12 @@ impl Aoi {
         field
     }
 
-    pub(super) fn plan_tab(&mut self, theme: &Theme, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn plan_tab(
+        &mut self,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         if self.shown.targets.is_empty() {
             return super::widgets::empty(theme, "plan", EMPTY).into_any_element();
         }
@@ -137,11 +158,12 @@ impl Aoi {
                 .mb(SP_2)
                 .child(section_title("既存の生徒一覧"))
                 .child(
-                    small_button(theme, "reload", "再読込")
-                        .on_click(cx.listener(|this, _, _, cx| {
+                    small_button(theme, "reload", "再読込").on_click(cx.listener(
+                        |this, _, _, cx| {
                             this.core.reload_plan();
                             cx.notify();
-                        })),
+                        },
+                    )),
                 )
                 .into_any_element(),
         );
@@ -169,16 +191,29 @@ impl Aoi {
                     .into_any_element(),
             );
         }
-        sections.push(section_title("必要素材").mt(SP_5).mb(SP_2).into_any_element());
+        sections.push(
+            section_title("必要素材")
+                .mt(SP_5)
+                .mb(SP_2)
+                .into_any_element(),
+        );
         if self.shown.plan.is_empty() && self.shown.blueprints.is_empty() {
-            sections.push(super::widgets::empty(theme, "reached", "目標までに要る素材はありません").into_any_element());
+            sections.push(
+                super::widgets::empty(theme, "reached", "目標までに要る素材はありません")
+                    .into_any_element(),
+            );
         } else {
             sections.push(self.needs(theme).into_any_element());
-            sections.push(section_title("不足分の調達").mt(SP_5).mb(SP_2).into_any_element());
+            sections.push(
+                section_title("不足分の調達")
+                    .mt(SP_5)
+                    .mb(SP_2)
+                    .into_any_element(),
+            );
             sections.extend(self.procure(theme, cx));
         }
         super::scroll("plan-scroll", &self.content)
-            .on_scroll_wheel(cx.listener(|this, _, _, cx| {
+            .on_scroll(cx.listener(|this, _, _, cx| {
                 // Scrolled, the star menu would stay where its button was: closed instead.
                 if this.star_menu.take().is_some() {
                     cx.notify();
@@ -188,7 +223,12 @@ impl Aoi {
             .into_any_element()
     }
 
-    fn targets_table(&mut self, theme: &Theme, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn targets_table(
+        &mut self,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let rule = theme.border;
         let head = div()
             .flex()
@@ -198,9 +238,21 @@ impl Aoi {
             .text_size(FS_SM)
             .text_color(theme.muted)
             .child(div().w(px(32.)).flex_none())
-            .child(div().flex_1().min_w(px(8. * 16.)).px(SP_1).py(SP_2).child(text("生徒")))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(8. * 16.))
+                    .px(SP_1)
+                    .py(SP_2)
+                    .child(text("生徒")),
+            )
             .children(COLUMNS.iter().map(|(_, label, _)| {
-                div().w(column_width(*label)).flex_none().px(SP_1).py(SP_2).child(text(*label))
+                div()
+                    .w(column_width(label))
+                    .flex_none()
+                    .px(SP_1)
+                    .py(SP_2)
+                    .child(text(*label))
             }));
         let targets = self.shown.targets.clone();
         let rows: Vec<AnyElement> = targets
@@ -217,9 +269,13 @@ impl Aoi {
                 } else {
                     row.name.clone()
                 };
-                let training = row
-                    .training
-                    .or_else(|| self.shown.students.iter().find(|s| s.id == id).map(|s| s.training));
+                let training = row.training.or_else(|| {
+                    self.shown
+                        .students
+                        .iter()
+                        .find(|s| s.id == id)
+                        .map(|s| s.training)
+                });
                 let remove = div()
                     .id(SharedString::from(format!("remove-{id}")))
                     .role(Role::Button)
@@ -269,38 +325,52 @@ impl Aoi {
                             .whitespace_nowrap()
                             .cursor_pointer()
                             .child(match to {
-                                Some(star) => stars(&format!("to-{id}"), star, px(14.)).into_any_element(),
+                                Some(star) => {
+                                    stars(&format!("to-{id}"), star, px(14.)).into_any_element()
+                                }
                                 None => text("?").into_any_element(),
                             })
                             .child("▾")
-                            .on_click(cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
-                                if this.star_menu.is_some_and(|m| m.id == id) {
-                                    this.star_menu = None;
-                                } else {
-                                    let at = window
-                                        .focused(cx)
-                                        .and(None)
-                                        .unwrap_or_else(|| Bounds::new(event.position(), gpui::size(px(1.), px(24.))));
-                                    this.star_menu = Some(StarMenu { id, at });
-                                }
-                                cx.notify();
-                            }));
+                            .on_click(cx.listener(
+                                move |this, event: &gpui::ClickEvent, window, cx| {
+                                    if this.star_menu.is_some_and(|m| m.id == id) {
+                                        this.star_menu = None;
+                                    } else {
+                                        let at =
+                                            window.focused(cx).and(None).unwrap_or_else(|| {
+                                                Bounds::new(
+                                                    event.position(),
+                                                    gpui::size(px(1.), px(24.)),
+                                                )
+                                            });
+                                        this.star_menu = Some(StarMenu { id, at });
+                                    }
+                                    cx.notify();
+                                },
+                            ));
                         cells.push(
                             cell.child(
-                                div()
-                                    .text_size(FS_CAPTION)
-                                    .text_color(theme.muted)
-                                    .child(match now {
-                                        Some(star) => stars(&format!("now-{id}"), star, px(12.)).into_any_element(),
+                                div().text_size(FS_CAPTION).text_color(theme.muted).child(
+                                    match now {
+                                        Some(star) => stars(&format!("now-{id}"), star, px(12.))
+                                            .into_any_element(),
                                         None => text("?").into_any_element(),
-                                    }),
+                                    },
+                                ),
                             )
                             .child(picker)
                             .into_any_element(),
                         );
                     } else {
                         let value = target_value(&row.target, *part);
-                        let field = self.target_field(id, column, value, format!("{name}の{label}の目標"), window, cx);
+                        let field = self.target_field(
+                            id,
+                            column,
+                            value,
+                            format!("{name}の{label}の目標"),
+                            window,
+                            cx,
+                        );
                         let focused = field.read(cx).focus_handle(cx).is_focused(window);
                         cells.push(
                             cell.child(
@@ -334,7 +404,14 @@ impl Aoi {
                     .items_center()
                     .border_b_1()
                     .border_color(rule)
-                    .child(div().w(px(32.)).flex_none().flex().justify_center().child(remove))
+                    .child(
+                        div()
+                            .w(px(32.))
+                            .flex_none()
+                            .flex()
+                            .justify_center()
+                            .child(remove),
+                    )
                     .child(
                         div()
                             .flex_1()
@@ -395,125 +472,148 @@ impl Aoi {
                 .py(SP_2)
                 .border_b_1()
                 .border_color(rule)
-                .child(div().flex_1().min_w(px(8. * 16.)).child(text(cells.name.clone())))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(8. * 16.))
+                        .child(text(cells.name.clone())),
+                )
                 .child(fit(text(cells.need.clone()).into_any_element()))
                 .child(fit(text(cells.have.clone()).into_any_element()))
-                .child(fit(
-                    div()
-                        .text_color(color)
-                        .font_weight(weight)
-                        .child(text(cells.short.clone()))
-                        .into_any_element(),
-                ))
+                .child(fit(div()
+                    .text_color(color)
+                    .font_weight(weight)
+                    .child(text(cells.short.clone()))
+                    .into_any_element()))
         });
         let families = (!plan.families.is_empty()).then(|| {
-            div().mt(SP_4).flex().flex_col().gap(px(2.)).children(plan.families.iter().map(|family| {
-                div().flex().children(family.tiers.iter().enumerate().map(|(i, line)| {
-                    let cell = div().flex_1().py(SP_1).px(px(10.)).bg(theme.tiers[i]);
-                    match line {
-                        Some(line) => {
-                            let tier = view::tier_cell(line.need, line.have);
-                            let (color, weight) = tone(tier.enough);
-                            cell.id(SharedString::from(format!("family-{}-{i}", family.id)))
-                                .tooltip(tooltip(line.name.clone()))
-                                .flex()
-                                .items_center()
-                                .gap(SP_2)
-                                .child(icons::icon(&line.icon, px(40.)))
-                                .child(div().text_color(color).font_weight(weight).font_features(tabular()).child(text(tier.text)))
-                                .into_any_element()
-                        }
-                        None => cell.into_any_element(),
-                    }
+            div()
+                .mt(SP_4)
+                .flex()
+                .flex_col()
+                .gap(px(2.))
+                .children(plan.families.iter().map(|family| {
+                    div()
+                        .flex()
+                        .children(family.tiers.iter().enumerate().map(|(i, line)| {
+                            let cell = div().flex_1().py(SP_1).px(px(10.)).bg(theme.tiers[i]);
+                            match line {
+                                Some(line) => {
+                                    let tier = view::tier_cell(line.need, line.have);
+                                    let (color, weight) = tone(tier.enough);
+                                    cell.id(SharedString::from(format!("family-{}-{i}", family.id)))
+                                        .tooltip(tooltip(line.name.clone()))
+                                        .flex()
+                                        .items_center()
+                                        .gap(SP_2)
+                                        .child(icons::icon(&line.icon, px(40.)))
+                                        .child(
+                                            div()
+                                                .text_color(color)
+                                                .font_weight(weight)
+                                                .font_features(tabular())
+                                                .child(text(tier.text)),
+                                        )
+                                        .into_any_element()
+                                }
+                                None => cell.into_any_element(),
+                            }
+                        }))
                 }))
-            }))
         });
         let prints = (!self.shown.blueprints.is_empty()).then(|| {
-            div().mt(SP_4).flex().flex_col().children(self.shown.blueprints.iter().map(|row| {
-                let cells = view::blueprint_cells(row);
-                let colored = |tone: Option<view::Tone>| match tone {
-                    Some(view::Tone::Enough) => (Some(theme.ok), FontWeight::NORMAL),
-                    Some(view::Tone::Short) => (Some(theme.danger), FontWeight::SEMIBOLD),
-                    _ => (None, FontWeight::NORMAL),
-                };
-                let (uc, uw) = colored(Some(cells.universal.tone));
-                div()
-                    .flex()
-                    .border_b_1()
-                    .border_color(rule)
-                    .py(SP_1)
-                    .child(
-                        div()
-                            .id(SharedString::from(format!("slot-{}", cells.name)))
-                            .w(px(56.))
-                            .flex_none()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .tooltip(tooltip(cells.name.clone()))
-                            .child(icons::icon(&cells.icon, px(48.))),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_col()
-                            .child(div().flex().children(cells.tiers.iter().map(|tier| {
-                                div()
-                                    .flex_1()
-                                    .flex()
-                                    .justify_center()
-                                    .text_size(FS_CAPTION)
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(theme.muted)
-                                    .child(text(tier.label.clone()))
-                            })))
-                            .child(div().flex().children(cells.tiers.iter().map(|tier| {
-                                let (color, weight) = colored(tier.tone);
-                                div()
-                                    .id(SharedString::from(format!("print-need-{}", tier.key)))
-                                    .flex_1()
-                                    .flex()
-                                    .flex_col()
-                                    .items_center()
-                                    .text_size(FS_SM)
-                                    .font_features(tabular())
-                                    .whitespace_nowrap()
-                                    .tooltip(tooltip(tier.name.clone()))
-                                    .when(!tier.text.is_empty(), |c| {
-                                        c.child(icons::icon(&tier.icon, px(32.))).child(
+            div()
+                .mt(SP_4)
+                .flex()
+                .flex_col()
+                .children(self.shown.blueprints.iter().map(|row| {
+                    let cells = view::blueprint_cells(row);
+                    let colored = |tone: Option<view::Tone>| match tone {
+                        Some(view::Tone::Enough) => (Some(theme.ok), FontWeight::NORMAL),
+                        Some(view::Tone::Short) => (Some(theme.danger), FontWeight::SEMIBOLD),
+                        _ => (None, FontWeight::NORMAL),
+                    };
+                    let (uc, uw) = colored(Some(cells.universal.tone));
+                    div()
+                        .flex()
+                        .border_b_1()
+                        .border_color(rule)
+                        .py(SP_1)
+                        .child(
+                            div()
+                                .id(SharedString::from(format!("slot-{}", cells.name)))
+                                .w(px(56.))
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .tooltip(tooltip(cells.name.clone()))
+                                .child(icons::icon(&cells.icon, px(48.))),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .flex()
+                                .flex_col()
+                                .child(div().flex().children(cells.tiers.iter().map(|tier| {
+                                    div()
+                                        .flex_1()
+                                        .flex()
+                                        .justify_center()
+                                        .text_size(FS_CAPTION)
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(theme.muted)
+                                        .child(text(tier.label.clone()))
+                                })))
+                                .child(div().flex().children(cells.tiers.iter().map(|tier| {
+                                    let (color, weight) = colored(tier.tone);
+                                    div()
+                                        .id(SharedString::from(format!("print-need-{}", tier.key)))
+                                        .flex_1()
+                                        .flex()
+                                        .flex_col()
+                                        .items_center()
+                                        .text_size(FS_SM)
+                                        .font_features(tabular())
+                                        .whitespace_nowrap()
+                                        .tooltip(tooltip(tier.name.clone()))
+                                        .when(!tier.text.is_empty(), |c| {
+                                            c.child(icons::icon(&tier.icon, px(32.))).child(
+                                                div()
+                                                    .when_some(color, gpui::Styled::text_color)
+                                                    .font_weight(weight)
+                                                    .child(text(tier.text.clone())),
+                                            )
+                                        })
+                                })))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .justify_end()
+                                        .items_center()
+                                        .gap(SP_1)
+                                        .text_size(FS_SM)
+                                        .text_color(theme.muted)
+                                        .font_features(tabular())
+                                        .child(text("T2 - T9:"))
+                                        .child(
                                             div()
-                                                .when_some(color, |d, c| d.text_color(c))
-                                                .font_weight(weight)
-                                                .child(text(tier.text.clone())),
+                                                .id(SharedString::from(format!(
+                                                    "universal-{}",
+                                                    cells.name
+                                                )))
+                                                .tooltip(tooltip(cells.universal.name.clone()))
+                                                .child(icons::icon(&cells.universal.icon, px(32.))),
                                         )
-                                    })
-                            })))
-                            .child(
-                                div()
-                                    .flex()
-                                    .justify_end()
-                                    .items_center()
-                                    .gap(SP_1)
-                                    .text_size(FS_SM)
-                                    .text_color(theme.muted)
-                                    .font_features(tabular())
-                                    .child(text("T2 - T9:"))
-                                    .child(
-                                        div()
-                                            .id(SharedString::from(format!("universal-{}", cells.name)))
-                                            .tooltip(tooltip(cells.universal.name.clone()))
-                                            .child(icons::icon(&cells.universal.icon, px(32.))),
-                                    )
-                                    .child(
-                                        div()
-                                            .when_some(uc, |d, c| d.text_color(c))
-                                            .font_weight(uw)
-                                            .child(text(cells.universal.text.clone())),
-                                    ),
-                            ),
-                    )
-            }))
+                                        .child(
+                                            div()
+                                                .when_some(uc, gpui::Styled::text_color)
+                                                .font_weight(uw)
+                                                .child(text(cells.universal.text.clone())),
+                                        ),
+                                ),
+                        )
+                }))
         });
         div()
             .flex()
@@ -527,10 +627,19 @@ impl Aoi {
     /// Pays one more from the `i`th source of the `at`th line (all with Shift), or takes back.
     fn pay(&mut self, at: usize, i: usize, shift: bool, right: bool, cx: &mut Context<Self>) {
         let settled = view::settle(&self.shown.procure, &self.payments);
-        let Some(line) = settled.lines.get(at) else { return };
-        let Some(chip) = line.chips.get(i) else { return };
+        let Some(line) = settled.lines.get(at) else {
+            return;
+        };
+        let Some(chip) = line.chips.get(i) else {
+            return;
+        };
         let key = format!("{}|{}", line.key, chip.key);
-        let n = view::step(&chip.source, chip.n, line.left, view::Click { right, shift });
+        let n = view::step(
+            &chip.source,
+            chip.n,
+            line.left,
+            view::Click { right, shift },
+        );
         self.payments.insert(key, n);
         cx.notify();
     }
@@ -546,7 +655,10 @@ impl Aoi {
         self.repeating = Some(cx.spawn(async move |this, cx| {
             cx.background_executor().timer(REPEAT_AFTER).await;
             loop {
-                if this.update(cx, |this, cx| this.pay(at, i, false, right, cx)).is_err() {
+                if this
+                    .update(cx, |this, cx| this.pay(at, i, false, right, cx))
+                    .is_err()
+                {
                     break;
                 }
                 cx.background_executor().timer(REPEAT_EVERY).await;
@@ -564,7 +676,13 @@ impl Aoi {
         let settled = view::settle(&self.shown.procure, &self.payments);
         let procure = view::procure_cells(&settled);
         if procure.lines.is_empty() {
-            return vec![div().text_size(FS_SM).text_color(theme.muted).child(text("足りないものはありません")).into_any_element()];
+            return vec![
+                div()
+                    .text_size(FS_SM)
+                    .text_color(theme.muted)
+                    .child(text("足りないものはありません"))
+                    .into_any_element(),
+            ];
         }
         let rule = theme.border;
         let fit = |child: AnyElement| {
@@ -596,11 +714,13 @@ impl Aoi {
                 (theme.danger, FontWeight::SEMIBOLD)
             };
             let chips: Vec<AnyElement> = if line.chips.is_empty() {
-                vec![div()
-                    .text_size(FS_CAPTION)
-                    .text_color(theme.muted)
-                    .child(text("手持ちのボックスや今月のショップでは補えません"))
-                    .into_any_element()]
+                vec![
+                    div()
+                        .text_size(FS_CAPTION)
+                        .text_color(theme.muted)
+                        .child(text("手持ちのボックスや今月のショップでは補えません"))
+                        .into_any_element(),
+                ]
             } else {
                 line.chips
                     .iter()
@@ -610,7 +730,10 @@ impl Aoi {
                         let border = if paid { theme.accent } else { theme.border };
                         let muted = theme.muted;
                         div()
-                            .id(SharedString::from(format!("chip-{}-{}", line.key, chip.key)))
+                            .id(SharedString::from(format!(
+                                "chip-{}-{}",
+                                line.key, chip.key
+                            )))
                             .role(Role::Button)
                             .aria_label(format!("{} {}", chip.title, chip.text))
                             .tab_stop(true)
@@ -630,10 +753,15 @@ impl Aoi {
                             .cursor_pointer()
                             .focus(move |s| if paid { s } else { s.border_color(muted) })
                             .tooltip(tooltip(chip.title.clone()))
-                            .child(icons::icon(&chip.icon, px(22.)).when(chip.out, |i| i.grayscale(true).opacity(0.6)))
+                            .child(
+                                icons::icon(&chip.icon, px(22.))
+                                    .when(chip.out, |i| i.grayscale(true).opacity(0.6)),
+                            )
                             .child(
                                 div()
-                                    .when(chip.negative, |t| t.text_color(theme.danger).font_weight(FontWeight::SEMIBOLD))
+                                    .when(chip.negative, |t| {
+                                        t.text_color(theme.danger).font_weight(FontWeight::SEMIBOLD)
+                                    })
                                     .child(text(chip.text.clone())),
                             )
                             .when(paid, |c| {
@@ -644,29 +772,46 @@ impl Aoi {
                                         .child(text(chip.given.clone())),
                                 )
                             })
-                            .on_mouse_down(MouseButton::Left, cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
-                                this.press(at, i, event.modifiers.shift, false, cx);
-                            }))
-                            .on_mouse_down(MouseButton::Right, cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
-                                this.press(at, i, event.modifiers.shift, true, cx);
-                            }))
-                            .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, _| this.release()))
-                            .on_mouse_up(MouseButton::Right, cx.listener(|this, _, _, _| this.release()))
-                            .on_mouse_up_out(MouseButton::Left, cx.listener(|this, _, _, _| this.release()))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                                    this.press(at, i, event.modifiers.shift, false, cx);
+                                }),
+                            )
+                            .on_mouse_down(
+                                MouseButton::Right,
+                                cx.listener(move |this, event: &gpui::MouseDownEvent, _, cx| {
+                                    this.press(at, i, event.modifiers.shift, true, cx);
+                                }),
+                            )
+                            .on_mouse_up(
+                                MouseButton::Left,
+                                cx.listener(|this, _, _, _| this.release()),
+                            )
+                            .on_mouse_up(
+                                MouseButton::Right,
+                                cx.listener(|this, _, _, _| this.release()),
+                            )
+                            .on_mouse_up_out(
+                                MouseButton::Left,
+                                cx.listener(|this, _, _, _| this.release()),
+                            )
                             .on_hover(cx.listener(|this, hovered: &bool, _, _| {
                                 if !hovered {
                                     this.release();
                                 }
                             }))
-                            .on_key_down(cx.listener(move |this, event: &gpui::KeyDownEvent, _, cx| {
-                                let key = event.keystroke.key.as_str();
-                                let shift = event.keystroke.modifiers.shift;
-                                if key == "enter" || key == "space" {
-                                    this.pay(at, i, shift, false, cx);
-                                } else if key == "delete" || key == "backspace" {
-                                    this.pay(at, i, shift, true, cx);
-                                }
-                            }))
+                            .on_key_down(cx.listener(
+                                move |this, event: &gpui::KeyDownEvent, _, cx| {
+                                    let key = event.keystroke.key.as_str();
+                                    let shift = event.keystroke.modifiers.shift;
+                                    if key == "enter" || key == "space" {
+                                        this.pay(at, i, shift, false, cx);
+                                    } else if key == "delete" || key == "backspace" {
+                                        this.pay(at, i, shift, true, cx);
+                                    }
+                                },
+                            ))
                             .into_any_element()
                     })
                     .collect()
@@ -687,17 +832,17 @@ impl Aoi {
                                     .flex()
                                     .items_center()
                                     .gap(SP_2)
-                                    .when(!line.icon.is_empty(), |w| w.child(icons::icon(&line.icon, px(28.))))
+                                    .when(!line.icon.is_empty(), |w| {
+                                        w.child(icons::icon(&line.icon, px(28.)))
+                                    })
                                     .child(text(line.name.clone())),
                             )
                             .child(fit(text(line.short.clone()).into_any_element()))
-                            .child(fit(
-                                div()
-                                    .text_color(color)
-                                    .font_weight(weight)
-                                    .child(text(line.left.clone()))
-                                    .into_any_element(),
-                            )),
+                            .child(fit(div()
+                                .text_color(color)
+                                .font_weight(weight)
+                                .child(text(line.left.clone()))
+                                .into_any_element())),
                     )
                     .child(div().flex().flex_wrap().px(SP_2).pb(SP_2).children(chips))
                     .into_any_element(),
@@ -706,10 +851,14 @@ impl Aoi {
         parts.push(
             div()
                 .my(SP_3)
-                .child(small_button(theme, "reset", "リセット").on_click(cx.listener(|this, _, _, cx| {
-                    this.payments.clear();
-                    cx.notify();
-                })))
+                .child(
+                    small_button(theme, "reset", "リセット").on_click(cx.listener(
+                        |this, _, _, cx| {
+                            this.payments.clear();
+                            cx.notify();
+                        },
+                    )),
+                )
                 .into_any_element(),
         );
         // Nothing paid, no settlement.
@@ -759,19 +908,15 @@ impl Aoi {
                                 .child(text(resource.name.clone())),
                         )
                         .child(fit(text(resource.held.clone()).into_any_element()))
-                        .child(fit(
-                            div()
-                                .text_color(theme.danger)
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child(text(resource.spent.clone()))
-                                .into_any_element(),
-                        ))
-                        .child(fit(
-                            div()
-                                .when_some(after, |d, (c, w)| d.text_color(c).font_weight(w))
-                                .child(text(resource.after.clone()))
-                                .into_any_element(),
-                        ))
+                        .child(fit(div()
+                            .text_color(theme.danger)
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(text(resource.spent.clone()))
+                            .into_any_element()))
+                        .child(fit(div()
+                            .when_some(after, |d, (c, w)| d.text_color(c).font_weight(w))
+                            .child(text(resource.after.clone()))
+                            .into_any_element()))
                         .into_any_element(),
                 );
             }
@@ -781,15 +926,29 @@ impl Aoi {
 
     /// The star menu of a target, over the page by its button: every star drawn as the game's,
     /// none below the student's now, the target ticked.
-    pub(super) fn star_menu_view(&mut self, menu: StarMenu, theme: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
+    pub(super) fn star_menu_view(
+        &mut self,
+        menu: StarMenu,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
         let row = self.shown.targets.iter().find(|t| t.id == menu.id)?.clone();
-        let training = row
-            .training
-            .or_else(|| self.shown.students.iter().find(|s| s.id == row.id).map(|s| s.training));
+        let training = row.training.or_else(|| {
+            self.shown
+                .students
+                .iter()
+                .find(|s| s.id == row.id)
+                .map(|s| s.training)
+        });
         let now = training.as_ref().and_then(view::star_of);
         let to = row.target.star.or(now);
         let name = if row.name.is_empty() {
-            self.shown.students.iter().find(|s| s.id == row.id).map(|s| s.name.clone()).unwrap_or_default()
+            self.shown
+                .students
+                .iter()
+                .find(|s| s.id == row.id)
+                .map(|s| s.name.clone())
+                .unwrap_or_default()
         } else {
             row.name.clone()
         };
@@ -821,13 +980,19 @@ impl Aoi {
                                 let checked = to == Some(choice.star);
                                 let star = choice.star;
                                 let disabled = choice.disabled;
-                                let target = row.target.clone();
+                                let target = row.target;
                                 div()
                                     .id(SharedString::from(format!("star-{star}")))
                                     .role(Role::MenuItemRadio)
                                     .aria_label(view::star_name(star))
-                                    .aria_toggled(if checked { gpui::Toggled::True } else { gpui::Toggled::False })
-                                    .when(disabled, |i| i.aria_description("押せません").opacity(0.35))
+                                    .aria_toggled(if checked {
+                                        gpui::Toggled::True
+                                    } else {
+                                        gpui::Toggled::False
+                                    })
+                                    .when(disabled, |i| {
+                                        i.aria_description("押せません").opacity(0.35)
+                                    })
                                     .tab_stop(!disabled)
                                     .flex()
                                     .items_center()
@@ -835,12 +1000,22 @@ impl Aoi {
                                     .pl(SP_2)
                                     .pr(SP_3)
                                     .text_size(FS_SM)
-                                    .when(!disabled, |i| i.cursor_pointer().hover(move |s| s.bg(hover)).focus(move |s| s.bg(hover)))
-                                    .child(div().w(px(14. * 1.4)).flex_none().when(!checked, |t| t.invisible()).child("✓"))
+                                    .when(!disabled, |i| {
+                                        i.cursor_pointer()
+                                            .hover(move |s| s.bg(hover))
+                                            .focus(move |s| s.bg(hover))
+                                    })
+                                    .child(
+                                        div()
+                                            .w(px(14. * 1.4))
+                                            .flex_none()
+                                            .when(!checked, gpui::Styled::invisible)
+                                            .child("✓"),
+                                    )
                                     .child(stars(&format!("menu-{star}"), star, px(14.)))
                                     .when(!disabled, |i| {
                                         i.on_click(cx.listener(move |this, _, _, cx| {
-                                            let mut target = target.clone();
+                                            let mut target = target;
                                             target.star = Some(star);
                                             let _ = this.core.set_target(id, Some(target));
                                             this.star_menu = None;
@@ -887,9 +1062,25 @@ mod tests {
     #[test]
     fn a_typed_value_is_kept_within_the_column() {
         let target = Target::default();
-        assert_eq!(retarget(&target, Part::Level, "120", 90).level, 90, "at most the column's highest");
-        assert_eq!(retarget(&target, Part::Skill(0), "0", 5).skills[0], 1, "at least 1");
-        assert_eq!(retarget(&target, Part::Skill(1), "7.6", 10).skills[1], 8, "rounded");
-        assert_eq!(retarget(&target, Part::Equipment(2), "abc", 10).equipment[2], 1, "unreadable is 1");
+        assert_eq!(
+            retarget(&target, Part::Level, "120", 90).level,
+            90,
+            "at most the column's highest"
+        );
+        assert_eq!(
+            retarget(&target, Part::Skill(0), "0", 5).skills[0],
+            1,
+            "at least 1"
+        );
+        assert_eq!(
+            retarget(&target, Part::Skill(1), "7.6", 10).skills[1],
+            8,
+            "rounded"
+        );
+        assert_eq!(
+            retarget(&target, Part::Equipment(2), "abc", 10).equipment[2],
+            1,
+            "unreadable is 1"
+        );
     }
 }

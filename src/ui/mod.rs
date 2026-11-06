@@ -2,20 +2,24 @@
 //! notices, the toasts and the dialogs. It shows the snapshot `Core` keeps current and calls
 //! `Core`'s commands; what it derives for display comes from `view`.
 
+// A screen's layout reads top to bottom in one function, as the page did; and a layout's
+// bindings are named after what they draw (`row`, `rows`), alike by nature.
+#![allow(clippy::too_many_lines, clippy::similar_names)]
+
 mod dialogs;
 mod equipment;
+pub mod icons;
 mod items;
 mod parts;
 mod plan;
 mod shops;
 mod students;
+#[cfg(test)]
+mod tests;
 pub mod text_input;
 pub mod theme;
 mod widgets;
 mod work;
-pub mod icons;
-#[cfg(test)]
-mod tests;
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -27,8 +31,8 @@ use futures::{StreamExt as _, channel::mpsc};
 use gpui::{
     App, AppContext as _, AsyncApp, Bounds, Context, Entity, FocusHandle, Focusable, FontWeight,
     InteractiveElement as _, IntoElement, KeyBinding, ParentElement as _, Render, ScrollHandle,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Task, TitlebarOptions,
-    WeakEntity, Window, WindowBounds, WindowOptions, actions, anchored, deferred, div,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Task, TitlebarOptions, WeakEntity,
+    Window, WindowBounds, WindowOptions, actions, anchored, deferred, div,
     prelude::FluentBuilder as _, px, size,
 };
 
@@ -185,7 +189,7 @@ impl Aoi {
             while changes.next().await.is_some() {
                 // Every change since is in the one snapshot taken.
                 while changes.try_recv().is_ok() {}
-                if this.update(cx, |this, cx| this.refresh(cx)).is_err() {
+                if this.update(cx, Aoi::refresh).is_err() {
                     break;
                 }
             }
@@ -243,7 +247,7 @@ impl Aoi {
     /// once, so one the user closes there stays closed. The others close and it comes to the top
     /// (「他の項目は全て閉じる」「画面上部に表示させる」); none of it while the menu says not to.
     fn follow_work(&mut self) {
-        let fold = view::work_fold(self.shown.place.clone(), &self.shown.month_end);
+        let fold = view::work_fold(self.shown.place, &self.shown.month_end);
         if fold == self.followed {
             return;
         }
@@ -287,8 +291,14 @@ impl Aoi {
     /// version (with the button to take it) and a failure stay in the page.
     fn check_update(&mut self, cx: &mut Context<Self>) {
         self.update = None;
-        self.notify_toast(Some(&view::update_text(&view::UpdateState::Checking)), true, cx);
-        let found = cx.background_executor().spawn(async { crate::app::check_update() });
+        self.notify_toast(
+            Some(&view::update_text(&view::UpdateState::Checking)),
+            true,
+            cx,
+        );
+        let found = cx
+            .background_executor()
+            .spawn(async { crate::app::check_update() });
         cx.spawn(async move |this, cx| {
             let found = found.await;
             let _ = this.update(cx, |this, cx| match found {
@@ -324,7 +334,9 @@ impl Aoi {
             self.update = Some(UpdateState::Installing(check.clone()));
             cx.notify();
         }
-        let applied = cx.background_executor().spawn(async { crate::app::apply_update() });
+        let applied = cx
+            .background_executor()
+            .spawn(async { crate::app::apply_update() });
         cx.spawn(async move |this, cx| {
             let applied = applied.await;
             let _ = this.update(cx, |this, cx| match applied {
@@ -425,7 +437,11 @@ impl Aoi {
                         gpui::transparent_black()
                     })
                     .text_size(FS_SM)
-                    .text_color(if selected { theme.on_surface } else { theme.muted })
+                    .text_color(if selected {
+                        theme.on_surface
+                    } else {
+                        theme.muted
+                    })
                     .when(selected, |t| t.font_weight(FontWeight::SEMIBOLD))
                     .cursor_pointer()
                     .child(tab.name())
@@ -435,7 +451,7 @@ impl Aoi {
                                 .font_weight(FontWeight::NORMAL)
                                 .text_color(theme.muted)
                                 .font_features(theme::tabular())
-                                .child(format!("\u{a0}{students}")),
+                                .child(text(format!("\u{a0}{students}"))),
                         )
                     })
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -495,7 +511,7 @@ impl Aoi {
                     .bg(lamp)
                     .into_any_element(),
             })
-            .child(status.label.clone())
+            .child(text(status.label.clone()))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.core.set_paused(!paused);
                 cx.notify();
@@ -576,53 +592,57 @@ impl Aoi {
                         .child(heading.to_owned()),
                 )
         };
-        let themes = group("テーマ").children(ThemeChoice::ALL.into_iter().map(|(choice, name)| {
-            widgets::menu_item(
-                theme,
-                &format!("theme-{name}"),
-                name,
-                Some(self.settings.theme == choice),
-                false,
-            )
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.settings.theme = choice;
-                this.keep_settings();
-                this.menu_open = false;
-                this.apply_theme(window, cx);
-            }))
-        }));
-        let follow = group("お仕事の自動開閉").children(WORK_FOLLOW.into_iter().map(|(on, name)| {
-            widgets::menu_item(
-                theme,
-                &format!("follow-{name}"),
-                name,
-                Some(self.settings.work_follow == on),
-                false,
-            )
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.settings.work_follow = on;
-                this.keep_settings();
-                this.menu_open = false;
-                cx.notify();
-            }))
-        }));
-        let cursors = self.cursor_shown.then(|| {
-            group("マウスカーソル変更").children(CursorChoice::ALL.into_iter().map(|(choice, name)| {
+        let themes =
+            group("テーマ").children(ThemeChoice::ALL.into_iter().map(|(choice, name)| {
                 widgets::menu_item(
                     theme,
-                    &format!("cursor-{name}"),
+                    &format!("theme-{name}"),
                     name,
-                    Some(self.settings.cursor == choice),
+                    Some(self.settings.theme == choice),
+                    false,
+                )
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.settings.theme = choice;
+                    this.keep_settings();
+                    this.menu_open = false;
+                    this.apply_theme(window, cx);
+                }))
+            }));
+        let follow =
+            group("お仕事の自動開閉").children(WORK_FOLLOW.into_iter().map(|(on, name)| {
+                widgets::menu_item(
+                    theme,
+                    &format!("follow-{name}"),
+                    name,
+                    Some(self.settings.work_follow == on),
                     false,
                 )
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    this.settings.cursor = choice;
+                    this.settings.work_follow = on;
                     this.keep_settings();
-                    this.cursor_shown = this.core.set_cursor(choice.palette());
                     this.menu_open = false;
                     cx.notify();
                 }))
-            }))
+            }));
+        let cursors = self.cursor_shown.then(|| {
+            group("マウスカーソル変更").children(CursorChoice::ALL.into_iter().map(
+                |(choice, name)| {
+                    widgets::menu_item(
+                        theme,
+                        &format!("cursor-{name}"),
+                        name,
+                        Some(self.settings.cursor == choice),
+                        false,
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.settings.cursor = choice;
+                        this.keep_settings();
+                        this.cursor_shown = this.core.set_cursor(choice.palette());
+                        this.menu_open = false;
+                        cx.notify();
+                    }))
+                },
+            ))
         });
         deferred(
             anchored().snap_to_window().child(
@@ -650,26 +670,32 @@ impl Aoi {
                     .border_color(theme.border)
                     .rounded(RADIUS_SM)
                     .bg(theme.surface)
-                    .child(item("export", "YAMLを書き出す", nothing_read).on_click(cx.listener(
-                        move |this, _, _, cx| {
-                            if !nothing_read {
+                    .child(
+                        item("export", "YAMLを書き出す", nothing_read).on_click(cx.listener(
+                            move |this, _, _, cx| {
+                                if !nothing_read {
+                                    this.menu_open = false;
+                                    this.export(cx);
+                                }
+                            },
+                        )),
+                    )
+                    .child(
+                        item("check", "アップデートを確認", false).on_click(cx.listener(
+                            |this, _, _, cx| {
                                 this.menu_open = false;
-                                this.export(cx);
-                            }
-                        },
-                    )))
-                    .child(item("check", "アップデートを確認", false).on_click(cx.listener(
-                        |this, _, _, cx| {
-                            this.menu_open = false;
-                            this.check_update(cx);
-                        },
-                    )))
-                    .child(item("phone", "Androidとの通信", false).on_click(cx.listener(
-                        |this, _, _, cx| this.open_dialog(Dialog::Phone, cx),
-                    )))
-                    .child(item("cast", "配信アプリとの連携", false).on_click(cx.listener(
-                        |this, _, _, cx| this.open_dialog(Dialog::Cast, cx),
-                    )))
+                                this.check_update(cx);
+                            },
+                        )),
+                    )
+                    .child(item("phone", "Androidとの通信", false).on_click(
+                        cx.listener(|this, _, _, cx| this.open_dialog(Dialog::Phone, cx)),
+                    ))
+                    .child(
+                        item("cast", "配信アプリとの連携", false).on_click(
+                            cx.listener(|this, _, _, cx| this.open_dialog(Dialog::Cast, cx)),
+                        ),
+                    )
                     .child(themes)
                     .child(follow)
                     .children(cursors),
@@ -683,15 +709,20 @@ impl Aoi {
     fn notices(&mut self, theme: &Theme, cx: &mut Context<Self>) -> Vec<gpui::AnyElement> {
         let mut notices = Vec::new();
         if let crate::watch::Status::Failed { message } = &self.shown.status {
-            notices.push(widgets::error(theme, "capture-error", message.clone()).into_any_element());
+            notices
+                .push(widgets::error(theme, "capture-error", message.clone()).into_any_element());
         }
         if let Some(error) = &self.shown.keep_error {
             notices.push(widgets::error(theme, "keep-error", error.clone()).into_any_element());
         }
         match &self.exported {
             Some(Err(error)) => notices.push(
-                widgets::error(theme, "export-error", format!("書き出せませんでした: {error}"))
-                    .into_any_element(),
+                widgets::error(
+                    theme,
+                    "export-error",
+                    format!("書き出せませんでした: {error}"),
+                )
+                .into_any_element(),
             ),
             Some(Ok(path)) => notices.push(
                 widgets::quiet(theme, "exported", format!("書き出しました: {path}"))
@@ -706,7 +737,7 @@ impl Aoi {
                     "update-error",
                     view::update_text(&view::UpdateState::Failed { error }),
                 )
-                    .into_any_element(),
+                .into_any_element(),
             ),
             Some(UpdateState::Available(check)) => {
                 let label = if check.installs {
@@ -769,7 +800,9 @@ impl Render for Aoi {
             Tab::Work => self.work_tab(&theme, window, cx),
         };
         let dialog = self.dialog.map(|d| self.dialog_view(d, &theme, cx));
-        let star_menu = self.star_menu.and_then(|m| self.star_menu_view(m, &theme, cx));
+        let star_menu = self
+            .star_menu
+            .and_then(|m| self.star_menu_view(m, &theme, cx));
         div()
             .id("aoi")
             .key_context("Aoi")
@@ -942,7 +975,11 @@ pub fn subtabs<T: Copy + PartialEq + 'static>(
                     gpui::transparent_black()
                 })
                 .text_size(FS_SM)
-                .text_color(if selected { theme.on_surface } else { theme.muted })
+                .text_color(if selected {
+                    theme.on_surface
+                } else {
+                    theme.muted
+                })
                 .when(selected, |t| t.font_weight(FontWeight::SEMIBOLD))
                 .whitespace_nowrap()
                 .cursor_pointer()
@@ -970,7 +1007,12 @@ pub fn search(theme: &Theme, field: &Entity<TextInput>) -> impl IntoElement {
         .flex_none()
         .gap(SP_1)
         .mb(SP_4)
-        .child(div().text_size(FS_CAPTION).text_color(theme.muted).child("名前で検索"))
+        .child(
+            div()
+                .text_size(FS_CAPTION)
+                .text_color(theme.muted)
+                .child("名前で検索"),
+        )
         .child(
             div()
                 .id("search")

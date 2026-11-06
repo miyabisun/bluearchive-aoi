@@ -2,14 +2,14 @@
 //! buttons, folds (a title that opens and closes what is under it) and table cells.
 
 use gpui::{
-    AnyView, App, AppContext as _, Div, FontWeight, Hsla, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, Role, SharedString, Stateful, StatefulInteractiveElement as _,
-    Styled as _, Window, div, prelude::FluentBuilder as _, px,
+    AnyView, App, AppContext as _, Div, InteractiveElement as _, IntoElement, ParentElement as _,
+    Render, Role, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, Window,
+    div, prelude::FluentBuilder as _, px,
 };
 
 use super::{
     icons::{Glyph, glyph},
-    theme::{FS_CAPTION, FS_SM, RADIUS_SM, SP_1, SP_2, SP_3, Theme},
+    theme::{FS_SM, RADIUS_SM, SP_1, SP_2, SP_3, Theme},
 };
 
 /// A piece of text that the window's tests can find (`text:<the text>`).
@@ -53,12 +53,18 @@ impl Render for Tooltip {
             .bg(theme.surface)
             .text_color(theme.on_surface)
             .text_size(FS_SM)
-            .children(self.text.split('\n').map(|line| div().child(line.to_owned())))
+            .children(
+                self.text
+                    .split('\n')
+                    .map(|line| div().child(line.to_owned())),
+            )
     }
 }
 
 /// A tooltip of `text` (lines apart by `\n`), for `.tooltip(...)`; none for empty text.
-pub fn tooltip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+pub fn tooltip(
+    text: impl Into<SharedString>,
+) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
     let text = text.into();
     move |_window, cx| cx.new(|_| Tooltip { text: text.clone() }).into()
 }
@@ -96,7 +102,11 @@ pub fn menu_item(
         .px(SP_3)
         .py(SP_2)
         .text_size(FS_SM)
-        .text_color(if disabled { theme.muted } else { theme.on_surface })
+        .text_color(if disabled {
+            theme.muted
+        } else {
+            theme.on_surface
+        })
         .when(!disabled, |item| {
             item.cursor_pointer()
                 .hover(move |s| s.bg(hover))
@@ -107,7 +117,7 @@ pub fn menu_item(
                 div()
                     .w(px(14. * 1.4))
                     .flex_none()
-                    .when(!checked, |tick| tick.invisible())
+                    .when(!checked, gpui::Styled::invisible)
                     .child("✓"),
             )
         })
@@ -192,27 +202,6 @@ pub fn fold_title(theme: &Theme, key: &str, open: bool) -> Stateful<Div> {
         }))
 }
 
-/// A count's text in tabular figures, right aligned.
-pub fn number(theme: &Theme, value: impl Into<SharedString>, color: Option<Hsla>) -> Div {
-    div()
-        .font_features(super::theme::tabular())
-        .text_color(color.unwrap_or(theme.on_surface))
-        .child(text(value))
-}
-
-/// A heading of a section (body-sm, muted, 600).
-pub fn heading(theme: &Theme, id: &str, title: impl Into<SharedString>) -> Stateful<Div> {
-    let title = title.into();
-    div()
-        .id(SharedString::from(format!("heading-{id}")))
-        .role(Role::Heading)
-        .aria_label(title.clone())
-        .text_size(FS_SM)
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(theme.muted)
-        .child(text(title))
-}
-
 /// What a tab says before anything of its list is read.
 pub fn empty(theme: &Theme, id: &str, message: &str) -> Stateful<Div> {
     div()
@@ -221,12 +210,4 @@ pub fn empty(theme: &Theme, id: &str, message: &str) -> Stateful<Div> {
         .aria_label(message.to_owned())
         .text_color(theme.muted)
         .child(text(message.to_owned()))
-}
-
-/// A caption-sized note.
-pub fn caption(theme: &Theme, words: impl Into<SharedString>) -> Div {
-    div()
-        .text_size(FS_CAPTION)
-        .text_color(theme.muted)
-        .child(text(words))
 }

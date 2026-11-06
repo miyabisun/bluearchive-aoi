@@ -265,7 +265,6 @@ fn keep_in(places: &Places, snapshot: &Snapshot) -> Result<(), String> {
     keep::write(&places.latest, snapshot.yaml(&now()).as_bytes())
 }
 
-
 impl Snapshot {
     /// Takes in what the watcher reports: its status, and what it read or where the phone,
     /// the streaming app or the game now stands. What was read is counted again and kept.

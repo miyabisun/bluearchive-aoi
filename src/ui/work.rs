@@ -2,9 +2,9 @@
 //! the month's end), a fold each, against what is held.
 
 use gpui::{
-    StyledImage as _, AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, Role,
-    ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
-    prelude::FluentBuilder as _, px,
+    AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
+    Role, ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled as _,
+    StyledImage as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
 use super::{
@@ -39,7 +39,15 @@ const FOLD_ORDER: [&str; 6] = [
 
 impl Aoi {
     /// A fold: its title (pressed, it opens and closes), and what it holds while open.
-    fn fold(&mut self, theme: &Theme, key: &str, title: AnyElement, extra: Option<AnyElement>, body: impl FnOnce(&Self) -> Vec<AnyElement>, cx: &mut Context<Self>) -> AnyElement {
+    fn fold(
+        &mut self,
+        theme: &Theme,
+        key: &str,
+        title: AnyElement,
+        extra: Option<AnyElement>,
+        body: impl FnOnce(&Self) -> Vec<AnyElement>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let open = self.opened.contains(key);
         let owned = key.to_owned();
         div()
@@ -64,7 +72,12 @@ impl Aoi {
             .into_any_element()
     }
 
-    pub(super) fn work_tab(&mut self, theme: &Theme, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn work_tab(
+        &mut self,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let width = parts::content_width(window);
         let heading = |title: &str, first: bool| {
             div()
@@ -101,35 +114,82 @@ impl Aoi {
             .cloned();
         let mut folds: Vec<AnyElement> = vec![heading("日課", true)];
         let t = *theme;
-        folds.push(self.fold(theme, "work:通常アイテム", h3("ショップ: 通常アイテム"), None, |this| {
-            vec![raise_rows(&t, "raises", &view::normal_item_rows(&this.shown.work.commissions, orbs.as_ref()), true).into_any_element()]
-        }, cx));
-        folds.push(self.fold(theme, "work:指名手配", h3("指名手配"), None, |this| {
-            this.shown
-                .work
-                .bounties
-                .iter()
-                .flat_map(|place| {
-                    let mut parts = vec![h4(&t, view::place_name(&place.name).to_owned())];
-                    parts.push(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap(px(2.))
-                            .children(place.kinds.iter().enumerate().map(|(k, tiers)| {
-                                tier_row(&t, &format!("bounty-{}-{k}", place.name), tiers, None)
-                            }))
-                            .into_any_element(),
-                    );
-                    parts
-                })
-                .collect()
-        }, cx));
-        folds.push(self.fold(theme, "work:学園交流会", h3("学園交流会"), None, |this| {
-            vec![raise_rows(&t, "schools", &view::scrimmage_rows(&this.shown.work.scrimmages, &this.shown.work.schools), false).into_any_element()]
-        }, cx));
+        folds.push(self.fold(
+            theme,
+            "work:通常アイテム",
+            h3("ショップ: 通常アイテム"),
+            None,
+            |this| {
+                vec![
+                    raise_rows(
+                        &t,
+                        "raises",
+                        &view::normal_item_rows(&this.shown.work.commissions, orbs.as_ref()),
+                        true,
+                    )
+                    .into_any_element(),
+                ]
+            },
+            cx,
+        ));
+        folds.push(self.fold(
+            theme,
+            "work:指名手配",
+            h3("指名手配"),
+            None,
+            |this| {
+                this.shown
+                    .work
+                    .bounties
+                    .iter()
+                    .flat_map(|place| {
+                        let mut parts = vec![h4(&t, view::place_name(&place.name).to_owned())];
+                        parts.push(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap(px(2.))
+                                .children(place.kinds.iter().enumerate().map(|(k, tiers)| {
+                                    tier_row(&t, &format!("bounty-{}-{k}", place.name), tiers, None)
+                                }))
+                                .into_any_element(),
+                        );
+                        parts
+                    })
+                    .collect()
+            },
+            cx,
+        ));
+        folds.push(self.fold(
+            theme,
+            "work:学園交流会",
+            h3("学園交流会"),
+            None,
+            |this| {
+                vec![
+                    raise_rows(
+                        &t,
+                        "schools",
+                        &view::scrimmage_rows(
+                            &this.shown.work.scrimmages,
+                            &this.shown.work.schools,
+                        ),
+                        false,
+                    )
+                    .into_any_element(),
+                ]
+            },
+            cx,
+        ));
         folds.push(heading("2倍キャンペーン", false));
-        folds.push(self.fold(theme, "work:任務", h3("任務 Normal"), None, |this| this.missions(&t), cx));
+        folds.push(self.fold(
+            theme,
+            "work:任務",
+            h3("任務 Normal"),
+            None,
+            |this| this.missions(&t),
+            cx,
+        ));
         let hard_ap = view::hard_cost(&self.shown.hard);
         let hard_extra = (hard_ap > 0).then(|| {
             div()
@@ -140,7 +200,10 @@ impl Aoi {
                 .gap(px(2.))
                 .text_size(FS_SM)
                 .font_features(tabular())
-                .tooltip(tooltip(format!("任務 Hard の予約: 1日 {} AP", view::exact(hard_ap))))
+                .tooltip(tooltip(format!(
+                    "任務 Hard の予約: 1日 {} AP",
+                    view::exact(hard_ap)
+                )))
                 .child(icons::icon("currency_icon_ap", px(20.)))
                 .child(
                     div()
@@ -151,10 +214,32 @@ impl Aoi {
                 .into_any_element()
         });
         let hard_cards = self.hard_cards(theme, width, cx);
-        folds.push(self.fold(theme, "work:任務 Hard", h3("任務 Hard"), hard_extra, move |_| vec![hard_cards], cx));
-        folds.push(self.fold(theme, "work:特別依頼", h3("特別依頼"), None, |this| {
-            vec![raise_rows(&t, "commissions", &view::commission_rows(&this.shown.work.commissions), false).into_any_element()]
-        }, cx));
+        folds.push(self.fold(
+            theme,
+            "work:任務 Hard",
+            h3("任務 Hard"),
+            hard_extra,
+            move |_| vec![hard_cards],
+            cx,
+        ));
+        folds.push(self.fold(
+            theme,
+            "work:特別依頼",
+            h3("特別依頼"),
+            None,
+            |this| {
+                vec![
+                    raise_rows(
+                        &t,
+                        "commissions",
+                        &view::commission_rows(&this.shown.work.commissions),
+                        false,
+                    )
+                    .into_any_element(),
+                ]
+            },
+            cx,
+        ));
         folds.push(heading("月末", false));
         let shops = self.shown.month_end.clone();
         for shop in &shops {
@@ -175,9 +260,17 @@ impl Aoi {
                             .font_features(tabular())
                             .child(text(view::short_time(&read_at))),
                     )
-                    .when(view::shop_stale(true, &read_at, &crate::keep::now()), |h| {
-                        h.child(div().text_size(FS_SM).font_weight(FontWeight::NORMAL).child(text("前の月の値")))
-                    })
+                    .when(
+                        view::shop_stale(true, &read_at, &crate::keep::now()),
+                        |h| {
+                            h.child(
+                                div()
+                                    .text_size(FS_SM)
+                                    .font_weight(FontWeight::NORMAL)
+                                    .child(text("前の月の値")),
+                            )
+                        },
+                    )
                 })
                 .into_any_element();
             // The coins left once the cards reserved are paid: blue while any is reserved, so
@@ -198,7 +291,10 @@ impl Aoi {
                         None
                     };
                     div()
-                        .id(SharedString::from(format!("plan-coin-{}-{}", shop.name, coin.name)))
+                        .id(SharedString::from(format!(
+                            "plan-coin-{}-{}",
+                            shop.name, coin.name
+                        )))
                         .flex()
                         .items_center()
                         .gap(px(2.))
@@ -206,7 +302,7 @@ impl Aoi {
                         .child(icons::icon(&coin.icon, px(20.)))
                         .child(
                             div()
-                                .when_some(color, |d, c| d.text_color(c))
+                                .when_some(color, gpui::Styled::text_color)
                                 .when(left.short, |d| d.font_weight(FontWeight::SEMIBOLD))
                                 .child(text(left.left.clone())),
                         )
@@ -251,8 +347,12 @@ impl Aoi {
                     .flex_col()
                     .child(
                         div()
-                            .font_weight(if color.is_some() { FontWeight::SEMIBOLD } else { FontWeight::BOLD })
-                            .when_some(color, |d, c| d.text_color(c))
+                            .font_weight(if color.is_some() {
+                                FontWeight::SEMIBOLD
+                            } else {
+                                FontWeight::BOLD
+                            })
+                            .when_some(color, gpui::Styled::text_color)
                             .font_features(tabular())
                             .child(text(c.pieces)),
                     )
@@ -302,26 +402,71 @@ impl Aoi {
             };
             parts.push(h4("黄金比までの周回（2倍キャンペーン中）"));
             if farm.lines.is_empty() {
-                parts.push(div().text_size(FS_CAPTION).text_color(theme.muted).child(text("どの部位も黄金比に届いています")).into_any_element());
-            } else {
-                let row = |name: AnyElement, runs: String, ap: String, slots: String, total: bool| {
+                parts.push(
                     div()
-                        .flex()
-                        .items_center()
-                        .px(SP_2)
-                        .py(SP_1)
-                        .when(!total, |r| r.border_b_1().border_color(rule))
-                        .when(total, |r| r.border_t_2().border_color(rule).font_weight(FontWeight::SEMIBOLD))
-                        .child(div().flex_1().child(name))
-                        .child(div().w(px(64.)).flex().justify_end().font_features(tabular()).child(text(runs)))
-                        .child(div().w(px(80.)).pl(SP_3).flex().justify_end().font_features(tabular()).child(text(ap)))
-                        .child(div().flex_1().pl(SP_2).text_size(FS_CAPTION).text_color(theme.muted).child(text(slots)))
-                        .into_any_element()
-                };
+                        .text_size(FS_CAPTION)
+                        .text_color(theme.muted)
+                        .child(text("どの部位も黄金比に届いています"))
+                        .into_any_element(),
+                );
+            } else {
+                let row =
+                    |name: AnyElement, runs: String, ap: String, slots: String, total: bool| {
+                        div()
+                            .flex()
+                            .items_center()
+                            .px(SP_2)
+                            .py(SP_1)
+                            .when(!total, |r| r.border_b_1().border_color(rule))
+                            .when(total, |r| {
+                                r.border_t_2()
+                                    .border_color(rule)
+                                    .font_weight(FontWeight::SEMIBOLD)
+                            })
+                            .child(div().flex_1().child(name))
+                            .child(
+                                div()
+                                    .w(px(64.))
+                                    .flex()
+                                    .justify_end()
+                                    .font_features(tabular())
+                                    .child(text(runs)),
+                            )
+                            .child(
+                                div()
+                                    .w(px(80.))
+                                    .pl(SP_3)
+                                    .flex()
+                                    .justify_end()
+                                    .font_features(tabular())
+                                    .child(text(ap)),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .pl(SP_2)
+                                    .text_size(FS_CAPTION)
+                                    .text_color(theme.muted)
+                                    .child(text(slots)),
+                            )
+                            .into_any_element()
+                    };
                 for line in &farm.lines {
-                    parts.push(row(text(line.name.clone()).into_any_element(), line.runs.clone(), line.ap.clone(), line.slots.clone(), false));
+                    parts.push(row(
+                        text(line.name.clone()).into_any_element(),
+                        line.runs.clone(),
+                        line.ap.clone(),
+                        line.slots.clone(),
+                        false,
+                    ));
                 }
-                parts.push(row(text("計").into_any_element(), farm.total.runs.clone(), farm.total.ap.clone(), String::new(), true));
+                parts.push(row(
+                    text("計").into_any_element(),
+                    farm.total.runs.clone(),
+                    farm.total.ap.clone(),
+                    String::new(),
+                    true,
+                ));
             }
             if !farm.next.is_empty() {
                 parts.push(h4("その後に黄金比を整える周回"));
@@ -334,7 +479,13 @@ impl Aoi {
                             .border_b_1()
                             .border_color(rule)
                             .child(div().flex_1().child(text(line.name.clone())))
-                            .child(div().flex_1().text_size(FS_CAPTION).text_color(theme.muted).child(text(line.slots.clone())))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .text_size(FS_CAPTION)
+                                    .text_color(theme.muted)
+                                    .child(text(line.slots.clone())),
+                            )
                             .into_any_element(),
                     );
                 }
@@ -346,7 +497,12 @@ impl Aoi {
     /// 任務 Hard: a student's eleph a card, as the month-end shops show a good: how many missions
     /// drop it, the student's star and the elephs held; pressing one reserves it, again takes it
     /// back. Those at 固有4 greyed, last, yet reserved as the others.
-    fn hard_cards(&mut self, theme: &Theme, width: gpui::Pixels, cx: &mut Context<Self>) -> AnyElement {
+    fn hard_cards(
+        &mut self,
+        theme: &Theme,
+        width: gpui::Pixels,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let cards: Vec<Card> = self
             .shown
             .hard
@@ -372,14 +528,24 @@ impl Aoi {
                 }
             })
             .collect();
-        self.cards(theme, width, cards, cx)
+        Self::cards(theme, width, cards, cx)
     }
 
     /// A month-end shop's cards: a good and a coin, as the game shows them; pressing one
     /// reserves it, again takes it back.
-    fn month_end_cards(&mut self, theme: &Theme, width: gpui::Pixels, shop: &crate::strategy::PlanShop, cx: &mut Context<Self>) -> AnyElement {
+    fn month_end_cards(
+        &mut self,
+        theme: &Theme,
+        width: gpui::Pixels,
+        shop: &crate::strategy::PlanShop,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         if shop.read_at.is_none() {
-            return div().text_size(FS_CAPTION).text_color(theme.muted).child(text("まだ読んでいません")).into_any_element();
+            return div()
+                .text_size(FS_CAPTION)
+                .text_color(theme.muted)
+                .child(text("まだ読んでいません"))
+                .into_any_element();
         }
         let cards: Vec<Card> = shop
             .cards
@@ -406,10 +572,15 @@ impl Aoi {
                 }
             })
             .collect();
-        self.cards(theme, width, cards, cx)
+        Self::cards(theme, width, cards, cx)
     }
 
-    fn cards(&mut self, theme: &Theme, width: gpui::Pixels, cards: Vec<Card>, cx: &mut Context<Self>) -> AnyElement {
+    fn cards(
+        theme: &Theme,
+        width: gpui::Pixels,
+        cards: Vec<Card>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let (count, column) = parts::columns(width, px(112.), SP_2);
         let mut rows = Vec::new();
         let mut cards = cards.into_iter().peekable();
@@ -422,7 +593,11 @@ impl Aoi {
                     .id(SharedString::from(card.key.clone()))
                     .role(Role::Button)
                     .aria_label(card.title.clone())
-                    .aria_toggled(if reserved { gpui::Toggled::True } else { gpui::Toggled::False })
+                    .aria_toggled(if reserved {
+                        gpui::Toggled::True
+                    } else {
+                        gpui::Toggled::False
+                    })
                     .debug_selector({
                         let key = card.key.clone();
                         move || format!("card:{key}")
@@ -437,7 +612,11 @@ impl Aoi {
                     .gap(SP_1)
                     .p(SP_1)
                     .border_2()
-                    .border_color(if reserved { theme.accent } else { gpui::transparent_black() })
+                    .border_color(if reserved {
+                        theme.accent
+                    } else {
+                        gpui::transparent_black()
+                    })
                     .rounded(RADIUS_SM)
                     .bg(card.face.unwrap_or(theme.wash_base))
                     .when(card.sold, |c| c.opacity(0.55))
@@ -446,7 +625,10 @@ impl Aoi {
                     .child(
                         div()
                             .relative()
-                            .child(icons::icon(&card.icon, px(64.)).when(card.sold, |i| i.grayscale(true)))
+                            .child(
+                                icons::icon(&card.icon, px(64.))
+                                    .when(card.sold, |i| i.grayscale(true)),
+                            )
                             .when_some(card.amount.filter(|a| !a.is_empty()), |p, amount| {
                                 p.child(
                                     div()
@@ -472,8 +654,12 @@ impl Aoi {
                             .text_size(FS_CAPTION)
                             .font_features(tabular())
                             .whitespace_nowrap()
-                            .when_some(card.coin_icon, |o, icon| o.child(icons::icon(&icon, px(18.))))
-                            .when_some(card.star, |o, star| o.child(stars(&card.key, star, px(12.))))
+                            .when_some(card.coin_icon, |o, icon| {
+                                o.child(icons::icon(&icon, px(18.)))
+                            })
+                            .when_some(card.star, |o, star| {
+                                o.child(stars(&card.key, star, px(12.)))
+                            })
                             .child(text(card.text)),
                     )
                     .when(reserved, |c| {
@@ -498,7 +684,13 @@ impl Aoi {
                     }))
             })));
         }
-        div().mt(SP_1).flex().flex_col().gap(SP_2).children(rows).into_any_element()
+        div()
+            .mt(SP_1)
+            .flex()
+            .flex_col()
+            .gap(SP_2)
+            .children(rows)
+            .into_any_element()
     }
 }
 
@@ -516,4 +708,3 @@ struct Card {
     text: String,
     reserve: Reserve,
 }
-

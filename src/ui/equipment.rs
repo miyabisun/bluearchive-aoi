@@ -36,7 +36,12 @@ pub const EMPTY: &str = "ブルーアーカイブの装備一覧を「デフォ�
 const PRINT_TIERS: std::ops::RangeInclusive<u8> = 1..=10;
 
 impl Aoi {
-    pub(super) fn equipment_tab(&mut self, theme: &Theme, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn equipment_tab(
+        &mut self,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         if self.shown.equipment.is_empty() {
             return super::widgets::empty(theme, "equipment", EMPTY).into_any_element();
         }
@@ -144,12 +149,20 @@ impl Aoi {
                         .iter()
                         .chain(std::iter::once(&slot.universal))
                         .enumerate()
-                        .map(|(i, cell)| count_cell(format!("print-{}-{i}", slot.name), cell.as_ref())),
+                        .map(|(i, cell)| {
+                            count_cell(format!("print-{}-{i}", slot.name), cell.as_ref())
+                        }),
                 )
         });
         let boxes = kinds.print_boxes.iter().any(Option::is_some).then(|| {
             row()
-                .child(div().flex_1().px(SP_1).whitespace_nowrap().child(text("選択ボックス")))
+                .child(
+                    div()
+                        .flex_1()
+                        .px(SP_1)
+                        .whitespace_nowrap()
+                        .child(text("選択ボックス")),
+                )
                 .children(
                     kinds
                         .print_boxes
@@ -159,7 +172,12 @@ impl Aoi {
                         .map(|(i, cell)| count_cell(format!("print-box-{i}"), cell.as_ref())),
                 )
         });
-        div().flex().flex_col().child(head).children(slots).children(boxes)
+        div()
+            .flex()
+            .flex_col()
+            .child(head)
+            .children(slots)
+            .children(boxes)
     }
 
     /// A kind of enhancement material a row: its tiers on their colours, then how many students
@@ -174,8 +192,22 @@ impl Aoi {
                 div()
                     .flex()
                     .items_center()
-                    .child(tier_row(theme, &format!("enhancement-{}", row.category), &row.tiers, None).flex_1())
-                    .child(raise_cell(theme, &cells.students, &cells.numerator, &cells.denominator, None))
+                    .child(
+                        tier_row(
+                            theme,
+                            &format!("enhancement-{}", row.category),
+                            &row.tiers,
+                            None,
+                        )
+                        .flex_1(),
+                    )
+                    .child(raise_cell(
+                        theme,
+                        &cells.students,
+                        &cells.numerator,
+                        &cells.denominator,
+                        None,
+                    ))
             }))
     }
 }
