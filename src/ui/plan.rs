@@ -310,7 +310,7 @@ impl Aoi {
                             .debug_selector(move || format!("star-pick-{id}"))
                             .role(Role::Button)
                             .aria_label(format!("{name}の星の目標"))
-                            .aria_expanded(open)
+                            .when(open, |b| b.aria_description("開いています"))
                             .tab_stop(true)
                             .flex()
                             .items_center()

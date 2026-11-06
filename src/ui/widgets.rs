@@ -187,7 +187,9 @@ pub fn outlined_button(theme: &Theme, id: &str, label: &str, primary: bool) -> S
 }
 
 /// A fold's title: a triangle turned down while open, then the title; pressing it (or Enter
-/// and Space on it) opens and closes the fold. Its text cannot be selected, so a double click
+/// and Space on it) opens and closes the fold. Whether it is open goes in its description, not
+/// as an expandable state: GPUI answers UI Automation's invoke alone, and an expandable node is
+/// offered to expand instead. Its text cannot be selected, so a double click
 /// opens and closes it and selects nothing.
 pub fn fold_title(theme: &Theme, key: &str, open: bool) -> Stateful<Div> {
     let selector = format!("fold-{key}");
@@ -195,7 +197,7 @@ pub fn fold_title(theme: &Theme, key: &str, open: bool) -> Stateful<Div> {
         .id(SharedString::from(selector.clone()))
         .debug_selector(move || selector.clone())
         .role(Role::Button)
-        .aria_expanded(open)
+        .when(open, |t| t.aria_description("開いています"))
         .tab_stop(true)
         .flex()
         .items_center()

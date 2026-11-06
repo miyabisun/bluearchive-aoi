@@ -169,7 +169,6 @@ impl Aoi {
                 div()
                     .id(SharedString::from(format!("shop-{}", shop.name)))
                     .role(Role::Group)
-                    .aria_label(shop.name.clone())
                     .border_b_1()
                     .border_color(theme.border)
                     .when(open, |f| f.pb(SP_4))

@@ -538,7 +538,7 @@ impl Aoi {
             .debug_selector(|| "menu-button".to_owned())
             .role(gpui::Role::Button)
             .aria_label("メニュー")
-            .aria_expanded(self.menu_open)
+            .when(self.menu_open, |b| b.aria_description("開いています"))
             .tab_stop(true)
             .flex()
             .flex_none()

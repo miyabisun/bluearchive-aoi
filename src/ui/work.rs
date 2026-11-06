@@ -43,11 +43,15 @@ impl Aoi {
         &mut self,
         theme: &Theme,
         key: &str,
-        title: AnyElement,
-        extra: Option<AnyElement>,
+        head: Head,
         body: impl FnOnce(&Self) -> Vec<AnyElement>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let Head {
+            label,
+            title,
+            extra,
+        } = head;
         let open = self.opened.contains(key);
         let owned = key.to_owned();
         div()
@@ -62,6 +66,7 @@ impl Aoi {
             .when(open, |f| f.pb(SP_4))
             .child(
                 fold_title(theme, key, open)
+                    .aria_label(label)
                     .gap(SP_2)
                     .py(SP_2)
                     .child(title)
@@ -117,8 +122,11 @@ impl Aoi {
         folds.push(self.fold(
             theme,
             "work:通常アイテム",
-            h3("ショップ: 通常アイテム"),
-            None,
+            Head {
+                label: "ショップ: 通常アイテム".to_owned(),
+                title: h3("ショップ: 通常アイテム"),
+                extra: None,
+            },
             |this| {
                 vec![
                     raise_rows(
@@ -135,8 +143,11 @@ impl Aoi {
         folds.push(self.fold(
             theme,
             "work:指名手配",
-            h3("指名手配"),
-            None,
+            Head {
+                label: "指名手配".to_owned(),
+                title: h3("指名手配"),
+                extra: None,
+            },
             |this| {
                 this.shown
                     .work
@@ -163,8 +174,11 @@ impl Aoi {
         folds.push(self.fold(
             theme,
             "work:学園交流会",
-            h3("学園交流会"),
-            None,
+            Head {
+                label: "学園交流会".to_owned(),
+                title: h3("学園交流会"),
+                extra: None,
+            },
             |this| {
                 vec![
                     raise_rows(
@@ -185,8 +199,11 @@ impl Aoi {
         folds.push(self.fold(
             theme,
             "work:任務",
-            h3("任務 Normal"),
-            None,
+            Head {
+                label: "任務 Normal".to_owned(),
+                title: h3("任務 Normal"),
+                extra: None,
+            },
             |this| this.missions(&t),
             cx,
         ));
@@ -217,16 +234,22 @@ impl Aoi {
         folds.push(self.fold(
             theme,
             "work:任務 Hard",
-            h3("任務 Hard"),
-            hard_extra,
+            Head {
+                label: "任務 Hard".to_owned(),
+                title: h3("任務 Hard"),
+                extra: hard_extra,
+            },
             move |_| vec![hard_cards],
             cx,
         ));
         folds.push(self.fold(
             theme,
             "work:特別依頼",
-            h3("特別依頼"),
-            None,
+            Head {
+                label: "特別依頼".to_owned(),
+                title: h3("特別依頼"),
+                extra: None,
+            },
             |this| {
                 vec![
                     raise_rows(
@@ -309,7 +332,18 @@ impl Aoi {
                 }))
                 .into_any_element();
             let cards = self.month_end_cards(theme, width, shop, cx);
-            folds.push(self.fold(theme, &key, title, Some(coins), move |_| vec![cards], cx));
+            let label = format!("ショップ: {}", shop.name);
+            folds.push(self.fold(
+                theme,
+                &key,
+                Head {
+                    label,
+                    title,
+                    extra: Some(coins),
+                },
+                move |_| vec![cards],
+                cx,
+            ));
         }
         super::scroll("work-scroll", &self.content)
             .children(folds)
@@ -692,6 +726,13 @@ impl Aoi {
             .children(rows)
             .into_any_element()
     }
+}
+
+/// A fold's title: its name for UI Automation, what it shows, and what goes at its right end.
+struct Head {
+    label: String,
+    title: AnyElement,
+    extra: Option<AnyElement>,
 }
 
 /// A card of the hard missions or a month-end shop, as the window draws it.
