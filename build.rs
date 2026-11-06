@@ -1,5 +1,5 @@
 //! Builds the files under `data/` into the program (`embedded::FILES`), so the
-//! released exe needs nothing beside it, and runs Tauri's build step.
+//! released exe needs nothing beside it, and puts the app's icon in the Windows exe.
 
 use std::{fmt::Write, path::Path};
 
@@ -39,5 +39,11 @@ fn main() {
         .join("embedded.rs");
     std::fs::write(out, code).expect("the file is written");
     println!("cargo:rerun-if-changed=data");
-    tauri_build::build();
+    if std::env::var("CARGO_CFG_WINDOWS").is_ok() {
+        println!("cargo:rerun-if-changed=bluearchive-aoi.rc");
+        println!("cargo:rerun-if-changed=icons/icon.ico");
+        embed_resource::compile("bluearchive-aoi.rc", embed_resource::NONE)
+            .manifest_optional()
+            .expect("the exe's icon is embedded");
+    }
 }

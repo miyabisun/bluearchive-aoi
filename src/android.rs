@@ -176,7 +176,7 @@ pub struct Phone {
     /// While set, no frames are received (the reading is paused).
     paused: Arc<AtomicBool>,
     mdns: OnceLock<Result<ServiceDaemon, String>>,
-    task: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
+    task: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 impl Phone {
@@ -303,7 +303,7 @@ impl Phone {
     fn run(&self, task: impl Future<Output = ()> + Send + 'static) {
         self.cancel();
         *self.task.lock().unwrap_or_else(PoisonError::into_inner) =
-            Some(tauri::async_runtime::spawn(task));
+            Some(crate::runtime::spawn(task));
     }
 
     fn cancel(&self) {

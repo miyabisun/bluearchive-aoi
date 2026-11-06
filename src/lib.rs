@@ -34,7 +34,11 @@ pub mod supply;
 pub mod tally;
 pub mod title;
 pub mod update;
+pub mod runtime;
+pub mod settings;
+pub mod ui;
 pub mod video;
+pub mod view;
 pub mod watch;
 pub mod work;
 mod embedded {

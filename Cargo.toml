@@ -14,7 +14,15 @@ name = "aoi"
 image = { version = "0.25", default-features = false, features = ["png", "webp"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tauri = { version = "2", features = [] }
+# GPUI is published as weekly snapshots of Zed (gpui-pre); any snapshot may change its API, so the
+# version is pinned exactly and raised on purpose.
+gpui = { package = "gpui-pre", version = "=0.3.11" }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.11" }
+# Where the app keeps what it read and its settings, and where it writes the YAML.
+dirs = "6"
+anyhow = "1"
+unicode-segmentation = "1"
+futures = "0.3"
 # The local date and time in the name and heading of an export.
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 serde_yaml = "0.9"
@@ -27,7 +35,7 @@ libadb = { version = "0.5", default-features = false, features = ["tokio", "tls"
 embedded-io-async = "0.6"
 mdns-sd = "0.21"
 qrcode = { version = "0.14", default-features = false }
-tokio = { version = "1", features = ["net", "time", "rt", "macros", "io-util"] }
+tokio = { version = "1", features = ["net", "time", "rt", "rt-multi-thread", "macros", "io-util"] }
 nusb = "0.1"
 openh264 = "0.9"
 rml_rtmp = "0.8"
@@ -67,7 +75,8 @@ debug = false
 strip = true
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+embed-resource = "3"
 
 [dev-dependencies]
 ab_glyph = "0.2"
+gpui = { package = "gpui-pre", version = "=0.3.11", features = ["test-support"] }

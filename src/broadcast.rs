@@ -70,7 +70,7 @@ type CastSink = Arc<dyn Fn(&Cast) + Send + Sync>;
 pub struct Receiver {
     frame: FrameSink,
     cast: CastSink,
-    task: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
+    task: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 impl Receiver {
@@ -88,7 +88,7 @@ impl Receiver {
     /// Waits under a new key, in place of any wait.
     pub fn start(&self) {
         let (frame, cast) = (self.frame.clone(), self.cast.clone());
-        let task = tauri::async_runtime::spawn(async move {
+        let task = crate::runtime::spawn(async move {
             if let Err(message) = wait(&frame, &cast).await {
                 cast(&Cast::Failed { message });
             }

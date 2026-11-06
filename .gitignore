@@ -1,7 +1,3 @@
-node_modules/
-dist/
+target/
+/gen/
 dist-release/
-/src-tauri/target/
-/src-tauri/gen/
-test-results/
-playwright-report/

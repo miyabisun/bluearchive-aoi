@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    aoi::app::run(tauri::generate_context!());
+    aoi::app::run();
 }
