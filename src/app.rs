@@ -344,12 +344,15 @@ pub fn apply_update() -> Result<(), String> {
     update::open_page()
 }
 
-/// Starts the exe now in place (the new version) and ends this one.
-pub fn restart(cx: &mut gpui::App) {
+/// Starts the exe now in place (the new version) and ends this one at once, as Tauri's restart
+/// did: asked to quit through its event loop instead (`App::quit`), the old version once kept its
+/// window open beside the new one (2026-11-07). What the app keeps is written whole or not at all
+/// (`keep::write`), and the caller has put Windows' cursor back.
+pub fn restart() -> ! {
     if let Ok(exe) = std::env::current_exe() {
         let _ = std::process::Command::new(exe).spawn();
     }
-    cx.quit();
+    std::process::exit(0);
 }
 
 /// What the window works with: the snapshot the watcher keeps current, and what the

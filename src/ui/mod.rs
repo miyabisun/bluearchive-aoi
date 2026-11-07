@@ -360,7 +360,7 @@ impl Aoi {
                 Ok(()) if check.installs => {
                     // The cursor chosen is put back in by the window of the new version.
                     this.core.set_cursor(None);
-                    crate::app::restart(cx);
+                    crate::app::restart();
                 }
                 Ok(()) => {}
                 Err(error) => {
