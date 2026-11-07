@@ -2,7 +2,13 @@
 //! equipment list share this; they differ only in their entries and `Rules`
 //! (`items.rs`, `equipment.rs`).
 
-use std::collections::HashMap;
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::{
+        Mutex, PoisonError,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 use image::{RgbImage, RgbaImage};
 
@@ -38,6 +44,33 @@ pub struct Catalog {
     /// Whether every entry drawn with each icon is untracked.
     icon_ignored: Vec<bool>,
     matcher: IconMatcher,
+    /// The cards told apart lately, by their look (and the icon left out), as they were told.
+    told: Mutex<Told>,
+    /// How many cards were told apart, not taken as told before (see `cards_told_apart`).
+    told_apart: AtomicUsize,
+}
+
+/// How many cards' tellings are kept: a list shows 20 to 25 cards, so the last few frames'.
+const TOLD_KEPT: usize = 128;
+
+/// The cards told apart lately, the oldest first out.
+#[derive(Default)]
+struct Told {
+    by_look: HashMap<Vec<u8>, Result<usize, Vec<usize>>>,
+    order: VecDeque<Vec<u8>>,
+}
+
+impl Told {
+    fn keep(&mut self, look: Vec<u8>, told: Result<usize, Vec<usize>>) {
+        if self.by_look.insert(look.clone(), told).is_none() {
+            self.order.push_back(look);
+            if self.order.len() > TOLD_KEPT
+                && let Some(oldest) = self.order.pop_front()
+            {
+                self.by_look.remove(&oldest);
+            }
+        }
+    }
 }
 
 impl Catalog {
@@ -81,7 +114,49 @@ impl Catalog {
             icon_ignored,
             entries,
             rules,
+            told: Mutex::new(Told::default()),
+            told_apart: AtomicUsize::new(0),
         })
+    }
+
+    /// How many cards this catalog has told apart by comparing their icons since it was made. A
+    /// card that looks exactly as one told apart lately (its icon's samples and the rows a badge
+    /// leaves, the same icon left out) is taken as that one was told, and not counted: the frames
+    /// of a list held still cost little, and read the same (the user's of 2026-11-07
+    /// 「一覧の読み取りの改善」).
+    pub fn cards_told_apart(&self) -> usize {
+        self.told_apart.load(Ordering::Relaxed)
+    }
+
+    /// The icon `card` shows (see `IconMatcher::identify`), or as a card of the same look was told.
+    fn tell(
+        &self,
+        image: &RgbImage,
+        card: &grid::Card,
+        badge: Option<u32>,
+        candidates: &[usize],
+        missing: Option<usize>,
+    ) -> Result<usize, Vec<usize>> {
+        let look = IconMatcher::look(image, card, badge);
+        let mut key = look.bytes();
+        key.extend_from_slice(&missing.map_or(u64::MAX, |m| m as u64).to_le_bytes());
+        let earlier = self
+            .told
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .by_look
+            .get(&key)
+            .cloned();
+        if let Some(found) = earlier {
+            return found;
+        }
+        let found = self.matcher.identify_look(&look, candidates);
+        self.told_apart.fetch_add(1, Ordering::Relaxed);
+        self.told
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .keep(key, found.clone());
+        found
     }
 
     pub fn entries(&self) -> &[Item] {
@@ -136,7 +211,7 @@ impl Catalog {
                             .iter()
                             .zip(badges)
                             .map(|(card, &badge)| {
-                                self.matcher.identify(image, card, badge, candidates)
+                                self.tell(image, card, badge, candidates, missing)
                             })
                             .collect::<Vec<_>>()
                     })

@@ -101,6 +101,32 @@ pub type Rgb = [f32; 3];
 /// position it scored at.
 type Ranked<'a> = (usize, f32, &'a RgbImage, (u32, u32));
 
+/// A card's icon as `IconMatcher::identify` compares it (see `IconMatcher::look`): its samples at
+/// the coarse size and at the fine size a pixel smaller, as measured and larger, and the first
+/// rows of each a badge leaves.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Look {
+    coarse: RgbImage,
+    fine: [RgbImage; 3],
+    coarse_from: u32,
+    from: u32,
+}
+
+impl Look {
+    /// All the look is, as bytes: two looks alike in these are told apart alike.
+    pub fn bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        for picture in std::iter::once(&self.coarse).chain(&self.fine) {
+            bytes.extend_from_slice(&picture.width().to_le_bytes());
+            bytes.extend_from_slice(&picture.height().to_le_bytes());
+            bytes.extend_from_slice(picture.as_raw());
+        }
+        bytes.extend_from_slice(&self.coarse_from.to_le_bytes());
+        bytes.extend_from_slice(&self.from.to_le_bytes());
+        bytes
+    }
+}
+
 /// How far from the icon's drawing a pixel of the card behind it is taken, in
 /// template pixels (the drawing's edge blurs, and the match may be a pixel off).
 const BACKGROUND_ROOM: i64 = 2;
@@ -319,12 +345,41 @@ impl IconMatcher {
         hidden: Option<u32>,
         candidates: &[usize],
     ) -> Result<usize, Vec<usize>> {
-        let coarse_from = Self::first_visible_row(card, hidden, COARSE_HEIGHT, 1);
-        let from = Self::first_visible_row(card, hidden, FINE_HEIGHT, SEARCH);
-        let coarse = Self::sample(image, card, COARSE_HEIGHT, 0);
+        self.identify_look(&Self::look(image, card, hidden), candidates)
+    }
+
+    /// What `identify` compares of the card: all it tells the card apart by, so two cards of the
+    /// same look are told apart alike.
+    pub fn look(image: &RgbImage, card: &Card, hidden: Option<u32>) -> Look {
+        // Fine detail (a page of writing) suffers from a pixel's error in the measured
+        // card height, so the card is also sampled a pixel smaller and larger.
+        let fine = [-1i32, 0, 1].map(|d| {
+            let card = Card {
+                height: card.height.saturating_add_signed(d),
+                ..*card
+            };
+            Self::sample(image, &card, FINE_HEIGHT, SEARCH)
+        });
+        Look {
+            coarse: Self::sample(image, card, COARSE_HEIGHT, 0),
+            fine,
+            coarse_from: Self::first_visible_row(card, hidden, COARSE_HEIGHT, 1),
+            from: Self::first_visible_row(card, hidden, FINE_HEIGHT, SEARCH),
+        }
+    }
+
+    /// `identify` on a card's `look`.
+    pub fn identify_look(&self, look: &Look, candidates: &[usize]) -> Result<usize, Vec<usize>> {
+        let Look {
+            coarse,
+            fine: samples,
+            coarse_from,
+            from,
+        } = look;
+        let (coarse_from, from) = (*coarse_from, *from);
         let shortlist: Vec<(usize, f32)> = candidates
             .iter()
-            .map(|&i| (i, self.coarse[i].score(&coarse, 0, 0, coarse_from)))
+            .map(|&i| (i, self.coarse[i].score(coarse, 0, 0, coarse_from)))
             .collect();
         // Thin icons (a barrel, a firing pin) leave too few pixels to score at low
         // resolution once the count is masked; they always go on to the fine
@@ -335,18 +390,6 @@ impl IconMatcher {
         shortlist.truncate(SHORTLIST);
         shortlist.extend(unscored);
 
-        // Fine detail (a page of writing) suffers from a pixel's error in the measured
-        // card height, so the card is also sampled a pixel smaller and larger.
-        let samples: Vec<RgbImage> = [-1i32, 0, 1]
-            .iter()
-            .map(|&d| {
-                let card = Card {
-                    height: card.height.saturating_add_signed(d),
-                    ..*card
-                };
-                Self::sample(image, &card, FINE_HEIGHT, SEARCH)
-            })
-            .collect();
         let mut ranked: Vec<Ranked> = shortlist
             .into_iter()
             .map(|(i, _)| {
