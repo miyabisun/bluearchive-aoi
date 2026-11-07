@@ -42,6 +42,9 @@ nusb = "0.1"
 openh264 = "0.9"
 rml_rtmp = "0.8"
 bytes = "1"
+# Scaling each frame to the width it is read at (`screen::normalize`) with SIMD: 6.x needs a
+# newer Rust than the 1.96 the gate builds with.
+fast_image_resize = "5.5"
 
 # Capturing the game's window: Blue Archive runs on Windows only.
 [target.'cfg(windows)'.dependencies]

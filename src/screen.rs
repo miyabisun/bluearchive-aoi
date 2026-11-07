@@ -10,6 +10,7 @@
 
 use std::borrow::Cow;
 
+use fast_image_resize as fr;
 use image::{
     Rgb, RgbImage,
     imageops::{self, FilterType},
@@ -339,14 +340,55 @@ pub fn normalize(image: &RgbImage) -> Cow<'_, RgbImage> {
     if (left, right) == (0, width) {
         return Cow::Borrowed(image);
     }
-    let area = imageops::crop_imm(image, left, 0, right - left, image.height());
-    let height = (image.height() as f32 * width as f32 / (right - left) as f32).round();
-    let filter = if (right - left) as f32 > width as f32 * SMOOTH_FROM {
-        FilterType::Triangle
+    let height = (image.height() as f32 * width as f32 / (right - left) as f32).round() as u32;
+    if (right - left) as f32 > width as f32 * SMOOTH_FROM {
+        Cow::Owned(smoothly(image, left, right - left, (width, height)))
     } else {
-        FilterType::CatmullRom
-    };
-    Cow::Owned(imageops::resize(&*area, width, height as u32, filter))
+        let area = imageops::crop_imm(image, left, 0, right - left, image.height());
+        Cow::Owned(imageops::resize(
+            &*area,
+            width,
+            height,
+            FilterType::CatmullRom,
+        ))
+    }
+}
+
+/// `image`'s columns from `left`, `across` wide, scaled down smoothly to `size`, as `image`'s own
+/// Triangle filter does within one level, with SIMD (`fast_image_resize`): 3 to 5 ms a frame of
+/// 2372×1372 to 1920 wide where `image`'s resize took 31 to 42 ms (2026-11-07). Sharp scaling stays
+/// with `image` (see `normalize`): `fast_image_resize` rounds between its passes, which clips
+/// Catmull-Rom's overshoot (up to 4 levels off), and the student fields read at 1520 and 1780 wide
+/// went unread 12 more times each in the sweep of the fixtures. Smoothly, the sweep (37 widths from
+/// 1500 to 2220) read no field wrong and left 354 unread where 353 were; the user took that for the
+/// speed (2026-11-07 「はい、その形で出してください」).
+fn smoothly(image: &RgbImage, left: u32, across: u32, (width, height): (u32, u32)) -> RgbImage {
+    thread_local! {
+        static RESIZER: std::cell::RefCell<fr::Resizer> = std::cell::RefCell::new(fr::Resizer::new());
+    }
+    let source = fr::images::ImageRef::new(
+        image.width(),
+        image.height(),
+        image.as_raw(),
+        fr::PixelType::U8x3,
+    )
+    .expect("an RgbImage's buffer is its size in RGB");
+    let mut scaled = fr::images::Image::new(width, height, fr::PixelType::U8x3);
+    let options = fr::ResizeOptions::new()
+        .resize_alg(fr::ResizeAlg::Convolution(fr::FilterType::Bilinear))
+        .crop(
+            f64::from(left),
+            0.0,
+            f64::from(across),
+            f64::from(image.height()),
+        );
+    RESIZER.with(|resizer| {
+        resizer
+            .borrow_mut()
+            .resize(&source, &mut scaled, &options)
+            .expect("the same pixel type in and out");
+    });
+    RgbImage::from_raw(width, height, scaled.into_vec()).expect("the buffer is the size asked")
 }
 
 /// A screen this many times as wide as the width it is read at, or more, is
@@ -590,6 +632,43 @@ mod tests {
         assert!(too_small(&small));
         // Upright, it is no game (it is drawn sideways only), small or not.
         assert!(!too_small(&RgbImage::new(1202, 1920)));
+    }
+
+    /// The frame is scaled as `image`'s own resize scales it (with which the references were
+    /// drawn and the reading measured), each value within one level: smoothly from far
+    /// (Triangle) and sharply from near (Catmull-Rom), a phone's safe area alone.
+    #[test]
+    fn a_frame_is_scaled_as_the_references_were() {
+        use image::imageops::{FilterType, crop_imm, resize};
+        let cases = [
+            ("items-16x9-list-top.png", 1.0, FilterType::Triangle),
+            (
+                "items-16x9-list-top.png",
+                1700.0 / 2222.0,
+                FilterType::CatmullRom,
+            ),
+            ("android/top-bar.png", 1.0, FilterType::Triangle),
+        ];
+        for (name, by, filter) in cases {
+            let image = fixture(name);
+            let image = resize(
+                &image,
+                (image.width() as f32 * by).round() as u32,
+                (image.height() as f32 * by).round() as u32,
+                FilterType::Triangle,
+            );
+            let (left, right) = safe_area(&image);
+            let scaled = normalize(&image);
+            let area = crop_imm(&image, left, 0, right - left, image.height());
+            let wanted = resize(&*area, scaled.width(), scaled.height(), filter);
+            let far = scaled
+                .as_raw()
+                .iter()
+                .zip(wanted.as_raw())
+                .map(|(a, b)| a.abs_diff(*b))
+                .max();
+            assert!(far <= Some(1), "{name} at {by}: off by {far:?}");
+        }
     }
 
     /// A phone keeps the game in from its rounded corners and its camera, as
