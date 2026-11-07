@@ -6,6 +6,7 @@ mod menu;
 mod plan;
 mod shops;
 mod students;
+mod tabs;
 mod work;
 
 use std::sync::{

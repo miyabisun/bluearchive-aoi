@@ -459,7 +459,9 @@ impl Aoi {
                     } else {
                         theme.muted
                     })
-                    .when(selected, |t| t.font_weight(FontWeight::SEMIBOLD))
+                    // Every tab as bold as the chosen one: a bolder name alone would widen it and
+                    // move the tabs after it (2026-11-07). The rule and the colour tell the chosen.
+                    .font_weight(FontWeight::SEMIBOLD)
                     .cursor_pointer()
                     .child(tab.name())
                     .when(tab == Tab::Students && students > 0, |t| {
@@ -1008,7 +1010,8 @@ pub fn subtabs<T: Copy + PartialEq + 'static>(
                 } else {
                     theme.muted
                 })
-                .when(selected, |t| t.font_weight(FontWeight::SEMIBOLD))
+                // As bold chosen or not, like the header's tabs, so that none moves.
+                .font_weight(FontWeight::SEMIBOLD)
                 .whitespace_nowrap()
                 .cursor_pointer()
                 .child(name)
