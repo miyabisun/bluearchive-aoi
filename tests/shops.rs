@@ -186,9 +186,10 @@ fn the_terms_price_every_labeled_offer_as_its_card() {
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
 }
 
-/// A shop lists what is worth buying first (the user's order of 2026-10-13):
-/// 秘伝ノート, 神名のカケラ, the elephs (those of the plain coin first, then by
-/// how the student is had: fest, limited, an event's last), テイラーストーン, BDs,
+/// A shop lists what is worth buying first (the user's order of 2026-10-13, the elephs moved
+/// first on 2026-11-07: 「神名のカケラ・秘伝ノートの表示位置を生徒の文字の後ろに」): the elephs
+/// (those of the plain coin first, then by how the student is had: fest, limited, an event's
+/// last), 神名のカケラ, 秘伝ノート, テイラーストーン, BDs,
 /// notes, ooparts, the goods of no such kind, チタン撃針, credits, then reports,
 /// booster tickets and blueprint boxes; the goods bought up go last.
 #[test]
@@ -233,10 +234,10 @@ fn a_shop_lists_its_goods_worth_buying_first_and_those_bought_up_last() {
             ]
         ),
         [
-            "神名のカケラ",
             "ワカモの神名文字",
             "アズサ（水着）の神名文字",
             "ノノミの神名文字",
+            "神名のカケラ",
             "チタン撃針",
             "クレジットポイント",
             "最上級レポート",
@@ -261,14 +262,58 @@ fn a_shop_lists_its_goods_worth_buying_first_and_those_bought_up_last() {
             ]
         ),
         [
-            "秘伝ノート",
             "ミドリの神名文字",
             "マキの神名文字",
+            "秘伝ノート",
             "初級戦術教育BD（百鬼夜行）",
             "初級技術ノート（百鬼夜行）",
             "エーテルの粉",
             "ブースターチケット",
         ]
+    );
+}
+
+/// The work tab's month-end shops list the goods to stock up on in the same order: the elephs
+/// before 秘伝ノート and 神名のカケラ.
+#[test]
+fn the_month_end_plan_lists_the_elephs_before_the_notes_and_the_fragments() {
+    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let items = recognizer.shop_goods();
+    let offer = |name: &str, coin: u8, left: u32| Offer {
+        id: items.iter().find(|i| i.name == name).unwrap().id,
+        coin,
+        left,
+        price: None,
+    };
+    let planned = |shop: &str, offers: Vec<Offer>| {
+        let shelf = Shelf {
+            read_at: String::new(),
+            offers,
+            held: Vec::new(),
+        };
+        let rows = recognizer.shop_rows(
+            &BTreeMap::from([(shop.to_owned(), shelf)]),
+            &std::collections::HashMap::new(),
+        );
+        let plan = recognizer.month_end(&rows, &[], |_| None, &std::collections::BTreeSet::new());
+        let shop = plan.iter().find(|s| s.name == shop).unwrap();
+        let mut names: Vec<String> = shop.cards.iter().map(|c| c.name.clone()).collect();
+        names.dedup();
+        names
+    };
+    assert_eq!(
+        planned(
+            "総力戦",
+            vec![offer("秘伝ノート", 1, 3), offer("マキの神名文字", 1, 10),]
+        ),
+        ["マキの神名文字", "秘伝ノート"]
+    );
+    assert_eq!(
+        planned(
+            "熟達証書",
+            vec![offer("神名のカケラ", 0, 5), offer("ワカモの神名文字", 0, 2),]
+        ),
+        ["ワカモの神名文字", "神名のカケラ"]
     );
 }
 

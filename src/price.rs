@@ -213,12 +213,14 @@ static HAD: std::sync::LazyLock<HashMap<&str, u8>> =
     std::sync::LazyLock::new(|| HashMap::from([("限定", 1), ("配布", 2), ("フェス限定", 3)]));
 
 /// The kinds of goods in the order a shop lists them, what is worth buying
-/// first (the user's order of 2026-10-13); the goods of none of them stand
+/// first (the user's order of 2026-10-13, the elephs moved ahead of 神名のカケラ and 秘伝ノート
+/// on 2026-11-07: 「神名のカケラ・秘伝ノートの表示位置を生徒の文字の後ろにしてください。
+/// 先に表示するのは制作者の思想が強すぎると感じました。」); the goods of none of them stand
 /// where the empty kind does.
 const ORDER: [&str; 13] = [
-    "秘伝ノート",
-    "神名のカケラ",
     "神名文字",
+    "神名のカケラ",
+    "秘伝ノート",
     "テイラーストーン",
     "戦術教育BD",
     "技術ノート",
