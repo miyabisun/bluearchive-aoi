@@ -985,6 +985,9 @@ pub fn open(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             display_id,
+            // Shown without taking the focus from the game being played (the user's of 2026-11-07
+            // 「Aoiの起動時にブルアカのフォーカスを奪わないように」).
+            focus: false,
             titlebar: Some(TitlebarOptions {
                 title: Some("Aoi".into()),
                 ..Default::default()
