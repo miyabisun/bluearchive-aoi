@@ -223,6 +223,60 @@ fn the_work_tab_opens_the_fold_the_game_comes_to_once(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn the_work_tab_brings_the_fold_the_game_comes_to_the_top_of_its_frame(cx: &mut TestAppContext) {
+    let (aoi, core, vcx) = open(cx, &Kept::default());
+    // Lower than what follows either fold, so each can come to the top.
+    vcx.simulate_resize(gpui::size(gpui::px(720.), gpui::px(300.)));
+    let shop = |name: &str, cards: usize| crate::strategy::PlanShop {
+        name: name.to_owned(),
+        read_at: Some("2026-11-01 12:00:00".to_owned()),
+        coins: vec![crate::strategy::PlanCoin {
+            name: "コイン".to_owned(),
+            icon: String::new(),
+            held: None,
+            need: 0,
+            short: false,
+        }],
+        cards: (0..cards)
+            .map(|i| crate::strategy::PlanCard {
+                id: 9000 + i64::try_from(i).expect("a few"),
+                name: format!("品{i}"),
+                icon: String::new(),
+                coin: 0,
+                left: 1,
+                price: Some(50),
+                amount: Some(1),
+                reserved: false,
+                barred: false,
+                held: None,
+                eleph: false,
+                rarity: None,
+            })
+            .collect(),
+    };
+    set(&core, vcx, |s| {
+        s.items = items();
+        s.month_end = vec![
+            shop("総力戦", 4),
+            shop("大決戦", 30),
+            shop("合同火力演習", 4),
+            shop("指名手配", 4),
+            shop("熟達証書", 4),
+        ];
+    });
+    click(vcx, "tab:お仕事");
+    let at_top = |vcx: &mut VisualTestContext, key: &str| {
+        let frame = aoi.read_with(vcx, |aoi, _| aoi.content.bounds());
+        let fold = super::bounds(vcx, &format!("fold:{key}")).expect("the fold shows");
+        (fold.top() - frame.top()).abs() < gpui::px(1.)
+    };
+    set(&core, vcx, |s| s.place = Some(Place::Screen("特別依頼")));
+    assert!(at_top(vcx, "work:特別依頼"), "a daily fold");
+    set(&core, vcx, |s| s.place = Some(Place::Shop("大決戦")));
+    assert!(at_top(vcx, "work:月末:大決戦"), "a month-end shop's fold");
+}
+
+#[gpui::test]
 fn the_work_tab_follows_nothing_when_the_menu_says_not_to(cx: &mut TestAppContext) {
     let settings = Settings {
         work_follow: false,

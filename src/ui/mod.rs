@@ -178,6 +178,8 @@ pub struct Aoi {
     pub(crate) opened: HashSet<String>,
     /// The work tab's fold the game came to last (see `follow_work`).
     followed: Option<String>,
+    /// The work tab's fold to bring to the top of its frame as the tab is next drawn.
+    bring_up: Option<String>,
     /// What is paid from each source for each line short (`line|source`), the user's choice,
     /// kept while the plan counts from the same reading (`plan_version`).
     payments: BTreeMap<String, u64>,
@@ -246,6 +248,7 @@ impl Aoi {
             toast_timer: None,
             opened: HashSet::new(),
             followed: None,
+            bring_up: None,
             payments: BTreeMap::new(),
             paid_for,
             star_menu: None,
@@ -288,7 +291,7 @@ impl Aoi {
         self.opened
             .retain(|key| !key.starts_with("work:") || *key == fold);
         self.opened.insert(fold.clone());
-        work::scroll_to_fold(&self.content, &fold);
+        self.bring_up = Some(fold);
     }
 
     fn apply_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {

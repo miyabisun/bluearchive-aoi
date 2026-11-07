@@ -3,8 +3,8 @@
 
 use gpui::{
     AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
-    Role, ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled as _,
-    StyledImage as _, Window, div, prelude::FluentBuilder as _, px,
+    Role, SharedString, StatefulInteractiveElement as _, Styled as _, StyledImage as _, Window,
+    div, prelude::FluentBuilder as _, px,
 };
 
 use super::{
@@ -17,44 +17,29 @@ use super::{
 };
 use crate::{strategy::Reserve, view};
 
-/// Brings the fold `key` to the top of the tab's frame.
-pub fn scroll_to_fold(content: &ScrollHandle, key: &str) {
-    if let Some(index) = FOLD_ORDER.iter().position(|k| *k == key) {
-        content.scroll_to_item(index);
-    } else if key.starts_with("work:月末:") {
-        content.scroll_to_item(FOLD_ORDER.len());
-    }
-}
-
-/// The folds in the order the tab lays them out, their keys as `view::work_fold` names them
-/// (the month-end shops follow).
-const FOLD_ORDER: [&str; 6] = [
-    "work:通常アイテム",
-    "work:指名手配",
-    "work:学園交流会",
-    "work:任務",
-    "work:任務 Hard",
-    "work:特別依頼",
-];
-
 impl Aoi {
-    /// A fold: its title (pressed, it opens and closes), and what it holds while open.
+    /// A fold onto `folds`: its title (pressed, it opens and closes), and what it holds while
+    /// open; brought to the top of the tab's frame if it is the one to bring up (`bring_up`).
     fn fold(
         &mut self,
+        folds: &mut Vec<AnyElement>,
         theme: &Theme,
         key: &str,
         head: Head,
         body: impl FnOnce(&Self) -> Vec<AnyElement>,
         cx: &mut Context<Self>,
-    ) -> AnyElement {
+    ) {
         let Head {
             label,
             title,
             extra,
         } = head;
         let open = self.opened.contains(key);
+        if self.bring_up.as_deref() == Some(key) {
+            self.content.scroll_to_top_of_item(folds.len());
+        }
         let owned = key.to_owned();
-        div()
+        let fold = div()
             .id(SharedString::from(format!("fold-box-{key}")))
             .role(Role::Group)
             .debug_selector({
@@ -74,7 +59,8 @@ impl Aoi {
                     .on_click(cx.listener(move |this, _, _, cx| this.toggle_fold(&owned, cx))),
             )
             .when(open, |f| f.children(body(self)))
-            .into_any_element()
+            .into_any_element();
+        folds.push(fold);
     }
 
     pub(super) fn work_tab(
@@ -119,7 +105,8 @@ impl Aoi {
             .cloned();
         let mut folds: Vec<AnyElement> = vec![heading("日課", true)];
         let t = *theme;
-        folds.push(self.fold(
+        self.fold(
+            &mut folds,
             theme,
             "work:通常アイテム",
             Head {
@@ -139,8 +126,9 @@ impl Aoi {
                 ]
             },
             cx,
-        ));
-        folds.push(self.fold(
+        );
+        self.fold(
+            &mut folds,
             theme,
             "work:指名手配",
             Head {
@@ -170,8 +158,9 @@ impl Aoi {
                     .collect()
             },
             cx,
-        ));
-        folds.push(self.fold(
+        );
+        self.fold(
+            &mut folds,
             theme,
             "work:学園交流会",
             Head {
@@ -194,9 +183,10 @@ impl Aoi {
                 ]
             },
             cx,
-        ));
+        );
         folds.push(heading("2倍キャンペーン", false));
-        folds.push(self.fold(
+        self.fold(
+            &mut folds,
             theme,
             "work:任務",
             Head {
@@ -206,7 +196,7 @@ impl Aoi {
             },
             |this| this.missions(&t),
             cx,
-        ));
+        );
         let hard_ap = view::hard_cost(&self.shown.hard);
         let hard_extra = (hard_ap > 0).then(|| {
             div()
@@ -231,7 +221,8 @@ impl Aoi {
                 .into_any_element()
         });
         let hard_cards = self.hard_cards(theme, width, cx);
-        folds.push(self.fold(
+        self.fold(
+            &mut folds,
             theme,
             "work:任務 Hard",
             Head {
@@ -241,8 +232,9 @@ impl Aoi {
             },
             move |_| vec![hard_cards],
             cx,
-        ));
-        folds.push(self.fold(
+        );
+        self.fold(
+            &mut folds,
             theme,
             "work:特別依頼",
             Head {
@@ -262,7 +254,7 @@ impl Aoi {
                 ]
             },
             cx,
-        ));
+        );
         folds.push(heading("月末", false));
         let shops = self.shown.month_end.clone();
         for shop in &shops {
@@ -333,7 +325,8 @@ impl Aoi {
                 .into_any_element();
             let cards = self.month_end_cards(theme, width, shop, cx);
             let label = format!("ショップ: {}", shop.name);
-            folds.push(self.fold(
+            self.fold(
+                &mut folds,
                 theme,
                 &key,
                 Head {
@@ -343,8 +336,9 @@ impl Aoi {
                 },
                 move |_| vec![cards],
                 cx,
-            ));
+            );
         }
+        self.bring_up = None;
         super::scroll("work-scroll", &self.content)
             .children(folds)
             .into_any_element()
