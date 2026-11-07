@@ -1,7 +1,7 @@
 //! What the user chose in the window's menu, kept for the next start in
-//! `settings.json` beside `state.json`: the theme, the mouse cursor, and whether
-//! the work tab follows the game. A file missing or unreadable, or a value this
-//! version does not know, means the default for that choice.
+//! `settings.json` beside `state.json`: the theme, the mouse cursor, whether
+//! the work tab follows the game, and where the window was left. A file missing or
+//! unreadable, or a value this version does not know, means the default for that choice.
 
 use std::path::Path;
 
@@ -62,12 +62,25 @@ impl CursorChoice {
 /// Whether the work tab follows the game (the user's of 2026-11-06 「お仕事の自動開閉」).
 pub const WORK_FOLLOW: [(bool, &str); 2] = [(true, "する"), (false, "しない")];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Where the window was left (the user's of 2026-11-07 「配置されているモニター忘れてメインモニターに
+/// 移動する」): the monitor, by the id GPUI gives it (on Windows made from the monitor's device
+/// name), and the window's place and size in that monitor's logical pixels.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Placement {
+    pub display: String,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub theme: ThemeChoice,
     pub cursor: CursorChoice,
     pub work_follow: bool,
+    pub window: Option<Placement>,
 }
 
 impl Default for Settings {
@@ -76,6 +89,7 @@ impl Default for Settings {
             theme: ThemeChoice::Auto,
             cursor: CursorChoice::None,
             work_follow: true,
+            window: None,
         }
     }
 }
@@ -100,6 +114,11 @@ impl Settings {
         }
         if let Some(serde_json::Value::Bool(follow)) = fields.get("work_follow") {
             settings.work_follow = *follow;
+        }
+        if let Some(window) = fields.get("window") {
+            settings.window = Placement::deserialize(window.clone())
+                .ok()
+                .filter(|p| p.width > 0 && p.height > 0);
         }
         settings
     }
@@ -134,6 +153,7 @@ mod tests {
             theme: ThemeChoice::Light,
             cursor: CursorChoice::Green,
             work_follow: false,
+            window: None,
         };
         let text = serde_json::to_string(&kept).unwrap();
         assert_eq!(Settings::parse(&text), kept, "read back as kept");
@@ -146,6 +166,39 @@ mod tests {
         assert_eq!(settings.theme, ThemeChoice::Auto, "unknown theme");
         assert_eq!(settings.cursor, CursorChoice::Red, "the cursor kept");
         assert!(settings.work_follow, "unreadable follow");
+    }
+
+    #[test]
+    fn the_window_s_place_kept_comes_back() {
+        let kept = Settings {
+            window: Some(Placement {
+                display: "6f1c0b52-3c5a-5a8e-9d2e-4b1f0c7a9e10".to_owned(),
+                x: -1580,
+                y: 360,
+                width: 734,
+                height: 858,
+            }),
+            ..Settings::default()
+        };
+        let text = serde_json::to_string(&kept).unwrap();
+        assert_eq!(Settings::parse(&text), kept, "read back as kept");
+    }
+
+    #[test]
+    fn a_place_that_cannot_be_read_is_none_and_leaves_the_choices() {
+        for window in [
+            r#""left""#,
+            r#"{"display": "a", "x": 0, "y": 0}"#,
+            r#"{"display": "a", "x": 0, "y": 0, "width": 0, "height": 820}"#,
+        ] {
+            let settings = Settings::parse(&format!(r#"{{"theme": "dark", "window": {window}}}"#));
+            assert_eq!(settings.window, None, "{window} is no place");
+            assert_eq!(
+                settings.theme,
+                ThemeChoice::Dark,
+                "the theme kept beside {window}"
+            );
+        }
     }
 
     #[test]

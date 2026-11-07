@@ -3,6 +3,7 @@
 
 mod app;
 mod menu;
+mod place;
 mod plan;
 mod shops;
 mod students;

@@ -30,16 +30,16 @@ use std::{
 use futures::{StreamExt as _, channel::mpsc};
 use gpui::{
     App, AppContext as _, AsyncApp, Bounds, Context, Entity, FocusHandle, Focusable, FontWeight,
-    InteractiveElement as _, IntoElement, KeyBinding, ParentElement as _, Render, ScrollHandle,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Task, TitlebarOptions, WeakEntity,
-    Window, WindowBounds, WindowOptions, actions, anchored, deferred, div,
-    prelude::FluentBuilder as _, px, size,
+    InteractiveElement as _, IntoElement, KeyBinding, ParentElement as _, Pixels, Render,
+    ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled as _, Task,
+    TitlebarOptions, WeakEntity, Window, WindowBounds, WindowOptions, actions, anchored, deferred,
+    div, point, prelude::FluentBuilder as _, px, size,
 };
 
 use crate::{
     Recognizer,
     app::{Core, Places, Snapshot, UpdateCheck},
-    settings::{CursorChoice, Settings, ThemeChoice, WORK_FOLLOW},
+    settings::{CursorChoice, Placement, Settings, ThemeChoice, WORK_FOLLOW},
     view,
 };
 
@@ -54,6 +54,9 @@ actions!(aoi, [FocusNext, FocusPrev, Escape]);
 
 /// The window's size as the Tauri versions opened it.
 const WINDOW: (f32, f32) = (720., 820.);
+/// How long the window's place has to stay put before it is kept: a drag moves it many times a
+/// second.
+const PLACE_SETTLES: std::time::Duration = std::time::Duration::from_millis(500);
 
 /// How long a toast stays before it goes.
 const TOAST_STAYS: Duration = Duration::from_secs(3);
@@ -187,6 +190,8 @@ pub struct Aoi {
     content: ScrollHandle,
     /// A held chip paying again and again.
     repeating: Option<Task<()>>,
+    /// Keeps the window's place once it stops moving (see `PLACE_SETTLES`).
+    keeping_place: Option<Task<()>>,
     _changes: Task<()>,
 }
 
@@ -214,6 +219,10 @@ impl Aoi {
         });
         cx.observe_window_appearance(window, |this: &mut Self, window, cx| {
             this.apply_theme(window, cx);
+        })
+        .detach();
+        cx.observe_window_bounds(window, |this: &mut Self, window, cx| {
+            this.place_changed(window, cx);
         })
         .detach();
         let paid_for = shown.plan_version;
@@ -245,6 +254,7 @@ impl Aoi {
             cast_code: CastCode::Moblin,
             content: ScrollHandle::new(),
             repeating: None,
+            keeping_place: None,
             _changes: changes,
         }
     }
@@ -288,6 +298,30 @@ impl Aoi {
 
     fn keep_settings(&self) {
         let _ = self.settings.save(&self.core.places.settings);
+    }
+
+    /// Notes where the window is now, to open there next time, and keeps it once it settles.
+    fn place_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(display) = window.display(cx).and_then(|d| d.uuid().ok()) else {
+            return;
+        };
+        // Maximized, the place it goes back to.
+        let bounds = window.window_bounds().get_bounds();
+        let whole = |p: Pixels| f32::from(p).round() as i32;
+        self.settings.window = Some(Placement {
+            display: display.to_string(),
+            x: whole(bounds.origin.x),
+            y: whole(bounds.origin.y),
+            width: whole(bounds.size.width),
+            height: whole(bounds.size.height),
+        });
+        // A newer change replaces (and so cancels) the wait for the older one.
+        self.keeping_place = Some(cx.spawn(
+            async move |this: WeakEntity<Self>, cx: &mut AsyncApp| {
+                cx.background_executor().timer(PLACE_SETTLES).await;
+                let _ = this.update(cx, |this, _| this.keep_settings());
+            },
+        ));
     }
 
     /// Shows `text` as a toast, gone after a while (staying while `stays` is false).
@@ -911,17 +945,46 @@ pub fn bind_keys(cx: &mut App) {
     text_input::bind_keys(cx);
 }
 
-/// Opens the window over what `core` keeps, its changes signalled on `changes`.
+/// Where the window opens, when it was `left` on one of `displays` (each by its id in the
+/// settings): on that one, where it was and as big; `None` when nothing was kept or that monitor
+/// is gone, to open as at first.
+pub fn opening_place<D: Copy>(
+    left: Option<&Placement>,
+    displays: &[(String, D)],
+) -> Option<(D, Bounds<Pixels>)> {
+    let left = left?;
+    let (_, display) = displays.iter().find(|(id, _)| *id == left.display)?;
+    let bounds = Bounds::new(
+        point(px(left.x as f32), px(left.y as f32)),
+        size(px(left.width as f32), px(left.height as f32)),
+    );
+    Some((*display, bounds))
+}
+
+/// Opens the window over what `core` keeps, its changes signalled on `changes`: where it was left
+/// (`opening_place`), or else centred on the primary monitor.
 pub fn open(
     core: Arc<Core>,
     changes: mpsc::UnboundedReceiver<()>,
     settings: Settings,
     cx: &mut App,
 ) -> gpui::WindowHandle<Aoi> {
-    let bounds = Bounds::centered(None, size(px(WINDOW.0), px(WINDOW.1)), cx);
+    let displays: Vec<_> = cx
+        .displays()
+        .iter()
+        .filter_map(|d| Some((d.uuid().ok()?.to_string(), d.id())))
+        .collect();
+    let (display_id, bounds) = match opening_place(settings.window.as_ref(), &displays) {
+        Some((display, bounds)) => (Some(display), bounds),
+        None => (
+            None,
+            Bounds::centered(None, size(px(WINDOW.0), px(WINDOW.1)), cx),
+        ),
+    };
     cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
+            display_id,
             titlebar: Some(TitlebarOptions {
                 title: Some("Aoi".into()),
                 ..Default::default()
