@@ -193,6 +193,10 @@ impl Aoi {
                 let selected = code == id;
                 div()
                     .id(SharedString::from(format!("code-{name}")))
+                    .debug_selector({
+                        let name = name.to_owned();
+                        move || format!("code:{name}")
+                    })
                     .role(Role::Tab)
                     .aria_label(name.to_owned())
                     .aria_selected(selected)
@@ -211,7 +215,8 @@ impl Aoi {
                     } else {
                         theme.muted
                     })
-                    .when(selected, |t| t.font_weight(FontWeight::SEMIBOLD))
+                    // As bold chosen or not, like every tab, so that neither moves.
+                    .font_weight(FontWeight::SEMIBOLD)
                     .cursor_pointer()
                     .child(name.to_owned())
                     .on_click(cx.listener(move |this, _, _, cx| {

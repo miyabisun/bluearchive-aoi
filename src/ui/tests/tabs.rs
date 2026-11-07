@@ -9,7 +9,7 @@ use super::{
     app::{equipment, items},
     bounds, click, open, set,
 };
-use crate::keep::Kept;
+use crate::{broadcast::Cast, keep::Kept};
 
 /// A test window laid out with the platform's text system, and what to do with it.
 fn with_real_text(test: impl FnOnce(&mut TestAppContext)) {
@@ -90,5 +90,24 @@ fn the_item_and_equipment_sub_tabs_stay_put_as_another_is_chosen() {
             .map(|(_, n)| format!("sub:{n}"))
             .collect();
         assert_still(vcx, &row, "sub:全体", "sub:設計図");
+    });
+}
+
+#[test]
+fn the_streaming_dialog_s_tabs_stay_put_as_another_is_chosen() {
+    with_real_text(|cx| {
+        let (_, core, vcx) = open(cx, &Kept::default());
+        click(vcx, "menu-button");
+        click(vcx, "menu-cast");
+        set(&core, vcx, |s| {
+            s.cast = Cast::Waiting {
+                url: "rtmp://192.168.1.20:1935/live/key".to_owned(),
+                moblin: vec![vec![true]],
+                plain: vec![vec![false]],
+                problem: None,
+            };
+        });
+        let row = ["code:Moblin".to_owned(), "code:ほかのアプリ".to_owned()];
+        assert_still(vcx, &row, "code:Moblin", "code:ほかのアプリ");
     });
 }
