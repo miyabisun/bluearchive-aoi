@@ -516,9 +516,40 @@ impl Watcher {
     }
 }
 
+/// The client area `(left, top, width, height)` of a window's frame, `frame_width` pixels wide in
+/// RGBA, as RGB rows. Sized up front and copied row by row: collected from per-byte iterators it
+/// took 22 to 28 ms a frame of 2372×1372 (2026-11-07), most of the capture thread's time.
+pub fn client_rgb(
+    frame: &[u8],
+    frame_width: u32,
+    (left, top, width, height): (u32, u32, u32, u32),
+) -> Vec<u8> {
+    let mut rgb = Vec::with_capacity(width as usize * height as usize * 3);
+    for y in top..top + height {
+        let row = (y * frame_width + left) as usize * 4;
+        for pixel in frame[row..row + width as usize * 4].chunks_exact(4) {
+            rgb.extend_from_slice(&pixel[..3]);
+        }
+    }
+    rgb
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Game, Place, Screen, Seen, Sight, Status, Steady, status};
+    use super::{Game, Place, Screen, Seen, Sight, Status, Steady, client_rgb, status};
+
+    /// The window's frame, 4×3 here, gives the client area (the 2×2 from (1, 1)) as RGB rows.
+    #[test]
+    fn the_client_area_comes_out_as_rgb_rows() {
+        let pixel = |i: u8| [i, 100 + i, 200 - i, 255];
+        let frame: Vec<u8> = (0..12).flat_map(pixel).collect();
+        let rgb = client_rgb(&frame, 4, (1, 1, 2, 2));
+        let wanted: Vec<u8> = [5, 6, 9, 10]
+            .into_iter()
+            .flat_map(|i| pixel(i)[..3].to_vec())
+            .collect();
+        assert_eq!(rgb, wanted, "the client area's pixels, alpha dropped");
+    }
 
     /// One game is read at a time: the phone's while its screen comes in, by
     /// ADB or from a streaming app.

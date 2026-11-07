@@ -121,14 +121,7 @@ impl GraphicsCaptureApiHandler for Capture {
             .filter(|&(l, t, w, h)| l + w <= width && t + h <= height)
             .unwrap_or((0, 0, width, height));
         let pixels = buffer.as_nopadding_buffer()?;
-        let rgb: Vec<u8> = (top..top + h)
-            .flat_map(|y| {
-                let row = (y * width + left) as usize * 4;
-                pixels[row..row + w as usize * 4]
-                    .chunks_exact(4)
-                    .flat_map(|p| [p[0], p[1], p[2]])
-            })
-            .collect();
+        let rgb = super::client_rgb(pixels, width, (left, top, w, h));
         if let Some(image) = RgbImage::from_raw(w, h, rgb) {
             self.latest.put_window(image);
         }
