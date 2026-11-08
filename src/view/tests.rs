@@ -2519,11 +2519,16 @@ fn count_lines_tells_each_good_of_a_cell_and_its_count_a_line_each() {
         cell("初級技術ノート（ゲヘナ）", None),
     );
     assert_eq!(
-        count_lines(&[Some(&bd), Some(&note)]),
+        count_lines(&[Some(&bd), Some(&note)], &[]),
         "初級戦術教育BD（ゲヘナ）: 677\n初級技術ノート（ゲヘナ）: —"
     );
     assert_eq!(
-        count_lines(&[None, Some(&bd)]),
+        count_lines(&[Some(&bd), Some(&note)], &[Some("429 + 5 + 0"), None]),
+        "初級戦術教育BD（ゲヘナ）: 677 = 429 + 5 + 0\n初級技術ノート（ゲヘナ）: —",
+        "a sum of boxes tells what each set holds after it"
+    );
+    assert_eq!(
+        count_lines(&[None, Some(&bd)], &[]),
         "初級戦術教育BD（ゲヘナ）: 677",
         "a tier the kind lacks tells nothing"
     );

@@ -720,67 +720,24 @@ impl Aoi {
 /// tech notes over one another in each tier; the pictures no taller than a row of text, outside
 /// the four tiers (「学園のエンブレムが4分割の表の外に出るので、1行の高さをギリギリまで削る」).
 fn bounty_table(theme: &Theme, place: &crate::work::BountyRow) -> AnyElement {
-    const PICTURE: gpui::Pixels = px(20.);
-    let row =
-        |key: &str, picture: AnyElement, tiers: [Vec<Option<&crate::work::HeldCell>>; 4]| {
-            div()
-                .flex()
-                .items_center()
-                .child(
-                    div()
-                        .w(px(32.))
-                        .flex_none()
-                        .flex()
-                        .justify_center()
-                        .child(picture),
-                )
-                .child(div().flex_1().flex().children(tiers.iter().enumerate().map(
-                    |(tier, cells)| {
-                        let id = format!("bounty-{}-{key}-{tier}", place.name);
-                        parts::counts_cell(theme, id, tier, cells)
-                    },
-                )))
-        };
-    let hover = |id: String, name: &str, picture: gpui::Img| {
-        div()
-            .id(SharedString::from(id))
-            .tooltip(tooltip(name.to_owned()))
-            .child(picture)
-            .into_any_element()
-    };
+    let id = format!("bounty-{}", place.name);
     let ooparts = place.ooparts.iter().enumerate().map(|(k, tiers)| {
-        let top = tiers.iter().rev().flatten().next();
-        let picture = top.map_or_else(
+        let key = format!("{id}-oopart{k}");
+        let picture = tiers.iter().rev().flatten().next().map_or_else(
             || div().into_any_element(),
-            |top| {
-                let picture = icons::icon(&top.icon, PICTURE)
-                    .w(px(25.))
-                    .object_fit(gpui::ObjectFit::Contain);
-                hover(
-                    format!("bounty-{}-oopart{k}", place.name),
-                    &top.name,
-                    picture,
-                )
-            },
+            |top| parts::named(key.clone(), &top.name, parts::item_picture(&top.icon)),
         );
-        row(
-            &format!("oopart{k}"),
+        parts::counts_row(
             picture,
-            std::array::from_fn(|t| vec![tiers[t].as_ref()]),
+            std::array::from_fn(|t| {
+                parts::counts_cell(theme, format!("{key}-{t}"), t, &[tiers[t].as_ref()], &[])
+            }),
         )
     });
-    let schools = place.schools.iter().map(|school| {
-        let emblem = icons::emblem(&school.icon, theme.emblem, PICTURE);
-        row(
-            &school.icon,
-            hover(
-                format!("bounty-{}-{}", place.name, school.icon),
-                &school.name,
-                emblem,
-            ),
-            std::array::from_fn(|t| vec![school.bd[t].as_ref(), school.notes[t].as_ref()]),
-        )
-    });
+    let schools = place
+        .schools
+        .iter()
+        .map(|school| parts::school_row(theme, &id, school));
     div()
         .flex()
         .flex_col()

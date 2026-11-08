@@ -134,41 +134,106 @@ fn lists_the_item_tally_in_order_and_narrows_it_by_name(cx: &mut TestAppContext)
 }
 
 #[gpui::test]
-fn lines_the_secret_notes_up_with_the_four_tiers_under_them(cx: &mut TestAppContext) {
+fn tables_the_skill_materials_as_the_bounties_a_row_a_school_its_bds_and_notes_either_side_of_a_slash(
+    cx: &mut TestAppContext,
+) {
     let (_, core, vcx) = open(cx, &Kept::default());
-    let cell = |id: i64, held: u32| crate::work::HeldCell {
+    let cell = |id: i64, name: &str, held: u32| crate::work::HeldCell {
         id,
-        name: format!("品{id}"),
-        icon: String::new(),
+        name: name.to_owned(),
+        icon: format!("item_icon_{id}"),
         held: Some(Count::Exact(held)),
-        need: None,
+        need: Some(300),
+    };
+    let tiers = |first: i64, name: &str, held: [u32; 4]| -> [Option<crate::work::HeldCell>; 4] {
+        std::array::from_fn(|t| {
+            let id = first + i64::try_from(t).expect("a tier");
+            Some(cell(id, &format!("{name}{t}"), held[t]))
+        })
     };
     set(&core, vcx, |s| {
         s.items = items();
-        // Two secret notes, the last two columns blank.
-        s.kinds.secret = vec![cell(1, 101), cell(2, 102)];
+        s.kinds.secret = vec![
+            cell(1, "秘伝ノート", 101),
+            cell(2, "秘伝ノートの断片", 2345),
+        ];
+        // Two sets of choice boxes, summed: 429 + 5 BD boxes, 50 + 9 note boxes at the first tier.
+        let boxes = |all: bool, bd: [u32; 4], notes: [u32; 4]| crate::kinds::SkillBoxes {
+            all,
+            schools: vec![],
+            bd: tiers(400, "BD選択ボックス", bd),
+            notes: tiers(500, "ノート選択ボックス", notes),
+        };
+        s.kinds.skill_boxes = vec![
+            boxes(true, [429, 41, 42, 43], [50, 51, 52, 53]),
+            boxes(false, [5, 0, 0, 0], [9, 0, 0, 0]),
+        ];
         s.kinds.schools = vec![crate::kinds::SchoolMaterials {
             name: "ゲヘナ".to_owned(),
             icon: "school_icon_gehenna".to_owned(),
-            bd: [0, 1, 2, 3].map(|t| Some(cell(10 + i64::from(t), 201 + t))),
-            notes: [0, 1, 2, 3].map(|t| Some(cell(20 + i64::from(t), 301 + t))),
+            bd: tiers(200, "戦術教育BD（ゲヘナ）", [677, 21, 22, 23]),
+            notes: tiers(300, "技術ノート（ゲヘナ）", [1106, 31, 32, 33]),
         }];
     });
     click(vcx, "tab:アイテム");
     click(vcx, "sub:スキル素材");
-    // A cell's count ends at its right edge, inside the padding every cell has.
-    let end = |vcx: &mut gpui::VisualTestContext, held: u32| {
-        super::bounds(vcx, &format!("text:{held}"))
-            .unwrap_or_else(|| panic!("{held} shows"))
-            .right()
+    let at = |vcx: &mut gpui::VisualTestContext, selector: &str| {
+        super::bounds(vcx, selector).unwrap_or_else(|| panic!("{selector} shows"))
     };
-    for (secret, school) in [(101, 201), (102, 202)] {
-        let (secret, school) = (end(vcx, secret), end(vcx, school));
+    let school = |t: usize| format!("cell:skills-school_icon_gehenna-{t}");
+    let boxes = |t: usize| format!("cell:skills-boxes-{t}");
+    // The user's 2026-11-09 「アイテムのスキル素材も同じ形にしてください」: as the bounties' table, a
+    // cell split at its middle, the one good's count at the right of the left half, the other's
+    // at the right of the right half; the secret notes so in the top tier's column, the summed
+    // choice boxes on one row.
+    let near = |a: gpui::Pixels, b: gpui::Pixels| (a - b).abs() < gpui::px(1.);
+    let mut ends = Vec::new();
+    for (cell, left, right) in [
+        (school(0), "677", "1,106"),
+        (boxes(0), "434", "59"),
+        ("cell:skills-secret-3".to_owned(), "101", "2,345"),
+    ] {
+        let (bounds, left, right) = (
+            at(vcx, &cell),
+            at(vcx, &format!("text:{left}")),
+            at(vcx, &format!("text:{right}")),
+        );
+        let middle = bounds.center().x;
         assert!(
-            (secret - school).abs() < gpui::px(1.),
-            "a secret note's column ends at {secret:?}, the school's under it at {school:?}"
+            bounds.left() < left.left()
+                && left.right() < middle
+                && middle < right.left()
+                && right.right() < bounds.right(),
+            "{cell}: {left:?} left of the middle, {right:?} right, in {bounds:?}"
+        );
+        assert!(
+            bounds.size.height < gpui::px(40.),
+            "{cell} lower than an icon: {:?}",
+            bounds.size.height
+        );
+        ends.push((cell, middle - left.right(), bounds.right() - right.right()));
+    }
+    // However many digits, each count ends alike short of its half's right edge.
+    let (_, half, end) = ends[0].clone();
+    for (cell, left, right) in &ends {
+        assert!(
+            near(*left, half) && near(*right, end),
+            "{cell}: counts end {left:?} and {right:?} short, the school's {half:?} and {end:?}"
         );
     }
+    // The rows' four tiers in the same columns, the secret notes in the top tier's.
+    for t in 0..4 {
+        let (school, boxes) = (at(vcx, &school(t)), at(vcx, &boxes(t)));
+        assert!(
+            near(school.left(), boxes.left()) && near(school.right(), boxes.right()),
+            "tier {t}: {school:?} under {boxes:?}"
+        );
+    }
+    let (secret, top) = (at(vcx, "cell:skills-secret-3"), at(vcx, &school(3)));
+    assert!(
+        near(secret.left(), top.left()) && near(secret.right(), top.right()),
+        "the secret notes {secret:?} over the school's top tier {top:?}"
+    );
 }
 
 #[gpui::test]

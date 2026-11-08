@@ -391,12 +391,20 @@ pub fn held_text(held: Option<Count>) -> String {
 }
 
 /// What a cell of counts tells on hover: each of its goods' name and count held, a line each
-/// (the user's 2026-11-08 「初級戦術教育BD（ゲヘナ）: 677」「初級技術ノート（ゲヘナ）: 1106」).
-pub fn count_lines(cells: &[Option<&HeldCell>]) -> String {
+/// (the user's 2026-11-08 「初級戦術教育BD（ゲヘナ）: 677」「初級技術ノート（ゲヘナ）: 1106」), a sum
+/// of boxes followed by what each set holds (`parts`, by the cells' places; see `box_totals`).
+pub fn count_lines(cells: &[Option<&HeldCell>], parts: &[Option<&str>]) -> String {
     cells
         .iter()
-        .flatten()
-        .map(|cell| format!("{}: {}", cell.name, held_text(cell.held)))
+        .enumerate()
+        .filter_map(|(i, cell)| {
+            let cell = (*cell)?;
+            let line = format!("{}: {}", cell.name, held_text(cell.held));
+            Some(match parts.get(i).copied().flatten() {
+                Some(parts) => format!("{line} = {parts}"),
+                None => line,
+            })
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }

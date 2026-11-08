@@ -199,13 +199,8 @@ impl Aoi {
                     .flex()
                     .items_center()
                     .child(
-                        tier_row(
-                            theme,
-                            &format!("enhancement-{}", row.category),
-                            &row.tiers,
-                            None,
-                        )
-                        .flex_1(),
+                        tier_row(theme, &format!("enhancement-{}", row.category), &row.tiers)
+                            .flex_1(),
                     )
                     .child(raise_cell(
                         theme,

@@ -12,7 +12,7 @@ use super::{
     theme::{FS_CAPTION, RADIUS_SM, SP_1, SP_2, Theme, tabular},
     widgets::{text, tooltip},
 };
-use crate::{view, work::HeldCell};
+use crate::{kinds::SchoolMaterials, view, work::HeldCell};
 
 /// How many columns of at least `min` fit `width` `gap` apart, and how wide each is.
 pub fn columns(width: Pixels, min: Pixels, gap: Pixels) -> (usize, Pixels) {
@@ -184,29 +184,18 @@ pub fn blank_cell() -> Div {
     div().flex_1().min_w_0().py(SP_1).px(px(10.))
 }
 
-/// A tier's cell on its colour: the icon at its own shape on the left (its name on hover, or
-/// the name and what each set holds for a sum of boxes), the count at the right, 10 px in from
-/// each side; empty where the kind has no such tier.
-pub fn tier_cell(
-    theme: &Theme,
-    id: &str,
-    tier: usize,
-    cell: Option<&HeldCell>,
-    parts: Option<&str>,
-) -> AnyElement {
+/// A tier's cell on its colour: the icon at its own shape on the left (its name on hover), the
+/// count at the right, 10 px in from each side; empty where the kind has no such tier.
+pub fn tier_cell(theme: &Theme, id: &str, tier: usize, cell: Option<&HeldCell>) -> AnyElement {
     let base = blank_cell().bg(theme.tiers[tier.min(3)]);
     let Some(cell) = cell else {
         return base.into_any_element();
     };
-    let title = parts.map_or_else(
-        || cell.name.clone(),
-        |parts| format!("{}\n{parts}", cell.name),
-    );
     let held = view::held_text(cell.held);
     base.id(SharedString::from(format!("{id}-{}", cell.id)))
         .role(Role::Cell)
         .aria_label(format!("{} {held}", cell.name))
-        .tooltip(tooltip(title))
+        .tooltip(tooltip(cell.name.clone()))
         .child(
             div()
                 .flex()
@@ -239,13 +228,15 @@ fn held_count(theme: &Theme, cell: &HeldCell) -> Div {
 /// 「スキル素材アイテムの画像は不要」「paddingを2px程度まで削れる」), each at the right so the digits
 /// line up (「アイテムは桁数が重要なので、基本的には右揃え」): one good's count, or two goods' in the
 /// halves either side of a "/" in the middle (「"/"はセルのど真ん中に記述する」「セルを2つに割る
-/// イメージで、それぞれを右揃え」), each in its own colour; every good's name and count on hover.
-/// Empty where the kind has no such tier.
+/// イメージで、それぞれを右揃え」), each in its own colour; every good's name and count on hover,
+/// with what each set holds for a sum of boxes (`parts`, see `view::count_lines`). Empty where
+/// the kind has no such tier.
 pub fn counts_cell(
     theme: &Theme,
     id: String,
     tier: usize,
     cells: &[Option<&HeldCell>],
+    parts: &[Option<&str>],
 ) -> AnyElement {
     let base = blank_cell().py(px(2.)).bg(theme.tiers[tier.min(3)]);
     if cells.iter().all(Option::is_none) {
@@ -265,7 +256,7 @@ pub fn counts_cell(
             .justify_end()
             .children(cells.iter().copied().filter_map(count)),
     };
-    let lines = view::count_lines(cells);
+    let lines = view::count_lines(cells, parts);
     let selector = id.clone();
     base.id(SharedString::from(id))
         .role(Role::Cell)
@@ -276,18 +267,65 @@ pub fn counts_cell(
         .into_any_element()
 }
 
+/// The height of the picture a row of counts opens with: a line of text's, so the row stays low
+/// (the user's 2026-11-08 「1行の高さをギリギリまで削る」).
+const ROW_PICTURE: Pixels = px(20.);
+
+/// A picture at a row's left, its name on hover.
+pub fn named(id: String, name: &str, picture: impl IntoElement) -> AnyElement {
+    div()
+        .id(SharedString::from(id))
+        .tooltip(tooltip(name.to_owned()))
+        .child(picture)
+        .into_any_element()
+}
+
+/// An item's picture a line high, at its own shape.
+pub fn item_picture(icon: &str) -> gpui::Img {
+    icons::icon(icon, ROW_PICTURE)
+        .w(px(25.))
+        .object_fit(gpui::ObjectFit::Contain)
+}
+
+/// A row of the tables of counts (the bounties', the skill materials'): its picture in a narrow
+/// column at the left, then the four tiers' cells (see `counts_cell`).
+pub fn counts_row(picture: AnyElement, cells: [AnyElement; 4]) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .child(
+            div()
+                .w(px(32.))
+                .flex_none()
+                .flex()
+                .justify_center()
+                .child(picture),
+        )
+        .child(div().flex_1().flex().children(cells))
+}
+
+/// A school's row of counts: its emblem (its name on hover), then each tier's BD and tech note
+/// either side of the slash (the user's 2026-11-08 「学園のエンブレム」「[BD] / [ノート]」).
+pub fn school_row(theme: &Theme, id: &str, school: &SchoolMaterials) -> Div {
+    let key = format!("{id}-{}", school.icon);
+    counts_row(
+        named(
+            key.clone(),
+            &school.name,
+            icons::emblem(&school.icon, theme.emblem, ROW_PICTURE),
+        ),
+        std::array::from_fn(|t| {
+            let cells = [school.bd[t].as_ref(), school.notes[t].as_ref()];
+            counts_cell(theme, format!("{key}-{t}"), t, &cells, &[])
+        }),
+    )
+}
+
 /// A row of a kind's four tiers.
-pub fn tier_row(
-    theme: &Theme,
-    id: &str,
-    cells: &[Option<HeldCell>],
-    parts: Option<&[Option<String>]>,
-) -> Div {
-    div().flex().gap(px(0.)).children((0..4).map(|tier| {
-        let cell = cells.get(tier).and_then(Option::as_ref);
-        let part = parts.and_then(|p| p.get(tier)).and_then(Option::as_deref);
-        tier_cell(theme, id, tier, cell, part)
-    }))
+pub fn tier_row(theme: &Theme, id: &str, cells: &[Option<HeldCell>]) -> Div {
+    div().flex().gap(px(0.)).children(
+        (0..4).map(|tier| tier_cell(theme, id, tier, cells.get(tier).and_then(Option::as_ref))),
+    )
 }
 
 /// How many students what is held raises, at a row's right end, and how in two lines under it:

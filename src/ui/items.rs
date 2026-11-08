@@ -142,110 +142,57 @@ impl Aoi {
             .into_any_element()
     }
 
-    /// The secret notes, the choice boxes, then each school's BDs over its tech notes, its
-    /// emblem at the left, the three great schools first.
+    /// The bounties' table of counts (the user's 2026-11-09 「アイテムのスキル素材も同じ形にしてく
+    /// ださい」): the secret notes, the choice boxes summed, then each school on a row, its BDs'
+    /// and tech notes' counts either side of the slash, the three great schools first.
     fn skills(&self, theme: &Theme) -> impl IntoElement + use<> {
         let kinds = &self.shown.kinds;
-        let emblem_column = |child: AnyElement| {
-            div()
-                .w(px(48.))
-                .flex_none()
-                .flex()
-                .items_center()
-                .justify_center()
-                .p(SP_1)
-                .child(child)
-        };
-        let mut groups = Vec::new();
-        if !kinds.secret.is_empty() {
-            let mut cells: Vec<_> = kinds.secret.iter().cloned().map(Some).collect();
-            cells.resize(4, None);
-            // Both 最上級: drawn on the last tier's colour.
-            groups.push(
-                div()
-                    .flex()
-                    .child(emblem_column(div().into_any_element()))
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .children(cells.iter().map(|cell| match cell {
-                                Some(cell) => {
-                                    parts::tier_cell(theme, "secret", 3, Some(cell), None)
-                                }
-                                None => parts::blank_cell().into_any_element(),
-                            })),
-                    )
-                    .into_any_element(),
-            );
+        let mut rows = Vec::new();
+        if let Some(note) = kinds.secret.first() {
+            // The note and its fragments split as a school's BD and note, in the top tier's
+            // column, whose colour they had: bare counts tell them apart only so.
+            let secret: Vec<_> = kinds.secret.iter().map(Some).collect();
+            rows.push(parts::counts_row(
+                parts::named(
+                    "skills-secret".to_owned(),
+                    &note.name,
+                    parts::item_picture(&note.icon),
+                ),
+                std::array::from_fn(|t| match t {
+                    3 => parts::counts_cell(theme, "skills-secret-3".to_owned(), t, &secret, &[]),
+                    _ => parts::blank_cell().into_any_element(),
+                }),
+            ));
         }
         if let Some(boxes) = view::box_totals(&kinds.skill_boxes) {
-            let cells = |row: &[Option<view::BoxTotal>; 4]| -> (Vec<Option<crate::work::HeldCell>>, Vec<Option<String>>) {
-                (
-                    row.iter().map(|b| b.as_ref().map(|b| b.cell.clone())).collect(),
-                    row.iter().map(|b| b.as_ref().map(|b| b.parts.clone())).collect(),
-                )
-            };
-            let (bd, bd_parts) = cells(&boxes.bd);
-            let (notes, notes_parts) = cells(&boxes.notes);
-            groups.push(
-                div()
-                    .flex()
-                    .child(emblem_column(
-                        div()
-                            .id("set")
-                            .text_size(FS_CAPTION)
-                            .whitespace_nowrap()
-                            .tooltip(tooltip("選択ボックスの合計"))
-                            .child(text("選択"))
-                            .into_any_element(),
-                    ))
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_col()
-                            .gap(px(2.))
-                            .child(tier_row(theme, "box-bd", &bd, Some(&bd_parts)))
-                            .child(tier_row(theme, "box-notes", &notes, Some(&notes_parts))),
+            let label = div()
+                .text_size(FS_CAPTION)
+                .whitespace_nowrap()
+                .child(text("選択"));
+            rows.push(parts::counts_row(
+                parts::named("skills-boxes".to_owned(), "選択ボックスの合計", label),
+                std::array::from_fn(|t| {
+                    let (bd, notes) = (boxes.bd[t].as_ref(), boxes.notes[t].as_ref());
+                    parts::counts_cell(
+                        theme,
+                        format!("skills-boxes-{t}"),
+                        t,
+                        &[bd.map(|b| &b.cell), notes.map(|b| &b.cell)],
+                        &[
+                            bd.map(|b| b.parts.as_str()),
+                            notes.map(|b| b.parts.as_str()),
+                        ],
                     )
-                    .into_any_element(),
-            );
+                }),
+            ));
         }
-        for school in &kinds.schools {
-            groups.push(
-                div()
-                    .flex()
-                    .child(emblem_column(
-                        div()
-                            .id(SharedString::from(format!("emblem-{}", school.icon)))
-                            .tooltip(tooltip(school.name.clone()))
-                            .child(icons::emblem(&school.icon, theme.emblem, px(36.)).w(px(40.)))
-                            .into_any_element(),
-                    ))
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_col()
-                            .gap(px(2.))
-                            .child(tier_row(
-                                theme,
-                                &format!("bd-{}", school.icon),
-                                &school.bd,
-                                None,
-                            ))
-                            .child(tier_row(
-                                theme,
-                                &format!("notes-{}", school.icon),
-                                &school.notes,
-                                None,
-                            )),
-                    )
-                    .into_any_element(),
-            );
-        }
-        div().flex().flex_col().gap(SP_2).children(groups)
+        rows.extend(
+            kinds
+                .schools
+                .iter()
+                .map(|school| parts::school_row(theme, "skills", school)),
+        );
+        div().flex().flex_col().gap(px(2.)).children(rows)
     }
 
     /// An oopart a row, its tiers on their colours; their choice boxes first (the user's of
@@ -258,14 +205,14 @@ impl Aoi {
             .flex_col()
             .gap(px(2.))
             .when(boxes, |t| {
-                t.child(tier_row(theme, "oopart-boxes", &kinds.oopart_boxes, None).mb(SP_2))
+                t.child(tier_row(theme, "oopart-boxes", &kinds.oopart_boxes).mb(SP_2))
             })
             .children(
                 kinds
                     .ooparts
                     .iter()
                     .enumerate()
-                    .map(|(k, tiers)| tier_row(theme, &format!("oopart-{k}"), tiers, None)),
+                    .map(|(k, tiers)| tier_row(theme, &format!("oopart-{k}"), tiers)),
             )
     }
 
@@ -336,7 +283,7 @@ pub fn raise_rows(
             };
             let held = match &row.held {
                 view::RaiseHeld::Tiers(tiers) => {
-                    tier_row(theme, &format!("{kind}-{}", row.key), tiers, None)
+                    tier_row(theme, &format!("{kind}-{}", row.key), tiers)
                         .flex_1()
                         .into_any_element()
                 }
