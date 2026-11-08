@@ -277,7 +277,9 @@ impl Aoi {
     /// The work tab's fold of where the game is, opened as the game comes there while the tab
     /// is open (the user's 2026-11-06 「お仕事タブを開いている時は、各項目に画面遷移したらそのタブを開く」):
     /// once, so one the user closes there stays closed. The others close and it comes to the top
-    /// (「他の項目は全て閉じる」「画面上部に表示させる」); none of it while the menu says not to.
+    /// (「他の項目は全て閉じる」「画面上部に表示させる」), unless it is open already, as when a dialog
+    /// in the game hid where it was (the user's 2026-11-08 「既にaoiのお仕事タブ内では、その項目を
+    /// 開いているのであれば、スクロールも行わない」); none of it while the menu says not to.
     fn follow_work(&mut self) {
         let fold = view::work_fold(self.shown.place, &self.shown.month_end);
         if fold == self.followed {
@@ -290,8 +292,9 @@ impl Aoi {
         }
         self.opened
             .retain(|key| !key.starts_with("work:") || *key == fold);
-        self.opened.insert(fold.clone());
-        self.bring_up = Some(fold);
+        if self.opened.insert(fold.clone()) {
+            self.bring_up = Some(fold);
+        }
     }
 
     fn apply_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {

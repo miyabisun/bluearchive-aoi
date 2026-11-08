@@ -222,12 +222,9 @@ fn the_work_tab_opens_the_fold_the_game_comes_to_once(cx: &mut TestAppContext) {
     assert!(!opened(vcx, "work:特別依頼"), "the others close");
 }
 
-#[gpui::test]
-fn the_work_tab_brings_the_fold_the_game_comes_to_the_top_of_its_frame(cx: &mut TestAppContext) {
-    let (aoi, core, vcx) = open(cx, &Kept::default());
-    // Lower than what follows either fold, so each can come to the top.
-    vcx.simulate_resize(gpui::size(gpui::px(720.), gpui::px(300.)));
-    let shop = |name: &str, cards: usize| crate::strategy::PlanShop {
+/// A month-end shop read on 11/01 with `cards` goods.
+fn month_end_shop(name: &str, cards: usize) -> crate::strategy::PlanShop {
+    crate::strategy::PlanShop {
         name: name.to_owned(),
         read_at: Some("2026-11-01 12:00:00".to_owned()),
         coins: vec![crate::strategy::PlanCoin {
@@ -253,27 +250,71 @@ fn the_work_tab_brings_the_fold_the_game_comes_to_the_top_of_its_frame(cx: &mut 
                 rarity: None,
             })
             .collect(),
-    };
-    set(&core, vcx, |s| {
+    }
+}
+
+/// The work tab open in a window lower than what follows its folds (大決戦 has 30 goods), so
+/// each can come to the top.
+fn tall_work_tab(core: &crate::app::Core, vcx: &mut VisualTestContext) {
+    vcx.simulate_resize(gpui::size(gpui::px(720.), gpui::px(300.)));
+    set(core, vcx, |s| {
         s.items = items();
-        s.month_end = vec![
-            shop("総力戦", 4),
-            shop("大決戦", 30),
-            shop("合同火力演習", 4),
-            shop("指名手配", 4),
-            shop("熟達証書", 4),
-        ];
+        s.month_end = ["総力戦", "大決戦", "合同火力演習", "指名手配", "熟達証書"]
+            .into_iter()
+            .map(|name| month_end_shop(name, if name == "大決戦" { 30 } else { 4 }))
+            .collect();
     });
     click(vcx, "tab:お仕事");
-    let at_top = |vcx: &mut VisualTestContext, key: &str| {
-        let frame = aoi.read_with(vcx, |aoi, _| aoi.content.bounds());
-        let fold = super::bounds(vcx, &format!("fold:{key}")).expect("the fold shows");
-        (fold.top() - frame.top()).abs() < gpui::px(1.)
-    };
+}
+
+/// How far a fold's title is below the top of the work tab's frame.
+fn below_top(aoi: &gpui::Entity<Aoi>, vcx: &mut VisualTestContext, key: &str) -> gpui::Pixels {
+    let frame = aoi.read_with(vcx, |aoi, _| aoi.content.bounds());
+    let fold = super::bounds(vcx, &format!("fold:{key}")).expect("the fold shows");
+    fold.top() - frame.top()
+}
+
+#[gpui::test]
+fn the_work_tab_brings_the_fold_the_game_comes_to_the_top_of_its_frame(cx: &mut TestAppContext) {
+    let (aoi, core, vcx) = open(cx, &Kept::default());
+    tall_work_tab(&core, vcx);
+    let at_top =
+        |vcx: &mut VisualTestContext, key: &str| below_top(&aoi, vcx, key).abs() < gpui::px(1.);
     set(&core, vcx, |s| s.place = Some(Place::Screen("特別依頼")));
     assert!(at_top(vcx, "work:特別依頼"), "a daily fold");
     set(&core, vcx, |s| s.place = Some(Place::Shop("大決戦")));
     assert!(at_top(vcx, "work:月末:大決戦"), "a month-end shop's fold");
+}
+
+#[gpui::test]
+fn the_work_tab_keeps_its_scroll_as_the_game_comes_back_to_an_open_fold(cx: &mut TestAppContext) {
+    // The user's 2026-11-08: 「既にaoiのお仕事タブ内では、その項目を開いているのであれば、スクロールも行わない」.
+    let (aoi, core, vcx) = open(cx, &Kept::default());
+    tall_work_tab(&core, vcx);
+    for (place, key) in [
+        (Place::Screen("指名手配"), "work:指名手配"),
+        (Place::Shop("大決戦"), "work:月末:大決戦"),
+    ] {
+        set(&core, vcx, |s| s.place = Some(place));
+        // The user scrolls on.
+        let frame = aoi.read_with(vcx, |aoi, _| aoi.content.bounds());
+        vcx.simulate_event(gpui::ScrollEvent {
+            position: frame.center(),
+            delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(0.), gpui::px(-40.))),
+            ..Default::default()
+        });
+        vcx.run_until_parked();
+        let scrolled = below_top(&aoi, vcx, key);
+        assert!(scrolled < gpui::px(-30.), "scrolled on: {scrolled:?}");
+        // A dialog in the game hides where it is, then goes.
+        set(&core, vcx, |s| s.place = None);
+        set(&core, vcx, |s| s.place = Some(place));
+        let back = below_top(&aoi, vcx, key);
+        assert!(
+            (back - scrolled).abs() < gpui::px(1.),
+            "{key} stays where the user scrolled it ({scrolled:?}), not {back:?}"
+        );
+    }
 }
 
 #[gpui::test]
