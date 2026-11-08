@@ -173,7 +173,7 @@ impl Aoi {
                                 Some(cell) => {
                                     parts::tier_cell(theme, "secret", 3, Some(cell), None)
                                 }
-                                None => div().flex_1().into_any_element(),
+                                None => parts::blank_cell().into_any_element(),
                             })),
                     )
                     .into_any_element(),

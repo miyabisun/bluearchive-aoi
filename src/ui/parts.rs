@@ -178,6 +178,12 @@ pub fn tone_color(theme: &Theme, tone: Option<view::Tone>) -> Option<Hsla> {
     }
 }
 
+/// A blank in a row of tier cells, as wide as a cell: the layout keeps a box's padding before it
+/// shares out the row, so a blank without it would widen the cells beside it.
+pub fn blank_cell() -> Div {
+    div().flex_1().min_w_0().py(SP_1).px(px(10.))
+}
+
 /// A tier's cell on its colour: the icon at its own shape on the left (its name on hover, or
 /// the name and what each set holds for a sum of boxes), the count at the right, 10 px in from
 /// each side; empty where the kind has no such tier.
@@ -188,12 +194,7 @@ pub fn tier_cell(
     cell: Option<&HeldCell>,
     parts: Option<&str>,
 ) -> AnyElement {
-    let base = div()
-        .flex_1()
-        .min_w_0()
-        .py(SP_1)
-        .px(px(10.))
-        .bg(theme.tiers[tier.min(3)]);
+    let base = blank_cell().bg(theme.tiers[tier.min(3)]);
     let Some(cell) = cell else {
         return base.into_any_element();
     };

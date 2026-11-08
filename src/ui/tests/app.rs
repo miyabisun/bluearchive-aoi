@@ -134,6 +134,44 @@ fn lists_the_item_tally_in_order_and_narrows_it_by_name(cx: &mut TestAppContext)
 }
 
 #[gpui::test]
+fn lines_the_secret_notes_up_with_the_four_tiers_under_them(cx: &mut TestAppContext) {
+    let (_, core, vcx) = open(cx, &Kept::default());
+    let cell = |id: i64, held: u32| crate::work::HeldCell {
+        id,
+        name: format!("品{id}"),
+        icon: String::new(),
+        held: Some(Count::Exact(held)),
+        need: None,
+    };
+    set(&core, vcx, |s| {
+        s.items = items();
+        // Two secret notes, the last two columns blank.
+        s.kinds.secret = vec![cell(1, 101), cell(2, 102)];
+        s.kinds.schools = vec![crate::kinds::SchoolMaterials {
+            name: "ゲヘナ".to_owned(),
+            icon: "school_icon_gehenna".to_owned(),
+            bd: [0, 1, 2, 3].map(|t| Some(cell(10 + i64::from(t), 201 + t))),
+            notes: [0, 1, 2, 3].map(|t| Some(cell(20 + i64::from(t), 301 + t))),
+        }];
+    });
+    click(vcx, "tab:アイテム");
+    click(vcx, "sub:スキル素材");
+    // A cell's count ends at its right edge, inside the padding every cell has.
+    let end = |vcx: &mut gpui::VisualTestContext, held: u32| {
+        super::bounds(vcx, &format!("text:{held}"))
+            .unwrap_or_else(|| panic!("{held} shows"))
+            .right()
+    };
+    for (secret, school) in [(101, 201), (102, 202)] {
+        let (secret, school) = (end(vcx, secret), end(vcx, school));
+        assert!(
+            (secret - school).abs() < gpui::px(1.),
+            "a secret note's column ends at {secret:?}, the school's under it at {school:?}"
+        );
+    }
+}
+
+#[gpui::test]
 fn the_status_pauses_the_reading_when_pressed_and_resumes_it(cx: &mut TestAppContext) {
     let (_, core, vcx) = open(cx, &Kept::default());
     set(&core, vcx, |s| {
