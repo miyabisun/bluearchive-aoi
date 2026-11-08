@@ -214,14 +214,22 @@ fn names_the_bounties_to_play_for_what_falls_short(cx: &mut TestAppContext) {
             need: 30,
             have: Some(crate::plan::Held::Exact(12)),
         }];
+        let school = || crate::kinds::SchoolMaterials {
+            name: "ゲヘナ".to_owned(),
+            icon: "school_icon_gehenna".to_owned(),
+            bd: [None, None, None, None],
+            notes: [None, None, None, Some(cell(4033))],
+        };
         s.work.bounties = vec![
-            crate::work::PlaceRow {
+            crate::work::BountyRow {
                 name: "指名手配：ハイウェイ".to_owned(),
-                kinds: vec![[Some(cell(4033)), None, None, None]],
+                ooparts: Vec::new(),
+                schools: vec![school()],
             },
-            crate::work::PlaceRow {
+            crate::work::BountyRow {
                 name: "指名手配：砂漠の鉄道".to_owned(),
-                kinds: vec![[Some(cell(4033)), None, None, None]],
+                ooparts: Vec::new(),
+                schools: vec![school()],
             },
         ];
     });

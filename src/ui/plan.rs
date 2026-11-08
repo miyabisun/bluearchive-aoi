@@ -212,8 +212,8 @@ impl Aoi {
             );
             sections.extend(self.procure(theme, cx));
             let places: Vec<crate::work::PlaceRow> = (self.shown.work.bounties.iter())
-                .chain(&self.shown.work.scrimmages)
-                .cloned()
+                .map(crate::work::BountyRow::place)
+                .chain(self.shown.work.scrimmages.iter().cloned())
                 .collect();
             let candidates = view::bounty_candidates(&self.shown.plan, &places);
             if !candidates.is_empty() {

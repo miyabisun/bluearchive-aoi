@@ -75,3 +75,74 @@ fn reserves_a_hard_mission_s_eleph_by_pressing_its_card(cx: &mut TestAppContext)
         "again, taken back"
     );
 }
+
+#[gpui::test]
+fn tables_a_bounty_s_school_on_a_row_its_bds_and_notes_either_side_of_a_slash(
+    cx: &mut TestAppContext,
+) {
+    let (_, core, vcx) = open(cx, &Kept::default());
+    let cell = |id: i64, name: String, held: u32| crate::work::HeldCell {
+        id,
+        name,
+        icon: format!("item_icon_{id}"),
+        held: Some(Count::Exact(held)),
+        need: Some(300),
+    };
+    let tier = ["初級", "中級", "上級", "最上級"];
+    let tiers = |first: i64, name: &str, held: [u32; 4]| -> [Option<crate::work::HeldCell>; 4] {
+        std::array::from_fn(|t| {
+            let id = first + i64::try_from(t).expect("a tier");
+            Some(cell(id, format!("{}{name}", tier[t]), held[t]))
+        })
+    };
+    set(&core, vcx, |s| {
+        s.items = items();
+        s.work.bounties = vec![crate::work::BountyRow {
+            name: "指名手配：ハイウェイ".to_owned(),
+            ooparts: vec![tiers(100, "円盤", [11, 12, 13, 14])],
+            schools: vec![crate::kinds::SchoolMaterials {
+                name: "ゲヘナ".to_owned(),
+                icon: "school_icon_gehenna".to_owned(),
+                bd: tiers(200, "戦術教育BD（ゲヘナ）", [677, 21, 22, 23]),
+                notes: tiers(300, "技術ノート（ゲヘナ）", [1106, 31, 32, 33]),
+            }],
+        }];
+    });
+    click(vcx, "tab:お仕事");
+    click(vcx, "fold-work:指名手配");
+    let at = |vcx: &mut gpui::VisualTestContext, selector: &str| {
+        super::bounds(vcx, selector).unwrap_or_else(|| panic!("{selector} shows"))
+    };
+    let school = |t: usize| format!("cell:bounty-指名手配：ハイウェイ-school_icon_gehenna-{t}");
+    let oopart = |t: usize| format!("cell:bounty-指名手配：ハイウェイ-oopart0-{t}");
+    // The BD's count and the note's either side of the cell's middle, as far each way: the
+    // slash between them in the middle.
+    let first = at(vcx, &school(0));
+    let (bd, note) = (at(vcx, "text:677"), at(vcx, "text:1,106"));
+    let middle = first.center().x;
+    assert!(
+        first.left() < bd.left()
+            && bd.right() < middle
+            && middle < note.left()
+            && note.right() < first.right(),
+        "the BD's count left of the middle, the note's right: {bd:?} {note:?} in {first:?}"
+    );
+    assert!(
+        ((middle - bd.right()) - (note.left() - middle)).abs() < gpui::px(1.),
+        "as far each way from the middle"
+    );
+    // The four tiers in the oopart row's columns.
+    for t in 0..4 {
+        let (school, oopart) = (at(vcx, &school(t)), at(vcx, &oopart(t)));
+        assert!(
+            (school.left() - oopart.left()).abs() < gpui::px(1.)
+                && (school.right() - oopart.right()).abs() < gpui::px(1.),
+            "tier {t}: {school:?} under {oopart:?}"
+        );
+    }
+    assert!(
+        first.size.height < gpui::px(40.),
+        "lower than an icon: {:?}",
+        first.size.height
+    );
+}

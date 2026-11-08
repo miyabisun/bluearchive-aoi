@@ -231,6 +231,33 @@ pub fn skill_boxes<S: BuildHasher>(
         .collect()
 }
 
+/// The bounties' tables: what each of `places` drops among `entries`, its ooparts and its
+/// schools' skill materials (told by `kind`), in the order dropped.
+pub fn bounties<S: BuildHasher, T: BuildHasher>(
+    places: &[crate::work::Place],
+    entries: &[Item],
+    kind: impl Fn(&Item) -> Option<Kind>,
+    held: &HashMap<i64, Count, S>,
+    needs: &HashMap<i64, u64, T>,
+) -> Vec<crate::work::BountyRow> {
+    places
+        .iter()
+        .map(|place| {
+            let dropped: Vec<&Item> = place
+                .drops
+                .iter()
+                .filter_map(|id| entries.iter().find(|e| e.id == *id))
+                .collect();
+            let (materials, keys) = materials_of(dropped.iter().copied(), &kind);
+            crate::work::BountyRow {
+                name: place.name.clone(),
+                ooparts: ooparts(dropped, &kind, held, needs),
+                schools: school_rows(&materials, keys, &kind, held, needs),
+            }
+        })
+        .collect()
+}
+
 /// The ooparts' choice boxes of `boxes` (their `entries` and their choices'
 /// kinds told by `kind`) by tier.
 pub fn oopart_boxes<S: BuildHasher>(
@@ -253,8 +280,19 @@ pub fn schools<S: BuildHasher, T: BuildHasher>(
     held: &HashMap<i64, Count, S>,
     needs: &HashMap<i64, u64, T>,
 ) -> Vec<SchoolMaterials> {
+    let (materials, mut keys) = materials_of(entries, &kind);
+    keys.sort_by_key(|key| school_rank(key));
+    school_rows(&materials, keys, kind, held, needs)
+}
+
+/// The skill materials (BDs and tech notes, told by `kind`) of `entries`, and their schools'
+/// keys in the order they first come.
+fn materials_of<'a>(
+    entries: impl IntoIterator<Item = &'a Item>,
+    kind: impl Fn(&Item) -> Option<Kind>,
+) -> (Vec<&'a Item>, Vec<&'a str>) {
     let materials: Vec<&Item> = entries
-        .iter()
+        .into_iter()
         .filter(|e| matches!(kind(e), Some(Kind::Bd | Kind::Note)))
         .collect();
     let mut keys: Vec<&str> = Vec::new();
@@ -263,7 +301,17 @@ pub fn schools<S: BuildHasher, T: BuildHasher>(
             keys.push(key);
         }
     }
-    keys.sort_by_key(|key| school_rank(key));
+    (materials, keys)
+}
+
+/// Each school of `keys` in their order, with its BDs and tech notes among `materials`.
+fn school_rows<S: BuildHasher, T: BuildHasher>(
+    materials: &[&Item],
+    keys: Vec<&str>,
+    kind: impl Fn(&Item) -> Option<Kind>,
+    held: &HashMap<i64, Count, S>,
+    needs: &HashMap<i64, u64, T>,
+) -> Vec<SchoolMaterials> {
     keys.into_iter()
         .map(|key| {
             let of = |wanted: Kind| {
@@ -292,13 +340,15 @@ pub fn schools<S: BuildHasher, T: BuildHasher>(
 
 /// The ooparts of `entries`, told by `kind`, each with its tiers, in the order
 /// of their first tiers.
-pub fn ooparts<S: BuildHasher, T: BuildHasher>(
-    entries: &[Item],
+pub fn ooparts<'a, S: BuildHasher, T: BuildHasher>(
+    entries: impl IntoIterator<Item = &'a Item>,
     kind: impl Fn(&Item) -> Option<Kind>,
     held: &HashMap<i64, Count, S>,
     needs: &HashMap<i64, u64, T>,
 ) -> Vec<[Option<HeldCell>; 4]> {
-    let found = entries.iter().filter(|e| kind(e) == Some(Kind::Oopart));
+    let found = entries
+        .into_iter()
+        .filter(|e| kind(e) == Some(Kind::Oopart));
     by_tier(
         found,
         |e| stem(e).map(|(stem, _)| stem.to_owned()),
@@ -581,6 +631,73 @@ mod tests {
             ]
         );
         assert_eq!(trinity.bd[0].as_ref().unwrap().need, Some(12));
+    }
+
+    #[test]
+    fn a_bounty_tables_its_ooparts_then_each_school_on_a_row_in_the_order_dropped() {
+        let nebra = |id: i64, n: usize, rarity| {
+            item(
+                id,
+                &format!("ネブラ{n}"),
+                &format!("item_icon_material_nebra_{n}"),
+                rarity,
+            )
+        };
+        let entries: Vec<Item> = [nebra(5000, 0, Rarity::N), nebra(5001, 1, Rarity::R)]
+            .into_iter()
+            .chain(school(3100, "redwinter", "レッドウィンター"))
+            .chain(school(3200, "abydos", "アビドス"))
+            .collect();
+        // As the game lists them: the ooparts, the BDs, the notes, then what has no tiers.
+        let place = crate::work::Place {
+            kind: "ChaserE".to_owned(),
+            name: "指名手配：屋敷".to_owned(),
+            drops: vec![
+                5000, 5001, 3100, 3101, 3200, 3201, 4100, 4101, 4200, 4201, 9,
+            ],
+        };
+        let held = HashMap::from([(3100, Count::Exact(677)), (4100, Count::Exact(1106))]);
+        let rows = bounties(&[place], &entries, kind, &held, &HashMap::<i64, u64>::new());
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].name, "指名手配：屋敷");
+        let ooparts: Vec<_> = rows[0].ooparts.iter().map(|t| cells(t)).collect();
+        assert_eq!(
+            ooparts,
+            [vec![Some((5000, None)), Some((5001, None)), None, None]]
+        );
+        // Not put in the order of SCHOOLS, where アビドス comes first.
+        let schools: Vec<_> = rows[0]
+            .schools
+            .iter()
+            .map(|s| {
+                (
+                    s.name.as_str(),
+                    s.icon.as_str(),
+                    cells(&s.bd),
+                    cells(&s.notes),
+                )
+            })
+            .collect();
+        let tiers = |first: Option<(i64, Option<Count>)>, second: i64| {
+            vec![first, Some((second, None)), None, None]
+        };
+        assert_eq!(
+            schools,
+            [
+                (
+                    "レッドウィンター",
+                    "school_icon_redwinter",
+                    tiers(Some((3100, Some(Count::Exact(677)))), 3101),
+                    tiers(Some((4100, Some(Count::Exact(1106)))), 4101),
+                ),
+                (
+                    "アビドス",
+                    "school_icon_abydos",
+                    tiers(Some((3200, None)), 3201),
+                    tiers(Some((4200, None)), 4201),
+                ),
+            ]
+        );
     }
 
     #[test]

@@ -10,7 +10,7 @@ use gpui::{
 use super::{
     Aoi, icons,
     items::raise_rows,
-    parts::{self, tier_row},
+    parts,
     students::stars,
     theme::{FS_CAPTION, FS_MD, FS_SM, RADIUS_SM, SP_1, SP_2, SP_3, SP_4, SP_5, Theme, tabular},
     widgets::{fold_title, text, tooltip},
@@ -142,18 +142,10 @@ impl Aoi {
                     .bounties
                     .iter()
                     .flat_map(|place| {
-                        let mut parts = vec![h4(&t, view::place_name(&place.name).to_owned())];
-                        parts.push(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(2.))
-                                .children(place.kinds.iter().enumerate().map(|(k, tiers)| {
-                                    tier_row(&t, &format!("bounty-{}-{k}", place.name), tiers, None)
-                                }))
-                                .into_any_element(),
-                        );
-                        parts
+                        [
+                            h4(&t, view::place_name(&place.name).to_owned()),
+                            bounty_table(&t, place),
+                        ]
                     })
                     .collect()
             },
@@ -720,6 +712,82 @@ impl Aoi {
             .children(rows)
             .into_any_element()
     }
+}
+
+/// A bounty's table (the user's 2026-11-08 「スキル素材(ノート・BD)は1行にまとめる」): a row for each
+/// oopart, its top tier's picture at the left (「一番左の学園エンブレムの代わりとして、オーパーツの
+/// 最上級の画像を表示させる」), then a row for each school, its emblem at the left and its BDs and
+/// tech notes over one another in each tier; the pictures no taller than a row of text, outside
+/// the four tiers (「学園のエンブレムが4分割の表の外に出るので、1行の高さをギリギリまで削る」).
+fn bounty_table(theme: &Theme, place: &crate::work::BountyRow) -> AnyElement {
+    const PICTURE: gpui::Pixels = px(20.);
+    let row =
+        |key: &str, picture: AnyElement, tiers: [Vec<Option<&crate::work::HeldCell>>; 4]| {
+            div()
+                .flex()
+                .items_center()
+                .child(
+                    div()
+                        .w(px(32.))
+                        .flex_none()
+                        .flex()
+                        .justify_center()
+                        .child(picture),
+                )
+                .child(div().flex_1().flex().children(tiers.iter().enumerate().map(
+                    |(tier, cells)| {
+                        let id = format!("bounty-{}-{key}-{tier}", place.name);
+                        parts::counts_cell(theme, id, tier, cells)
+                    },
+                )))
+        };
+    let hover = |id: String, name: &str, picture: gpui::Img| {
+        div()
+            .id(SharedString::from(id))
+            .tooltip(tooltip(name.to_owned()))
+            .child(picture)
+            .into_any_element()
+    };
+    let ooparts = place.ooparts.iter().enumerate().map(|(k, tiers)| {
+        let top = tiers.iter().rev().flatten().next();
+        let picture = top.map_or_else(
+            || div().into_any_element(),
+            |top| {
+                let picture = icons::icon(&top.icon, PICTURE)
+                    .w(px(25.))
+                    .object_fit(gpui::ObjectFit::Contain);
+                hover(
+                    format!("bounty-{}-oopart{k}", place.name),
+                    &top.name,
+                    picture,
+                )
+            },
+        );
+        row(
+            &format!("oopart{k}"),
+            picture,
+            std::array::from_fn(|t| vec![tiers[t].as_ref()]),
+        )
+    });
+    let schools = place.schools.iter().map(|school| {
+        let emblem = icons::emblem(&school.icon, theme.emblem, PICTURE);
+        row(
+            &school.icon,
+            hover(
+                format!("bounty-{}-{}", place.name, school.icon),
+                &school.name,
+                emblem,
+            ),
+            std::array::from_fn(|t| vec![school.bd[t].as_ref(), school.notes[t].as_ref()]),
+        )
+    });
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(2.))
+        .children(ooparts)
+        .children(schools)
+        .into_any_element()
 }
 
 /// A fold's title: its name for UI Automation, what it shows, and what goes at its right end.

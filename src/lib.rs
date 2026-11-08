@@ -368,6 +368,17 @@ impl Recognizer {
             .unwrap_or(&self.texts[0])
     }
 
+    /// What tiered skill material or oopart `entry` is, as the shops' terms tell.
+    fn kind(&self, entry: &Item) -> Option<kinds::Kind> {
+        [
+            ("戦術教育BD", kinds::Kind::Bd),
+            ("技術ノート", kinds::Kind::Note),
+            ("オーパーツ", kinds::Kind::Oopart),
+        ]
+        .into_iter()
+        .find_map(|(name, kind)| self.prices.is_kind(entry.id, name).then_some(kind))
+    }
+
     /// The work tab against the items and equipment held and the credits.
     pub fn work_rows(
         &self,
@@ -393,14 +404,10 @@ impl Recognizer {
                 &equipment_held,
                 2,
             ),
-            bounties: work::places(
+            bounties: kinds::bounties(
                 &stages.bounties,
                 goods,
-                |e| {
-                    self.prices
-                        .family(e.id)
-                        .map(|(family, _)| family.to_string())
-                },
+                |e| self.kind(e),
                 &items_held,
                 &self.person_needs,
             ),
@@ -495,15 +502,7 @@ impl Recognizer {
         };
         let (items_held, equipment_held) = (counts(items), counts(equipment));
         let goods = self.items.entries();
-        let kind = |e: &Item| {
-            [
-                ("戦術教育BD", kinds::Kind::Bd),
-                ("技術ノート", kinds::Kind::Note),
-                ("オーパーツ", kinds::Kind::Oopart),
-            ]
-            .into_iter()
-            .find_map(|(name, kind)| self.prices.is_kind(e.id, name).then_some(kind))
-        };
+        let kind = |e: &Item| self.kind(e);
         let needs = &self.person_needs;
         kinds::Kinds {
             secret: kinds::secret(goods, &items_held, needs),

@@ -390,6 +390,17 @@ pub fn held_text(held: Option<Count>) -> String {
     held.map_or_else(|| "—".to_owned(), format_count)
 }
 
+/// What a cell of counts tells on hover: each of its goods' name and count held, a line each
+/// (the user's 2026-11-08 「初級戦術教育BD（ゲヘナ）: 677」「初級技術ノート（ゲヘナ）: 1106」).
+pub fn count_lines(cells: &[Option<&HeldCell>]) -> String {
+    cells
+        .iter()
+        .flatten()
+        .map(|cell| format!("{}: {}", cell.name, held_text(cell.held)))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 // Students
 
 /// A student's training as the students tab's cells (see `student_cells`).

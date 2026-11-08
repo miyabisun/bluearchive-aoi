@@ -147,7 +147,7 @@ pub struct Commissions {
 pub struct WorkRows {
     pub slots: Vec<SlotRow>,
     pub farm: Option<Farm>,
-    pub bounties: Vec<PlaceRow>,
+    pub bounties: Vec<BountyRow>,
     pub scrimmages: Vec<PlaceRow>,
     pub commissions: CommissionRow,
     /// The scrimmages' schools, as `scrimmages` lists them.
@@ -619,6 +619,30 @@ pub fn person_needs(growers: &[Grower], growth: &Growth) -> HashMap<i64, u64> {
 pub struct PlaceRow {
     pub name: String,
     pub kinds: Vec<[Option<HeldCell>; 4]>,
+}
+
+/// A bounty as the work tab tables it (the user's 2026-11-08 「スキル素材(ノート・BD)は1行にまとめる」
+/// 「オーパーツの行も同様の措置を行い表に統一感をもたせる」): its name, each oopart it drops by tier,
+/// then each school's BDs and tech notes, in the order dropped.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct BountyRow {
+    pub name: String,
+    pub ooparts: Vec<[Option<HeldCell>; 4]>,
+    pub schools: Vec<crate::kinds::SchoolMaterials>,
+}
+
+impl BountyRow {
+    /// The bounty as a place the plan tab looks for what falls short in, each kind a row.
+    pub fn place(&self) -> PlaceRow {
+        let schools = self
+            .schools
+            .iter()
+            .flat_map(|s| [s.bd.clone(), s.notes.clone()]);
+        PlaceRow {
+            name: self.name.clone(),
+            kinds: self.ooparts.iter().cloned().chain(schools).collect(),
+        }
+    }
 }
 
 /// A good dropped, how many are held, and what one student takes (none for a

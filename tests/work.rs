@@ -120,7 +120,7 @@ fn a_student_takes_their_school_notes_and_their_ooparts_with_the_potential() {
     let need = |id: i64| {
         work.bounties
             .iter()
-            .flat_map(|p| &p.kinds)
+            .flat_map(|p| p.place().kinds)
             .flatten()
             .flatten()
             .find(|c| c.id == id)
@@ -136,12 +136,17 @@ fn a_student_takes_their_school_notes_and_their_ooparts_with_the_potential() {
 fn the_bounties_and_scrimmages_show_what_they_drop() {
     let work = recognizer().work_rows(&[row(4030, 12)], &[row(10, 5)], None);
     assert_eq!(work.bounties.len(), 5);
-    // Two or three schools' tactical BDs and tech notes, and two ooparts, in
-    // four tiers.
+    // Two ooparts, and two or three schools' tactical BDs and tech notes a row each, in four
+    // tiers.
     for place in &work.bounties {
-        assert!([6, 8].contains(&place.kinds.len()), "{}", place.name);
+        assert_eq!(place.ooparts.len(), 2, "{}", place.name);
+        assert!([2, 3].contains(&place.schools.len()), "{}", place.name);
         assert!(
-            place.kinds.iter().all(|k| k.iter().all(Option::is_some)),
+            place
+                .place()
+                .kinds
+                .iter()
+                .all(|k| k.iter().all(Option::is_some)),
             "{}",
             place.name
         );
@@ -149,7 +154,7 @@ fn the_bounties_and_scrimmages_show_what_they_drop() {
     let held: Vec<_> = work
         .bounties
         .iter()
-        .flat_map(|p| &p.kinds)
+        .flat_map(|p| p.place().kinds)
         .flatten()
         .flatten()
         .filter(|c| c.held.is_some())

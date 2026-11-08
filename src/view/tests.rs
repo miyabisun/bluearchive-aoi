@@ -2504,3 +2504,27 @@ fn bounty_candidates_take_any_line_a_place_drops_whatever_its_kind() {
     let found = bounty_candidates(&[line], &[bounty("指名手配：教室", &[5000])]);
     assert_eq!(found.len(), 1, "a line of equipment a place drops counts");
 }
+
+#[test]
+fn count_lines_tells_each_good_of_a_cell_and_its_count_a_line_each() {
+    let cell = |name: &str, held| HeldCell {
+        id: 1,
+        name: name.to_owned(),
+        icon: String::new(),
+        held,
+        need: None,
+    };
+    let (bd, note) = (
+        cell("初級戦術教育BD（ゲヘナ）", Some(Count::Exact(677))),
+        cell("初級技術ノート（ゲヘナ）", None),
+    );
+    assert_eq!(
+        count_lines(&[Some(&bd), Some(&note)]),
+        "初級戦術教育BD（ゲヘナ）: 677\n初級技術ノート（ゲヘナ）: —"
+    );
+    assert_eq!(
+        count_lines(&[None, Some(&bd)]),
+        "初級戦術教育BD（ゲヘナ）: 677",
+        "a tier the kind lacks tells nothing"
+    );
+}

@@ -202,7 +202,6 @@ pub fn tier_cell(
         || cell.name.clone(),
         |parts| format!("{}\n{parts}", cell.name),
     );
-    let tone = view::held_tone(cell.held, cell.need);
     let held = view::held_text(cell.held);
     base.id(SharedString::from(format!("{id}-{}", cell.id)))
         .role(Role::Cell)
@@ -219,16 +218,59 @@ pub fn tier_cell(
                         .w(px(50.))
                         .object_fit(gpui::ObjectFit::Contain),
                 )
-                .child(
-                    div()
-                        .font_features(tabular())
-                        .whitespace_nowrap()
-                        .when_some(tone_color(theme, tone), |n, color| {
-                            n.text_color(color).font_weight(FontWeight::SEMIBOLD)
-                        })
-                        .child(text(held)),
-                ),
+                .child(held_count(theme, cell)),
         )
+        .into_any_element()
+}
+
+/// A good's count held, in its colour against what one student takes.
+fn held_count(theme: &Theme, cell: &HeldCell) -> Div {
+    let tone = view::held_tone(cell.held, cell.need);
+    div()
+        .font_features(tabular())
+        .whitespace_nowrap()
+        .when_some(tone_color(theme, tone), |n, color| {
+            n.text_color(color).font_weight(FontWeight::SEMIBOLD)
+        })
+        .child(text(view::held_text(cell.held)))
+}
+
+/// A tier's cell of counts alone, no icons, 2 px from top and bottom (the user's 2026-11-08
+/// 「スキル素材アイテムの画像は不要」「paddingを2px程度まで削れる」): one good's count in the middle, or
+/// two goods' either side of a "/" in the middle (「"/"はセルのど真ん中に記述する」), each in its own
+/// colour; every good's name and count on hover. Empty where the kind has no such tier.
+pub fn counts_cell(
+    theme: &Theme,
+    id: String,
+    tier: usize,
+    cells: &[Option<&HeldCell>],
+) -> AnyElement {
+    let base = blank_cell().py(px(2.)).bg(theme.tiers[tier.min(3)]);
+    if cells.iter().all(Option::is_none) {
+        return base.into_any_element();
+    }
+    let count = |cell: Option<&HeldCell>| cell.map(|cell| held_count(theme, cell));
+    let counts = match *cells {
+        [left, right] => div()
+            .flex()
+            .items_center()
+            .gap(SP_1)
+            .child(div().flex_1().flex().justify_end().children(count(left)))
+            .child("/")
+            .child(div().flex_1().flex().children(count(right))),
+        _ => div()
+            .flex()
+            .justify_center()
+            .children(cells.iter().copied().filter_map(count)),
+    };
+    let lines = view::count_lines(cells);
+    let selector = id.clone();
+    base.id(SharedString::from(id))
+        .role(Role::Cell)
+        .aria_label(lines.replace('\n', " "))
+        .tooltip(tooltip(lines))
+        .debug_selector(move || format!("cell:{selector}"))
+        .child(counts)
         .into_any_element()
 }
 
