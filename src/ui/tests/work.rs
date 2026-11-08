@@ -115,8 +115,10 @@ fn tables_a_bounty_s_school_on_a_row_its_bds_and_notes_either_side_of_a_slash(
     };
     let school = |t: usize| format!("cell:bounty-指名手配：ハイウェイ-school_icon_gehenna-{t}");
     let oopart = |t: usize| format!("cell:bounty-指名手配：ハイウェイ-oopart0-{t}");
-    // The BD's count and the note's either side of the cell's middle, as far each way: the
-    // slash between them in the middle.
+    // The cell split in two at its middle, the slash there: the BD's count at the right of the
+    // left half, the note's at the right of the right half, however many digits (the user's
+    // 2026-11-08 「アイテムは桁数が重要なので、基本的には右揃え」「セルを2つに割るイメージで、
+    // それぞれを右揃え」).
     let first = at(vcx, &school(0));
     let (bd, note) = (at(vcx, "text:677"), at(vcx, "text:1,106"));
     let middle = first.center().x;
@@ -127,9 +129,26 @@ fn tables_a_bounty_s_school_on_a_row_its_bds_and_notes_either_side_of_a_slash(
             && note.right() < first.right(),
         "the BD's count left of the middle, the note's right: {bd:?} {note:?} in {first:?}"
     );
+    let second = at(vcx, &school(1));
+    let (short_bd, short_note) = (at(vcx, "text:21"), at(vcx, "text:31"));
+    let near = |a: gpui::Pixels, b: gpui::Pixels| (a - b).abs() < gpui::px(1.);
     assert!(
-        ((middle - bd.right()) - (note.left() - middle)).abs() < gpui::px(1.),
-        "as far each way from the middle"
+        near(middle - bd.right(), second.center().x - short_bd.right()),
+        "677 and 21 end alike short of the middle: {bd:?} {short_bd:?}"
+    );
+    let from_right = first.right() - note.right();
+    assert!(
+        near(from_right, second.right() - short_note.right()),
+        "1,106 and 31 end alike short of the right: {note:?} {short_note:?}"
+    );
+    // An oopart's count, alone in its cell, ends there too.
+    let oopart_count = at(vcx, "text:11");
+    assert!(
+        near(
+            from_right,
+            at(vcx, &oopart(0)).right() - oopart_count.right()
+        ),
+        "the oopart's count at the right: {oopart_count:?}"
     );
     // The four tiers in the oopart row's columns.
     for t in 0..4 {

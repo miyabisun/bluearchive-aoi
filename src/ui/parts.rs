@@ -236,9 +236,11 @@ fn held_count(theme: &Theme, cell: &HeldCell) -> Div {
 }
 
 /// A tier's cell of counts alone, no icons, 2 px from top and bottom (the user's 2026-11-08
-/// 「スキル素材アイテムの画像は不要」「paddingを2px程度まで削れる」): one good's count in the middle, or
-/// two goods' either side of a "/" in the middle (「"/"はセルのど真ん中に記述する」), each in its own
-/// colour; every good's name and count on hover. Empty where the kind has no such tier.
+/// 「スキル素材アイテムの画像は不要」「paddingを2px程度まで削れる」), each at the right so the digits
+/// line up (「アイテムは桁数が重要なので、基本的には右揃え」): one good's count, or two goods' in the
+/// halves either side of a "/" in the middle (「"/"はセルのど真ん中に記述する」「セルを2つに割る
+/// イメージで、それぞれを右揃え」), each in its own colour; every good's name and count on hover.
+/// Empty where the kind has no such tier.
 pub fn counts_cell(
     theme: &Theme,
     id: String,
@@ -257,10 +259,10 @@ pub fn counts_cell(
             .gap(SP_1)
             .child(div().flex_1().flex().justify_end().children(count(left)))
             .child("/")
-            .child(div().flex_1().flex().children(count(right))),
+            .child(div().flex_1().flex().justify_end().children(count(right))),
         _ => div()
             .flex()
-            .justify_center()
+            .justify_end()
             .children(cells.iter().copied().filter_map(count)),
     };
     let lines = view::count_lines(cells);
