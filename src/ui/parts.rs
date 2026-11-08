@@ -273,9 +273,11 @@ const ROW_PICTURE: Pixels = px(20.);
 
 /// A picture at a row's left, its name on hover.
 pub fn named(id: String, name: &str, picture: impl IntoElement) -> AnyElement {
+    let selector = name.to_owned();
     div()
         .id(SharedString::from(id))
         .tooltip(tooltip(name.to_owned()))
+        .debug_selector(move || format!("picture:{selector}"))
         .child(picture)
         .into_any_element()
 }
@@ -319,6 +321,21 @@ pub fn school_row(theme: &Theme, id: &str, school: &SchoolMaterials) -> Div {
             counts_cell(theme, format!("{key}-{t}"), t, &cells, &[])
         }),
     )
+}
+
+/// A kind's four tiers' counts, a good a tier (an oopart's).
+pub fn tier_counts(theme: &Theme, key: &str, tiers: &[Option<HeldCell>; 4]) -> [AnyElement; 4] {
+    std::array::from_fn(|t| counts_cell(theme, format!("{key}-{t}"), t, &[tiers[t].as_ref()], &[]))
+}
+
+/// An oopart's row of counts: its top tier's picture (its name on hover), then each tier's count
+/// (the user's 2026-11-08 「一番左の学園エンブレムの代わりとして、オーパーツの最上級の画像を表示させる」).
+pub fn oopart_row(theme: &Theme, key: &str, tiers: &[Option<HeldCell>; 4]) -> Div {
+    let picture = tiers.iter().rev().flatten().next().map_or_else(
+        || div().into_any_element(),
+        |top| named(key.to_owned(), &top.name, item_picture(&top.icon)),
+    );
+    counts_row(picture, tier_counts(theme, key, tiers))
 }
 
 /// A row of a kind's four tiers.

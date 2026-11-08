@@ -721,19 +721,11 @@ impl Aoi {
 /// the four tiers (「学園のエンブレムが4分割の表の外に出るので、1行の高さをギリギリまで削る」).
 fn bounty_table(theme: &Theme, place: &crate::work::BountyRow) -> AnyElement {
     let id = format!("bounty-{}", place.name);
-    let ooparts = place.ooparts.iter().enumerate().map(|(k, tiers)| {
-        let key = format!("{id}-oopart{k}");
-        let picture = tiers.iter().rev().flatten().next().map_or_else(
-            || div().into_any_element(),
-            |top| parts::named(key.clone(), &top.name, parts::item_picture(&top.icon)),
-        );
-        parts::counts_row(
-            picture,
-            std::array::from_fn(|t| {
-                parts::counts_cell(theme, format!("{key}-{t}"), t, &[tiers[t].as_ref()], &[])
-            }),
-        )
-    });
+    let ooparts = place
+        .ooparts
+        .iter()
+        .enumerate()
+        .map(|(k, tiers)| parts::oopart_row(theme, &format!("{id}-oopart{k}"), tiers));
     let schools = place
         .schools
         .iter()

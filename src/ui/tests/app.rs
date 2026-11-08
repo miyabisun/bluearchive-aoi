@@ -237,6 +237,104 @@ fn tables_the_skill_materials_as_the_bounties_a_row_a_school_its_bds_and_notes_e
 }
 
 #[gpui::test]
+fn tables_the_ooparts_as_the_bounties_counts_alone_their_top_tier_at_the_left(
+    cx: &mut TestAppContext,
+) {
+    let (_, core, vcx) = open(cx, &Kept::default());
+    let tiers = |first: i64, name: &str, held: [u32; 4]| -> [Option<crate::work::HeldCell>; 4] {
+        std::array::from_fn(|t| {
+            let id = first + i64::try_from(t).expect("a tier");
+            Some(crate::work::HeldCell {
+                id,
+                name: format!("{name}{t}"),
+                icon: format!("item_icon_{id}"),
+                held: Some(Count::Exact(held[t])),
+                need: Some(300),
+            })
+        })
+    };
+    set(&core, vcx, |s| {
+        s.items = items();
+        s.kinds.oopart_boxes = tiers(600, "オーパーツ選択ボックス", [70, 80, 90, 1234]);
+        s.kinds.ooparts = vec![
+            tiers(100, "円盤", [11, 12, 13, 14]),
+            tiers(110, "ネックレス", [2048, 33, 44, 55]),
+        ];
+    });
+    click(vcx, "tab:アイテム");
+    click(vcx, "sub:オーパーツ");
+    let at = |vcx: &mut gpui::VisualTestContext, selector: &str| {
+        super::bounds(vcx, selector).unwrap_or_else(|| panic!("{selector} shows"))
+    };
+    let oopart = |k: usize, t: usize| format!("cell:ooparts-oopart{k}-{t}");
+    let boxes = |t: usize| format!("cell:ooparts-boxes-{t}");
+    let near = |a: gpui::Pixels, b: gpui::Pixels| (a - b).abs() < gpui::px(1.);
+    // The user's 2026-11-09 「オーパーツのタブも同じ形にしてください」: as the bounties' oopart rows,
+    // the counts alone at their cells' right, however many digits, the rows low.
+    let mut ends = Vec::new();
+    for (cell, count) in [
+        (oopart(0, 0), "11"),
+        (oopart(1, 0), "2,048"),
+        (boxes(0), "70"),
+        (boxes(3), "1,234"),
+    ] {
+        let (bounds, count) = (at(vcx, &cell), at(vcx, &format!("text:{count}")));
+        assert!(
+            bounds.center().x < count.left() && count.right() < bounds.right(),
+            "{cell}: {count:?} at the right of {bounds:?}"
+        );
+        assert!(
+            bounds.size.height < gpui::px(40.),
+            "{cell} lower than an icon: {:?}",
+            bounds.size.height
+        );
+        ends.push((cell, bounds.right() - count.right()));
+    }
+    let (_, end) = ends[0].clone();
+    for (cell, from_right) in &ends {
+        assert!(
+            near(*from_right, end),
+            "{cell}: its count ends {from_right:?} short, the first's {end:?}"
+        );
+    }
+    // The rows' four tiers in the same columns.
+    for t in 0..4 {
+        let first = at(vcx, &boxes(t));
+        for k in 0..2 {
+            let row = at(vcx, &oopart(k, t));
+            assert!(
+                near(first.left(), row.left()) && near(first.right(), row.right()),
+                "tier {t}: oopart {k} {row:?} under the boxes' {first:?}"
+            );
+        }
+    }
+    // At each row's left, the picture of its top tier (its name on hover); the boxes' caption.
+    for (picture, cell) in [
+        ("picture:円盤3", oopart(0, 0)),
+        ("picture:ネックレス3", oopart(1, 0)),
+        ("picture:選択ボックス", boxes(0)),
+    ] {
+        let (picture, row) = (at(vcx, picture), at(vcx, &cell));
+        assert!(
+            picture.right() <= row.left()
+                && row.top() <= picture.center().y
+                && picture.center().y <= row.bottom(),
+            "{picture:?} at the left of {row:?}"
+        );
+    }
+    // The boxes apart from the ooparts under them (the user's of 2026-10-29).
+    let (top, first, second) = (
+        at(vcx, &boxes(0)),
+        at(vcx, &oopart(0, 0)),
+        at(vcx, &oopart(1, 0)),
+    );
+    assert!(
+        first.top() - top.bottom() > second.top() - first.bottom(),
+        "a wider gap under the boxes {top:?} than between the ooparts {first:?} {second:?}"
+    );
+}
+
+#[gpui::test]
 fn the_status_pauses_the_reading_when_pressed_and_resumes_it(cx: &mut TestAppContext) {
     let (_, core, vcx) = open(cx, &Kept::default());
     set(&core, vcx, |s| {

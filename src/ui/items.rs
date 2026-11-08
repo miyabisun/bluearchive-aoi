@@ -165,12 +165,8 @@ impl Aoi {
             ));
         }
         if let Some(boxes) = view::box_totals(&kinds.skill_boxes) {
-            let label = div()
-                .text_size(FS_CAPTION)
-                .whitespace_nowrap()
-                .child(text("選択"));
             rows.push(parts::counts_row(
-                parts::named("skills-boxes".to_owned(), "選択ボックスの合計", label),
+                boxes_label("skills-boxes", "選択ボックスの合計"),
                 std::array::from_fn(|t| {
                     let (bd, notes) = (boxes.bd[t].as_ref(), boxes.notes[t].as_ref());
                     parts::counts_cell(
@@ -195,8 +191,9 @@ impl Aoi {
         div().flex().flex_col().gap(px(2.)).children(rows)
     }
 
-    /// An oopart a row, its tiers on their colours; their choice boxes first (the user's of
-    /// 2026-10-29), apart from the ooparts under them.
+    /// The bounties' oopart rows (the user's 2026-11-09 「オーパーツのタブも同じ形にしてください」):
+    /// their choice boxes on the top row, apart from the ooparts under them (the user's of
+    /// 2026-10-29), then an oopart a row, its top tier's picture at the left, the counts alone.
     fn ooparts(&self, theme: &Theme) -> impl IntoElement + use<> {
         let kinds = &self.shown.kinds;
         let boxes = kinds.oopart_boxes.iter().any(Option::is_some);
@@ -205,14 +202,18 @@ impl Aoi {
             .flex_col()
             .gap(px(2.))
             .when(boxes, |t| {
-                t.child(tier_row(theme, "oopart-boxes", &kinds.oopart_boxes).mb(SP_2))
+                t.child(
+                    parts::counts_row(
+                        boxes_label("ooparts-boxes", "選択ボックス"),
+                        parts::tier_counts(theme, "ooparts-boxes", &kinds.oopart_boxes),
+                    )
+                    .mb(SP_2),
+                )
             })
             .children(
-                kinds
-                    .ooparts
-                    .iter()
-                    .enumerate()
-                    .map(|(k, tiers)| tier_row(theme, &format!("oopart-{k}"), tiers)),
+                kinds.ooparts.iter().enumerate().map(|(k, tiers)| {
+                    parts::oopart_row(theme, &format!("ooparts-oopart{k}"), tiers)
+                }),
             )
     }
 
@@ -325,4 +326,13 @@ pub fn raise_rows(
                     color,
                 )))
         }))
+}
+
+/// The choice boxes' row's caption at its left, what it sums on hover.
+fn boxes_label(id: &str, name: &str) -> AnyElement {
+    let label = div()
+        .text_size(FS_CAPTION)
+        .whitespace_nowrap()
+        .child(text("選択"));
+    parts::named(id.to_owned(), name, label)
 }
