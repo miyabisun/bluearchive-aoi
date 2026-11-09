@@ -980,12 +980,13 @@ impl Recognizer {
                             .collect(),
                     })
                     .collect();
-                // What is worth buying first, those the plain coin buys before
+                // What is worth buying first (the elephs by when their students
+                // came, whatever coin buys them), those the plain coin buys before
                 // the rare's; the goods bought up last.
                 goods.sort_by_key(|g| {
-                    let (kind, had) = self.prices.rank(g.id);
+                    let (kind, came) = self.prices.rank(g.id);
                     let coin = g.offers.iter().position(Option::is_some);
-                    (g.sold, kind, coin, had, g.id)
+                    (g.sold, kind, came, coin, g.id)
                 });
                 Some(shop::ShopRow {
                     name: name.to_owned(),

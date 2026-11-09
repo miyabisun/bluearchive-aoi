@@ -1,7 +1,10 @@
 //! What each shop asks for its goods (`data/shops.yaml`): the price in coins,
 //! how many come with a purchase and how many purchases it allows.
 
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    cmp::Reverse,
+    collections::{BTreeMap, HashMap},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -51,12 +54,15 @@ pub struct Good {
 }
 
 /// A student as the rules see them (`data/schaledb/students.json`): how they
-/// are had (0 always, 1 limited, 2 an event's, 3 fest).
+/// are had (0 always, 1 limited, 2 an event's, 3 fest) and when they came
+/// (SchaleDB's `DefaultOrder`; none where the snapshot lacks it).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Student {
     pub name: String,
     #[serde(default)]
     pub limited: u8,
+    #[serde(default)]
+    pub order: Option<u32>,
 }
 
 /// The terms of every shop, and what the rules go by.
@@ -65,41 +71,47 @@ pub struct Prices {
     goods: HashMap<i64, Good>,
     /// How the student of each eleph is had, by the eleph's id.
     elephs: HashMap<i64, u8>,
+    /// When the student of each eleph came (see `Student::order`), by the eleph's id.
+    came: HashMap<i64, u32>,
 }
 
 impl Prices {
     pub fn new(shops: BTreeMap<String, Terms>, goods: Vec<Good>, students: &[Student]) -> Self {
         // An eleph is "<student>の神名文字".
-        let elephs = goods
+        let of_elephs: Vec<(i64, &Student)> = goods
             .iter()
             .filter_map(|g| {
                 let student = g.name.strip_suffix(ELEPH)?;
-                let had = students.iter().find(|s| s.name == student)?.limited;
-                Some((g.id, had))
+                Some((g.id, students.iter().find(|s| s.name == student)?))
             })
+            .collect();
+        let elephs = of_elephs.iter().map(|(id, s)| (*id, s.limited)).collect();
+        let came = of_elephs
+            .iter()
+            .filter_map(|(id, s)| Some((*id, s.order?)))
             .collect();
         Self {
             shops,
             goods: goods.into_iter().map(|g| (g.id, g)).collect(),
             elephs,
+            came,
         }
     }
 
     /// Where the good `id` goes in a shop's list (see `ORDER`), then, for an
-    /// eleph, by how its student is had: fest, limited, always, an event's.
-    pub fn rank(&self, id: i64) -> (usize, u8) {
+    /// eleph, by when its student came, the newest first (the user's 2026-11-09
+    /// 「実装順番の降順の方がシンプルでわかりやすい」, SchaleDB's `DefaultOrder` by their choice);
+    /// a student the snapshot lacks came after any it lists.
+    pub fn rank(&self, id: i64) -> (usize, Reverse<u32>) {
         let kind = self
             .goods
             .get(&id)
             .and_then(|good| ORDER.iter().position(|k| !k.is_empty() && is(good, k)))
             .unwrap_or(OTHERS);
-        let had = match self.elephs.get(&id) {
-            Some(3) => 0,
-            Some(1) => 1,
-            Some(2) => 3,
-            _ => 2,
-        };
-        (kind, had)
+        (
+            kind,
+            Reverse(self.came.get(&id).copied().unwrap_or(u32::MAX)),
+        )
     }
 
     /// Whether the good `id` is of `kind` (as a rule names one: 神名文字,
@@ -331,14 +343,17 @@ mod tests {
                 Student {
                     name: "アズサ".into(),
                     limited: 0,
+                    order: None,
                 },
                 Student {
                     name: "ムツキ（正月）".into(),
                     limited: 3,
+                    order: None,
                 },
                 Student {
                     name: "キリノ（水着）".into(),
                     limited: 2,
+                    order: None,
                 },
             ],
         )
@@ -474,6 +489,7 @@ mod tests {
         .map(|(name, limited)| Student {
             name: name.into(),
             limited,
+            order: None,
         });
         let all: Vec<i64> = goods.iter().map(|g| g.id).collect();
         let p = Prices::new(BTreeMap::new(), goods, &students);

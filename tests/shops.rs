@@ -188,8 +188,8 @@ fn the_terms_price_every_labeled_offer_as_its_card() {
 
 /// A shop lists what is worth buying first (the user's order of 2026-10-13, the elephs moved
 /// first on 2026-11-07: 「神名のカケラ・秘伝ノートの表示位置を生徒の文字の後ろに」): the elephs
-/// (those of the plain coin first, then by how the student is had: fest, limited, an event's
-/// last), 神名のカケラ, 秘伝ノート, テイラーストーン, BDs,
+/// (by when their students came, the newest first, whatever coin buys them: the user's of
+/// 2026-11-09 「実装順番の降順の方がシンプルでわかりやすい」), 神名のカケラ, 秘伝ノート, テイラーストーン, BDs,
 /// notes, ooparts, the goods of no such kind, チタン撃針, credits, then reports,
 /// booster tickets and blueprint boxes; the goods bought up go last.
 #[test]
@@ -228,14 +228,20 @@ fn a_shop_lists_its_goods_worth_buying_first_and_those_bought_up_last() {
                 offer("アズサ（水着）の神名文字", 0, 2),
                 offer("ミカの神名文字", 0, 0),
                 offer("ワカモの神名文字", 0, 2),
+                offer("チナツの神名文字", 0, 2),
+                offer("ヒフミ（レーシング）の神名文字", 0, 2),
                 offer("クレジットポイント", 0, 4),
                 offer("チタン撃針", 0, 2),
                 offer("神名のカケラ", 0, 5),
             ]
         ),
+        // SchaleDB's DefaultOrder: ヒフミ（レーシング） 278, ワカモ 82, アズサ（水着） 57, チナツ 39,
+        // ノノミ 18 (not by id: チナツ's 26000 is the highest, ノノミ's 13004 next).
         [
+            "ヒフミ（レーシング）の神名文字",
             "ワカモの神名文字",
             "アズサ（水着）の神名文字",
+            "チナツの神名文字",
             "ノノミの神名文字",
             "神名のカケラ",
             "チタン撃針",
@@ -258,10 +264,13 @@ fn a_shop_lists_its_goods_worth_buying_first_and_those_bought_up_last() {
                 offer("初級戦術教育BD（百鬼夜行）", 1, 40),
                 offer("マキの神名文字", 0, 10),
                 offer("ミドリの神名文字", 1, 20),
+                offer("ヒフミ（レーシング）の神名文字", 0, 2),
                 offer("秘伝ノート", 1, 3),
             ]
         ),
+        // The rare coin's ヒフミ（レーシング） (278) ahead of the plain coin's ミドリ (49).
         [
+            "ヒフミ（レーシング）の神名文字",
             "ミドリの神名文字",
             "マキの神名文字",
             "秘伝ノート",
@@ -273,8 +282,8 @@ fn a_shop_lists_its_goods_worth_buying_first_and_those_bought_up_last() {
     );
 }
 
-/// The work tab's month-end shops list the goods to stock up on in the same order: the elephs
-/// before 秘伝ノート and 神名のカケラ.
+/// The work tab's month-end shops list the goods to stock up on in the same order: the elephs,
+/// the newest students' first, before 秘伝ノート and 神名のカケラ.
 #[test]
 fn the_month_end_plan_lists_the_elephs_before_the_notes_and_the_fragments() {
     let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
@@ -304,9 +313,19 @@ fn the_month_end_plan_lists_the_elephs_before_the_notes_and_the_fragments() {
     assert_eq!(
         planned(
             "総力戦",
-            vec![offer("秘伝ノート", 1, 3), offer("マキの神名文字", 1, 10),]
+            vec![
+                offer("秘伝ノート", 1, 3),
+                offer("マキの神名文字", 1, 10),
+                offer("ミドリの神名文字", 0, 10),
+                offer("ヒフミ（レーシング）の神名文字", 1, 2),
+            ]
         ),
-        ["マキの神名文字", "秘伝ノート"]
+        [
+            "ヒフミ（レーシング）の神名文字",
+            "ミドリの神名文字",
+            "マキの神名文字",
+            "秘伝ノート"
+        ]
     );
     assert_eq!(
         planned(

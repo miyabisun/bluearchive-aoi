@@ -126,6 +126,8 @@ $students = Update-List 'students' $null $null {
     limited = [int]$student.IsLimited[0]
     # The stars the student comes with (1 to 3), which orders the hard missions' elephs.
     star = [int]$student.StarGrade
+    # When the student came (SchaleDB's DefaultOrder, from 0), which orders the shops' elephs.
+    order = [int]$student.DefaultOrder
     ex = Pairs $student.SkillExMaterial $student.SkillExMaterialAmount
     skills = Pairs $student.SkillMaterial $student.SkillMaterialAmount
     # The ooparts (their first tier) the student's potential takes.
