@@ -99,17 +99,26 @@ impl Prices {
     }
 
     /// Where the good `id` goes in a shop's list (see `ORDER`), then, for an
-    /// eleph, by when its student came, the newest first (the user's 2026-11-09
+    /// eleph, by how its student is had: fest, limited, always, an event's (the
+    /// user's of 2026-10-13, kept on 2026-11-09: 「フェス限定→通常限定の順に並べろ」),
+    /// then by when they came, the newest first (the user's 2026-11-09
     /// 「実装順番の降順の方がシンプルでわかりやすい」, SchaleDB's `DefaultOrder` by their choice);
     /// a student the snapshot lacks came after any it lists.
-    pub fn rank(&self, id: i64) -> (usize, Reverse<u32>) {
+    pub fn rank(&self, id: i64) -> (usize, u8, Reverse<u32>) {
         let kind = self
             .goods
             .get(&id)
             .and_then(|good| ORDER.iter().position(|k| !k.is_empty() && is(good, k)))
             .unwrap_or(OTHERS);
+        let had = match self.elephs.get(&id) {
+            Some(3) => 0,
+            Some(1) => 1,
+            Some(2) => 3,
+            _ => 2,
+        };
         (
             kind,
+            had,
             Reverse(self.came.get(&id).copied().unwrap_or(u32::MAX)),
         )
     }
