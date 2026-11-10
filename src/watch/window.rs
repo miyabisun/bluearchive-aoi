@@ -24,8 +24,6 @@ use windows_capture::{
 use super::{Board, Game, Latest, Sight};
 
 const GAME: &str = "BlueArchive.exe";
-/// Frames are taken at most this often (30 a second).
-const FRAME_INTERVAL: Duration = Duration::from_millis(33);
 /// How often the game's window is looked for, and the frame rate measured.
 const LOOK_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -85,7 +83,6 @@ struct Capture {
     latest: Arc<Latest>,
     /// The game's window handle.
     window: isize,
-    last: Instant,
 }
 
 impl GraphicsCaptureApiHandler for Capture {
@@ -94,11 +91,7 @@ impl GraphicsCaptureApiHandler for Capture {
 
     fn new(ctx: Context<Self::Flags>) -> Result<Self, Self::Error> {
         let (latest, window) = ctx.flags;
-        Ok(Self {
-            latest,
-            window,
-            last: Instant::now(),
-        })
+        Ok(Self { latest, window })
     }
 
     fn on_frame_arrived(
@@ -106,11 +99,12 @@ impl GraphicsCaptureApiHandler for Capture {
         frame: &mut Frame,
         _control: InternalCaptureControl,
     ) -> Result<(), Self::Error> {
-        // Windows before 24H2 ignores the minimum update interval.
-        if self.last.elapsed() < FRAME_INTERVAL {
+        // Frames come faster than they are read (Windows before 24H2 ignores the minimum
+        // update interval, and a screen not read is looked at slower): one not due is
+        // left before its copy is made.
+        if !self.latest.window_due() {
             return Ok(());
         }
-        self.last = Instant::now();
         // The frame holds the title bar and a border around the client area.
         // windows-capture's own `buffer_without_title_bar` miscounts the bar in
         // a DPI-aware process (the app) and keeps the border, which moves every
@@ -187,7 +181,7 @@ fn capture(
         CursorCaptureSettings::WithoutCursor,
         DrawBorderSettings::WithoutBorder,
         SecondaryWindowSettings::Default,
-        MinimumUpdateIntervalSettings::Custom(FRAME_INTERVAL),
+        MinimumUpdateIntervalSettings::Custom(super::READING),
         DirtyRegionSettings::Default,
         ColorFormat::Rgba8,
         (latest, window.as_raw_hwnd() as isize),

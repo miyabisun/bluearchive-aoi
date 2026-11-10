@@ -15,6 +15,7 @@ use std::{
         atomic::{AtomicBool, AtomicU32, Ordering},
     },
     thread,
+    time::{Duration, Instant},
 };
 
 use image::RgbImage;
@@ -187,6 +188,38 @@ impl Board {
     }
 }
 
+/// Frames are taken at most this often while the game shows something read (30 a second).
+pub(crate) const READING: Duration = Duration::from_millis(33);
+/// And this often while it shows nothing read, or the reading is paused: the screens between
+/// are only looked at for one that reads. Measured on 2026-11-10 on a screen not read, a
+/// window 2370 by 1333 at 30 frames a second: 51% of a core, each frame 3 ms to scale and 3
+/// to 4 to look at, and its copy out of the capture before that.
+pub(crate) const RESTING: Duration = Duration::from_millis(150);
+
+/// When the next frame is due: frames come faster than they are worth reading.
+#[derive(Debug, Default)]
+struct Pace {
+    /// When the last frame was taken.
+    last: Option<Instant>,
+    /// Whether the last frame read showed nothing read (or the reading is paused).
+    resting: bool,
+}
+
+impl Pace {
+    /// Whether a frame come at `now` is taken: one far enough after the last taken.
+    fn due(&mut self, now: Instant) -> bool {
+        let apart = if self.resting { RESTING } else { READING };
+        if self
+            .last
+            .is_some_and(|last| now.duration_since(last) < apart)
+        {
+            return false;
+        }
+        self.last = Some(now);
+        true
+    }
+}
+
 /// The newest frame, replaced by every new one until the reader takes it.
 #[derive(Default)]
 struct Latest {
@@ -198,9 +231,32 @@ struct Latest {
     /// then the game's window is left out, one game read at a time.
     phone: AtomicBool,
     cast: AtomicBool,
+    pace: Mutex<Pace>,
 }
 
 impl Latest {
+    /// Whether a frame come now is taken (see `Pace`): asked before the work of making it.
+    fn due(&self) -> bool {
+        self.pace
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .due(Instant::now())
+    }
+
+    /// Whether a frame of the game's window come now is taken: none while a phone's
+    /// screen comes in.
+    fn window_due(&self) -> bool {
+        !self.phone.load(Ordering::Relaxed) && !self.cast.load(Ordering::Relaxed) && self.due()
+    }
+
+    /// Frames are taken slower from now (`resting`), or as fast as they are read.
+    fn rest(&self, resting: bool) {
+        self.pace
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .resting = resting;
+    }
+
     /// Puts a frame of the game's window, unless a phone's screen comes in.
     fn put_window(&self, frame: RgbImage) {
         if !self.phone.load(Ordering::Relaxed) && !self.cast.load(Ordering::Relaxed) {
@@ -250,8 +306,17 @@ fn shops_changed(recognizer: &Recognizer, shelves: &mut Shelves, items: &mut Tal
     ));
 }
 
-/// Frames between two readings of the credits (about two a second).
-const CREDITS_EVERY: u32 = 15;
+/// The credits change seldom: they are read this far apart.
+const CREDITS_APART: Duration = Duration::from_millis(500);
+
+/// Whether the credits are read from a frame come at `now`, `last` the time they were.
+fn credits_due(last: &mut Option<Instant>, now: Instant) -> bool {
+    if last.is_some_and(|last| now.duration_since(last) < CREDITS_APART) {
+        return false;
+    }
+    *last = Some(now);
+    true
+}
 
 /// What the frames show, taken once `CONFIRM` readings in a row agree: a
 /// frame read otherwise now and then changes nothing.
@@ -338,7 +403,11 @@ pub fn start(
         Arc::new(Phone::new(
             phone_dir,
             paused.clone(),
-            move |frame| latest.put(frame),
+            move |frame| {
+                if latest.due() {
+                    latest.put(frame);
+                }
+            },
             move |link| {
                 let streaming = matches!(link, Link::Streaming { .. });
                 windowed.phone.store(streaming, Ordering::Relaxed);
@@ -363,9 +432,9 @@ pub fn start(
             loop {
                 let shot = latest.take();
                 // Paused, frames are taken and dropped unread.
-                if !paused.load(Ordering::Relaxed) {
-                    read.frame(&recognizer, &board, &frames, &shot);
-                }
+                let reads = !paused.load(Ordering::Relaxed)
+                    && read.frame(&recognizer, &board, &frames, &shot);
+                latest.rest(!reads);
             }
         });
     }
@@ -383,7 +452,11 @@ pub fn start(
 fn receiver(latest: &Arc<Latest>, board: &Arc<Board>) -> Receiver {
     let (latest, windowed, board) = (latest.clone(), latest.clone(), board.clone());
     Receiver::new(
-        move |frame| latest.put(frame),
+        move |frame| {
+            if latest.due() {
+                latest.put(frame);
+            }
+        },
         move |cast| {
             let receiving = matches!(cast, Cast::Receiving { .. });
             windowed.cast.store(receiving, Ordering::Relaxed);
@@ -398,6 +471,8 @@ struct Read {
     tallies: HashMap<List, Tally>,
     roster: Roster,
     credits: Credits,
+    /// When the credits were last read.
+    credits_at: Option<Instant>,
     shelves: Shelves,
     place: Steady<Option<Place>>,
 }
@@ -414,31 +489,32 @@ impl Read {
             ]),
             roster: Roster::seeded(kept.students),
             credits: Credits(Steady::new(kept.credits)),
+            credits_at: None,
             place: Steady::new(None),
             shelves: Shelves::seeded(kept.shops),
         }
     }
 
     /// Reads `shot` into what is read, telling `board` what it shows and
-    /// what changed; `frames` counts the frames read.
+    /// what changed; `frames` counts the frames read. Whether it showed
+    /// something read.
     fn frame(
         &mut self,
         recognizer: &Recognizer,
         board: &Board,
         frames: &AtomicU32,
         shot: &RgbImage,
-    ) {
+    ) -> bool {
         if screen::too_small(shot) {
             board.update(|seen| seen.sight = Sight::TooSmall);
-            return;
+            return false;
         }
         // A phone's frame as the game lays it out (a window's as it is).
         let shot = screen::normalize(shot);
         let read = recognizer.read_frame(&shot);
-        // The credits change seldom.
-        if frames
-            .fetch_add(1, Ordering::Relaxed)
-            .is_multiple_of(CREDITS_EVERY)
+        let reads = read.is_some();
+        frames.fetch_add(1, Ordering::Relaxed);
+        if credits_due(&mut self.credits_at, Instant::now())
             && let Some(changed) = self.credits.observe(recognizer.read_credits(&shot))
         {
             board.changed(Update::Credits(changed));
@@ -486,6 +562,7 @@ impl Read {
             }
             _ => {}
         }
+        reads
     }
 }
 
@@ -671,5 +748,38 @@ mod tests {
             };
             assert_eq!(status(&paused), Status::Paused);
         }
+    }
+
+    /// Frames come every 10 ms: while the game shows something read, one is taken every 33 ms
+    /// or so; while it shows nothing read, one every 150 ms.
+    #[test]
+    fn frames_are_taken_slower_while_nothing_reads() {
+        let start = std::time::Instant::now();
+        let taken = |resting: bool| -> Vec<u64> {
+            let mut pace = super::Pace {
+                last: None,
+                resting,
+            };
+            (0..40)
+                .map(|n| n * 10)
+                .filter(|&ms| pace.due(start + std::time::Duration::from_millis(ms)))
+                .collect()
+        };
+        assert_eq!(taken(false), [0, 40, 80, 120, 160, 200, 240, 280, 320, 360]);
+        assert_eq!(taken(true), [0, 150, 300]);
+    }
+
+    /// The credits are read every half a second, however fast the frames come.
+    #[test]
+    fn the_credits_are_read_by_the_clock() {
+        let start = std::time::Instant::now();
+        let mut last = None;
+        let read: Vec<u64> = [0, 33, 200, 499, 500, 650, 1000, 1001]
+            .into_iter()
+            .filter(|&ms| {
+                super::credits_due(&mut last, start + std::time::Duration::from_millis(ms))
+            })
+            .collect();
+        assert_eq!(read, [0, 500, 1000]);
     }
 }
