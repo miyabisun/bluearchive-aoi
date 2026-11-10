@@ -188,8 +188,11 @@ impl Board {
     }
 }
 
-/// Frames are taken at most this often while the game shows something read (30 a second).
-pub(crate) const READING: Duration = Duration::from_millis(33);
+/// Frames are taken at most this often while the game shows something read: 15 a second, a
+/// video's rate (the user's of 2026-11-10: 「アニメ・動画程度が適切」「15か20FPSが適切でしょう」;
+/// 30 before). A recorded scroll of the item list tallied the same 19 items read at 30, 15,
+/// 10, 7 or 5 a second.
+pub(crate) const READING: Duration = Duration::from_millis(66);
 /// And this often while it shows nothing read, or the reading is paused: the screens between
 /// are only looked at for one that reads. Measured on 2026-11-10 on a screen not read, a
 /// window 2370 by 1333 at 30 frames a second: 51% of a core, each frame 3 ms to scale and 3
@@ -750,8 +753,8 @@ mod tests {
         }
     }
 
-    /// Frames come every 10 ms: while the game shows something read, one is taken every 33 ms
-    /// or so; while it shows nothing read, one every 150 ms.
+    /// Frames come every 10 ms: while the game shows something read, one is taken every 66 ms
+    /// or so (15 a second); while it shows nothing read, one every 150 ms.
     #[test]
     fn frames_are_taken_slower_while_nothing_reads() {
         let start = std::time::Instant::now();
@@ -765,7 +768,7 @@ mod tests {
                 .filter(|&ms| pace.due(start + std::time::Duration::from_millis(ms)))
                 .collect()
         };
-        assert_eq!(taken(false), [0, 40, 80, 120, 160, 200, 240, 280, 320, 360]);
+        assert_eq!(taken(false), [0, 70, 140, 210, 280, 350]);
         assert_eq!(taken(true), [0, 150, 300]);
     }
 
