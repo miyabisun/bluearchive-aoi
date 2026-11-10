@@ -15,7 +15,12 @@ mod plan;
 mod setup;
 mod shops;
 mod students;
+// The window's tests find what is drawn by its `debug_selector`, which GPUI records in debug
+// builds alone (elsewhere it is a no-op, sparing the app the cost each frame): built with
+// `--release` they would find nothing and fail, so they are not built there. (Two attributes:
+// clippy takes a module for tests, where `unwrap` is allowed, by a plain `cfg(test)`.)
 #[cfg(test)]
+#[cfg(debug_assertions)]
 mod tests;
 pub mod text_input;
 pub mod theme;

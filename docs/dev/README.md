@@ -67,6 +67,8 @@ git config core.hooksPath .githooks         # run those three before pushing mai
 
 The window's tests drive it in GPUI's test context (`src/ui/tests`) over what a test keeps and
 reports in place of the game; what the window derives for display is tested in `src/view.rs`.
+They are part of debug builds only (`cargo test --release` leaves them out): GPUI records the
+`debug_selector`s they find elements by in debug builds alone.
 The window's tests need no window system: on Linux the gate builds GPUI without its Wayland and
 X11 features (checked on Ubuntu 24.04 under WSL with nothing installed beyond Rust).
 
