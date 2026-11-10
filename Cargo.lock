@@ -615,7 +615,7 @@ dependencies = [
 
 [[package]]
 name = "bluearchive-aoi"
-version = "0.3.19"
+version = "0.3.20"
 dependencies = [
  "ab_glyph",
  "anyhow",
