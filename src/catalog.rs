@@ -48,6 +48,67 @@ pub struct Catalog {
     told: Mutex<Told>,
     /// How many cards were told apart, not taken as told before (see `cards_told_apart`).
     told_apart: AtomicUsize,
+    /// How many cards were read, not taken as read before (see `cards_read`).
+    read_anew: AtomicUsize,
+    /// The cards read lately, as they were read.
+    reads: Mutex<Reads>,
+}
+
+/// A card as it was read: its icon as told, the first row under the badge it wears, its count.
+#[derive(Clone)]
+struct ReadCard {
+    told: Result<usize, Vec<usize>>,
+    badge: Option<u32>,
+    quantity: Option<Count>,
+}
+
+/// The cards read lately by what they were read from (see `drawn`), the oldest first out.
+#[derive(Default)]
+struct Reads {
+    by_drawn: HashMap<u64, ReadCard>,
+    order: VecDeque<u64>,
+}
+
+impl Reads {
+    fn keep(&mut self, drawn: u64, read: ReadCard) {
+        if self.by_drawn.insert(drawn, read).is_none() {
+            self.order.push_back(drawn);
+            if self.order.len() > TOLD_KEPT
+                && let Some(oldest) = self.order.pop_front()
+            {
+                self.by_drawn.remove(&oldest);
+            }
+        }
+    }
+}
+
+/// How far around a card its reading looks, as shares of its height: across, where its
+/// slanted foot and the count on it reach (0.1 of its height at the foot, and a pixel of the
+/// count's blend); up and down, where a badge hangs over its top (0.1).
+const AROUND: (f32, f32) = (0.25, 0.15);
+
+/// All a card's reading goes by, as one number: where the card is, the icon left out, and
+/// every pixel around it the reading looks at (`AROUND`). Two cards of one number are read
+/// alike (but for a chance of one in 2^64).
+fn drawn(image: &RgbImage, card: &grid::Card, missing: Option<usize>) -> u64 {
+    use std::hash::Hasher as _;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    hasher.write_u32(card.left.to_bits());
+    hasher.write_u32(card.width.to_bits());
+    hasher.write_u32(card.top);
+    hasher.write_u32(card.height);
+    hasher.write_u64(missing.map_or(u64::MAX, |m| m as u64));
+    let height = card.height as f32;
+    let (across, down) = (AROUND.0 * height, AROUND.1 * height);
+    let x0 = (card.left - across).max(0.0) as usize;
+    let x1 = ((card.left + card.width + across).ceil() as usize).min(image.width() as usize);
+    let y0 = (card.top as f32 - down).max(0.0) as usize;
+    let y1 = ((card.top as f32 + height + down).ceil() as usize).min(image.height() as usize);
+    let (raw, stride) = (image.as_raw(), image.width() as usize * 3);
+    for y in y0..y1 {
+        hasher.write(&raw[y * stride + x0 * 3..y * stride + x1 * 3]);
+    }
+    hasher.finish()
 }
 
 /// How many cards' tellings are kept: a list shows 20 to 25 cards, so the last few frames'.
@@ -116,6 +177,8 @@ impl Catalog {
             rules,
             told: Mutex::new(Told::default()),
             told_apart: AtomicUsize::new(0),
+            read_anew: AtomicUsize::new(0),
+            reads: Mutex::new(Reads::default()),
         })
     }
 
@@ -126,6 +189,12 @@ impl Catalog {
     /// 「一覧の読み取りの改善」).
     pub fn cards_told_apart(&self) -> usize {
         self.told_apart.load(Ordering::Relaxed)
+    }
+
+    /// How many cards this catalog has read since it was made: a card drawn exactly as one
+    /// read lately, where that one was, is taken as that one was read, and not counted.
+    pub fn cards_read(&self) -> usize {
+        self.read_anew.load(Ordering::Relaxed)
     }
 
     /// The icon `card` shows (see `IconMatcher::identify`), or as a card of the same look was told.
@@ -190,38 +259,62 @@ impl Catalog {
         digits: &Digits,
         missing: Option<usize>,
     ) -> Vec<Cell> {
-        let badges: Vec<Option<u32>> = cards
+        // A card drawn as one read lately, where that one was, is taken as that one was read.
+        let drawn: Vec<u64> = cards
             .iter()
-            .map(|card| grid::badge_bottom(image, card))
+            .map(|card| drawn(image, card, missing))
             .collect();
+        let mut read: Vec<Option<ReadCard>> = {
+            let reads = self.reads.lock().unwrap_or_else(PoisonError::into_inner);
+            drawn
+                .iter()
+                .map(|drawn| reads.by_drawn.get(drawn).cloned())
+                .collect()
+        };
+        let anew: Vec<usize> = (0..cards.len()).filter(|&i| read[i].is_none()).collect();
+        self.read_anew.fetch_add(anew.len(), Ordering::Relaxed);
         let candidates: Vec<usize> = (0..self.icon_keys.len())
             .filter(|&i| Some(i) != missing)
             .collect();
-        // Cards are told apart independently, so they share out over the CPU's cores.
+        let read_card = |i: usize| {
+            let card = &cards[i];
+            let badge = grid::badge_bottom(image, card);
+            ReadCard {
+                told: self.tell(image, card, badge, &candidates, missing),
+                badge,
+                quantity: digits.read(image, card),
+            }
+        };
+        // Cards are read independently, so more than a few share out over the CPU's cores.
         let threads = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
-        let per_thread = cards.len().div_ceil(threads).max(1);
-        let found: Vec<Result<usize, Vec<usize>>> = std::thread::scope(|scope| {
-            let workers: Vec<_> = cards
-                .chunks(per_thread)
-                .zip(badges.chunks(per_thread))
-                .map(|(chunk, badges)| {
-                    let candidates = &candidates;
-                    scope.spawn(move || {
-                        chunk
-                            .iter()
-                            .zip(badges)
-                            .map(|(card, &badge)| {
-                                self.tell(image, card, badge, candidates, missing)
-                            })
-                            .collect::<Vec<_>>()
+        let per_thread = anew.len().div_ceil(threads).max(1);
+        let fresh: Vec<ReadCard> = if anew.len() <= 2 {
+            anew.iter().map(|&i| read_card(i)).collect()
+        } else {
+            std::thread::scope(|scope| {
+                let workers: Vec<_> = anew
+                    .chunks(per_thread)
+                    .map(|chunk| {
+                        let read_card = &read_card;
+                        scope.spawn(move || chunk.iter().map(|&i| read_card(i)).collect::<Vec<_>>())
                     })
-                })
-                .collect();
-            workers
-                .into_iter()
-                .flat_map(|worker| worker.join().expect("a card worker panicked"))
-                .collect()
-        });
+                    .collect();
+                workers
+                    .into_iter()
+                    .flat_map(|worker| worker.join().expect("a card worker panicked"))
+                    .collect()
+            })
+        };
+        {
+            let mut reads = self.reads.lock().unwrap_or_else(PoisonError::into_inner);
+            for (&i, fresh) in anew.iter().zip(fresh) {
+                reads.keep(drawn[i], fresh.clone());
+                read[i] = Some(fresh);
+            }
+        }
+        let read: Vec<ReadCard> = read.into_iter().flatten().collect();
+        let badges: Vec<Option<u32>> = read.iter().map(|card| card.badge).collect();
+        let found: Vec<&Result<usize, Vec<usize>>> = read.iter().map(|card| &card.told).collect();
         let icons: Vec<Option<usize>> = found.iter().map(|f| f.as_ref().ok().copied()).collect();
         // A cell is ignored when its icon, or every icon it could be, is untracked.
         let ignored: Vec<bool> = found
@@ -244,7 +337,7 @@ impl Catalog {
         order::resolve(&ordered)
             .into_iter()
             .zip(icons.iter().zip(&badges))
-            .zip(cards.iter().zip(ignored))
+            .zip(read.iter().zip(ignored))
             .map(|((key, (&icon, badge)), (card, ignored))| {
                 let key = if badge.is_some() {
                     icon.and_then(|i| match self.icon_keys[i].as_slice() {
@@ -256,7 +349,7 @@ impl Catalog {
                 };
                 Cell {
                     id: key.map(|(_, id)| id),
-                    quantity: digits.read(image, card),
+                    quantity: card.quantity,
                     ignored,
                 }
             })
