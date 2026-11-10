@@ -13,10 +13,12 @@ use std::{
 use image::{RgbImage, RgbaImage};
 
 use crate::{
-    Cell, Item, Row, grid,
+    Cell, Item, Row,
+    glyph::Fonts,
+    grid,
     icon::{IconMatcher, Mask, Rarity},
     order,
-    quantity::{Count, Digits},
+    quantity::{self, Count},
 };
 
 /// Where an entry sits in its list's default order.
@@ -256,7 +258,7 @@ impl Catalog {
         &self,
         image: &RgbImage,
         cards: &[grid::Card],
-        digits: &Digits,
+        counts: &Fonts,
         missing: Option<usize>,
     ) -> Vec<Cell> {
         // A card drawn as one read lately, where that one was, is taken as that one was read.
@@ -282,7 +284,7 @@ impl Catalog {
             ReadCard {
                 told: self.tell(image, card, badge, &candidates, missing),
                 badge,
-                quantity: digits.read(image, card),
+                quantity: quantity::read(counts, image, card),
             }
         };
         // Cards are read independently, so more than a few share out over the CPU's cores.

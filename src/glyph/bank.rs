@@ -24,6 +24,13 @@ pub fn files(width: u32) -> (String, String) {
     )
 }
 
+/// The files the counts' bank is kept in (see `quantity`): one for every
+/// width, its references drawn from them all. Measured on 2026-11-10 over the
+/// lists' screens drawn at 39 widths and a tablet's streams (13,225 counts,
+/// none read wrong either way): with each width's own references 105 went
+/// unread, with all widths' 46.
+pub const COUNTS: (&str, &str) = ("counts.png", "counts.json");
+
 /// A tile's side in pixels.
 pub const TILE: usize = 16;
 /// Tiles side by side in the picture.
@@ -162,6 +169,38 @@ impl Bank {
                 })
                 .collect(),
         )
+    }
+}
+
+/// A cut farther than this from every group of its character starts a group.
+/// A group's mean drifts from its cuts as more join it: at 10 a tablet's "3"
+/// took a window's credits' "3" nearer to "8" (measured on 2026-10-16), and
+/// the cards' small digits read fewer.
+const JOIN: f32 = 5.0;
+
+/// A group of alike cuts of a character, which the bank keeps the mean of as
+/// a reference: their sum and how many.
+pub struct Group(pub Vec<f32>, pub u32);
+
+impl Group {
+    pub fn mean(&self) -> Vec<f32> {
+        self.0.iter().map(|v| v / self.1 as f32).collect()
+    }
+}
+
+/// Adds a cut to the nearest group of its character, or starts a group.
+pub fn join(groups: &mut Vec<Group>, shape: Vec<f32>) {
+    let nearest = groups
+        .iter_mut()
+        .map(|g| (super::distance(&g.mean(), &shape), g))
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .filter(|(d, _)| *d <= JOIN);
+    match nearest {
+        Some((_, group)) => {
+            group.0.iter_mut().zip(&shape).for_each(|(s, v)| *s += v);
+            group.1 += 1;
+        }
+        None => groups.push(Group(shape, 1)),
     }
 }
 

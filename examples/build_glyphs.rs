@@ -36,7 +36,7 @@ use aoi::{
     campaign, credit,
     glyph::{
         self, Style,
-        bank::{Bank, Word, glyph_tile},
+        bank::{Bank, Group, Word, glyph_tile, join},
         word::Ink,
     },
     screen, shop,
@@ -49,11 +49,6 @@ use image::{
 };
 use serde::Deserialize;
 
-/// A cut farther than this from every group of its character starts a group.
-/// A group's mean drifts from its cuts as more join it: at 10 a tablet's "3"
-/// took a window's credits' "3" nearer to "8" (measured on 2026-10-16), and
-/// the cards' small digits read fewer.
-const JOIN: f32 = 5.0;
 /// How loosely the digits drawn with the font read the game's: the nearest
 /// digit within this distance, and within this share of the next nearest one
 /// (measured on 2026-10-14: the game's digits lie 12 to 30 from the font's,
@@ -102,31 +97,6 @@ const APART: f32 = 20.0;
 const ALIKE: f32 = 30.0;
 /// The size the names are drawn at, in pixels.
 const SIZE: f32 = 64.0;
-
-/// A group of alike cuts: their sum and how many.
-struct Group(Vec<f32>, u32);
-
-impl Group {
-    fn mean(&self) -> Vec<f32> {
-        self.0.iter().map(|v| v / self.1 as f32).collect()
-    }
-}
-
-/// Adds a cut to the nearest group of its character, or starts a group.
-fn join(groups: &mut Vec<Group>, shape: Vec<f32>) {
-    let nearest = groups
-        .iter_mut()
-        .map(|g| (glyph::distance(&g.mean(), &shape), g))
-        .min_by(|a, b| a.0.total_cmp(&b.0))
-        .filter(|(d, _)| *d <= JOIN);
-    match nearest {
-        Some((_, group)) => {
-            group.0.iter_mut().zip(&shape).for_each(|(s, v)| *s += v);
-            group.1 += 1;
-        }
-        None => groups.push(Group(shape, 1)),
-    }
-}
 
 /// The cuts of each style's characters.
 type Cuts = BTreeMap<String, BTreeMap<char, Vec<Group>>>;

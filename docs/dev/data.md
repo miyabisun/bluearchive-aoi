@@ -64,12 +64,13 @@ SIL Open Font License) in a folder:
 cargo run --release --example build_glyphs -- <folder of the fonts>
 ```
 
-The lists' counts have references of their own (`data/digits.json`), from the
-fixtures and from a collection of a tablet's screens as scrcpy streams them (each with the
-screen as screencap gives it, which labels them), kept outside the repository for its size:
+The lists' counts are read as the other texts are, with a bank of their own
+(`data/counts.png` and `.json`, one for every width), from the fixtures and from a collection of
+a tablet's screens as scrcpy streams them (each with the screen as screencap gives it, which
+labels them), kept outside the repository for its size:
 
 ```powershell
-cargo run --release --example build_digits -- <collection>
+cargo run --release --example build_counts -- <collection>
 ```
 
 ## What is counted

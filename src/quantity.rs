@@ -1,17 +1,25 @@
 //! Reads the "xN" count at the bottom right of a card.
 //!
 //! The count is drawn in one flat ink colour with a white outline, so each
-//! character is a separate blob of ink. Blobs are scaled to a common height
-//! and compared with reference characters (the digits and the "K" of counts
-//! from 10,000) taken from labeled screenshots
-//! (`data/digits.json`, written by `cargo run --example build_digits`).
+//! character is a separate blob of ink. The count's blobs are found by where
+//! they stand (the digits on a line ending at the card's right, the "x"
+//! before them), then scaled and told as every other text's characters are
+//! (`glyph`), with references of their own (the "x", the digits and the "K"
+//! of counts from 10,000; `data/counts.png`, written by
+//! `cargo run --example build_counts`).
 
-use std::{collections::BTreeMap, fmt};
+use std::fmt;
 
 use image::RgbImage;
 use serde::{Deserialize, Serialize};
 
-use crate::grid::Card;
+use crate::{
+    glyph::{self, Blob, Fonts},
+    grid::Card,
+};
+
+/// The style the counts' references are kept under.
+pub const FONT: &str = "count";
 
 const INK: [f32; 3] = [45.0, 70.0, 99.0];
 /// Least share of ink (versus white) for a pixel to belong to a character.
@@ -26,12 +34,6 @@ const DIGIT_HEIGHT: (f32, f32) = (0.11, 0.2);
 const OVERLAP: f32 = 0.25;
 /// The "x" is shorter than the digits it precedes.
 const X_HEIGHT: (f32, f32) = (0.45, 0.85);
-/// Normalized glyph size: characters keep their width relative to their height.
-pub const GLYPH: (usize, usize) = (16, 20);
-/// Farthest a glyph may be from its reference (squared difference summed over
-/// the normalized glyph). Measured on 2026-10-11: read characters are within
-/// 35, a "K" without its reference is 73 or more from every digit.
-const MAX_DISTANCE: f32 = 50.0;
 /// The right-aligned count ends this close to the card's right edge (fraction
 /// of the card height; measured 0.10 to 0.15). Farther, its last character is
 /// missing, as under the blinking frame of the selected card (0.24).
@@ -40,8 +42,8 @@ const END_GAP: f32 = 0.19;
 /// How much a pixel looks like ink, 0 (white) to 1 (ink), if it lies on the
 /// ink-to-white blend at all.
 fn ink_share(p: [u8; 3]) -> Option<f32> {
-    let d: Vec<f32> = (0..3).map(|c| 255.0 - f32::from(p[c])).collect();
-    let axis: Vec<f32> = INK.iter().map(|v| 255.0 - v).collect();
+    let d = p.map(|v| 255.0 - f32::from(v));
+    let axis = INK.map(|v| 255.0 - v);
     let len_sq: f32 = axis.iter().map(|a| a * a).sum();
     let t = d.iter().zip(&axis).map(|(a, b)| a * b).sum::<f32>() / len_sq;
     let off: f32 = d
@@ -53,65 +55,9 @@ fn ink_share(p: [u8; 3]) -> Option<f32> {
     (off <= OFF_LINE).then_some(t.clamp(0.0, 1.0))
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Blob {
-    left: u32,
-    right: u32,
-    top: u32,
-    bottom: u32,
-}
-
-impl Blob {
-    fn height(&self) -> u32 {
-        self.bottom - self.top + 1
-    }
-}
-
-/// Ink blobs (8-connected) inside the rectangle `[x0, x1) x [y0, y1)`.
-fn blobs(image: &RgbImage, x0: u32, x1: u32, y0: u32, y1: u32) -> Vec<Blob> {
-    let (width, height) = ((x1 - x0) as usize, (y1 - y0) as usize);
-    let ink: Vec<bool> = (y0..y1)
-        .flat_map(|y| (x0..x1).map(move |x| (x, y)))
-        .map(|(x, y)| ink_share(image.get_pixel(x, y).0).is_some_and(|t| t >= INK_SHARE))
-        .collect();
-    let mut seen = vec![false; width * height];
-    let mut out = Vec::new();
-    for start in 0..width * height {
-        if !ink[start] || seen[start] {
-            continue;
-        }
-        seen[start] = true;
-        let mut stack = vec![start];
-        let mut blob = Blob {
-            left: u32::MAX,
-            right: 0,
-            top: u32::MAX,
-            bottom: 0,
-        };
-        while let Some(i) = stack.pop() {
-            let (x, y) = (i % width, i / width);
-            let (px, py) = (x0 + x as u32, y0 + y as u32);
-            blob.left = blob.left.min(px);
-            blob.right = blob.right.max(px);
-            blob.top = blob.top.min(py);
-            blob.bottom = blob.bottom.max(py);
-            for dy in -1i64..=1 {
-                for dx in -1i64..=1 {
-                    let (nx, ny) = (x as i64 + dx, y as i64 + dy);
-                    if nx < 0 || ny < 0 || nx >= width as i64 || ny >= height as i64 {
-                        continue;
-                    }
-                    let j = ny as usize * width + nx as usize;
-                    if ink[j] && !seen[j] {
-                        seen[j] = true;
-                        stack.push(j);
-                    }
-                }
-            }
-        }
-        out.push(blob);
-    }
-    out
+/// Whether a pixel is the ink of a count.
+fn ink(p: [u8; 3]) -> bool {
+    ink_share(p).is_some_and(|t| t >= INK_SHARE)
 }
 
 /// The pieces of a character one above the other, as one blob: `a` and `b`
@@ -157,9 +103,19 @@ fn joined(blobs: Vec<Blob>, heights: (u32, u32)) -> Vec<Blob> {
     out
 }
 
-/// The blobs of the card's count, if a count is found: the "x" before it, and
+/// The foot of a card where its count stands, as a mask of the count's ink
+/// (see `glyph::mask`), and the count's blobs in it: the "x" before it, and
 /// its digits left to right.
-fn digit_blobs(image: &RgbImage, card: &Card) -> Option<(Blob, Vec<Blob>)> {
+struct Cut {
+    ink: Vec<bool>,
+    width: usize,
+    height: usize,
+    x: Blob,
+    digits: Vec<Blob>,
+}
+
+/// The card's count as cut out, if a count is found.
+fn cut(image: &RgbImage, card: &Card) -> Option<Cut> {
     let h = card.height as f32;
     let y0 = card.top + (h * COUNT_TOP) as u32;
     let y1 = (card.top + card.height).min(image.height());
@@ -171,13 +127,22 @@ fn digit_blobs(image: &RgbImage, card: &Card) -> Option<(Blob, Vec<Blob>)> {
         (h * DIGIT_HEIGHT.0).ceil() as u32,
         (h * DIGIT_HEIGHT.1).floor() as u32,
     );
-    let all = joined(blobs(image, x0, x1, y0, y1), heights);
-    let right = card.left + card.width + card.shift_at(y0 as f32);
-    count_blobs(&all, h, right)
+    let (ink, width, height) = glyph::mask(image, (x0, y0, x1, y1), ink, 0.0);
+    let (all, ink) = glyph::blobs(ink, width, height, false);
+    let right = card.left + card.width + card.shift_at(y0 as f32) - x0 as f32;
+    let (x, digits) = count_blobs(&joined(all, heights), h, right)?;
+    Some(Cut {
+        ink,
+        width,
+        height,
+        x,
+        digits,
+    })
 }
 
-/// Of the blobs at the foot of a card `h` high whose right edge is at `right`,
-/// the count's: the "x" before it, and its digits left to right.
+/// Of the blobs at the foot of a card `h` high whose right edge is at `right`
+/// (in the blobs' columns), the count's: the "x" before it, and its digits
+/// left to right.
 fn count_blobs(all: &[Blob], h: f32, right: f32) -> Option<(Blob, Vec<Blob>)> {
     let is_digit = |b: &Blob| {
         let r = b.height() as f32 / h;
@@ -216,51 +181,12 @@ fn count_blobs(all: &[Blob], h: f32, right: f32) -> Option<(Blob, Vec<Blob>)> {
     }
 }
 
-/// A blob scaled to `GLYPH` height, keeping its width proportion, left-aligned.
-fn normalize(image: &RgbImage, blob: &Blob) -> Vec<f32> {
-    let (gw, gh) = GLYPH;
-    let scale = (blob.height() as f32) / gh as f32;
-    let mut out = vec![0.0; gw * gh];
-    for gy in 0..gh {
-        for gx in 0..gw {
-            let x = blob.left as f32 + (gx as f32 + 0.5) * scale;
-            let y = blob.top as f32 + (gy as f32 + 0.5) * scale;
-            if x > blob.right as f32 + 0.5 {
-                continue;
-            }
-            // Between pixels, a blend of the four around (bilinear): a small
-            // glyph keeps its strokes' share of each pixel.
-            let (fx, fy) = (x - 0.5, y - 0.5);
-            let (x0, y0) = (fx.floor().max(0.0), fy.floor().max(0.0));
-            let (tx, ty) = ((fx - x0).clamp(0.0, 1.0), (fy - y0).clamp(0.0, 1.0));
-            let at = |x: f32, y: f32| {
-                let (x, y) = (x as u32, y as u32);
-                if x < image.width() && y < image.height() {
-                    ink_share(image.get_pixel(x, y).0).unwrap_or(0.0)
-                } else {
-                    0.0
-                }
-            };
-            out[gy * gw + gx] = (1.0 - ty) * ((1.0 - tx) * at(x0, y0) + tx * at(x0 + 1.0, y0))
-                + ty * ((1.0 - tx) * at(x0, y0 + 1.0) + tx * at(x0 + 1.0, y0 + 1.0));
-        }
-    }
-    out
-}
-
-/// Normalized digit glyphs of the card's count, left to right.
-pub fn glyphs(image: &RgbImage, card: &Card) -> Option<Vec<Vec<f32>>> {
-    count_glyphs(image, card).map(|(_, digits)| digits)
-}
-
-/// The normalized glyphs of the card's count: its "x", and its digits left to
-/// right.
-pub fn count_glyphs(image: &RgbImage, card: &Card) -> Option<(Vec<f32>, Vec<Vec<f32>>)> {
-    let (x, digits) = digit_blobs(image, card)?;
-    Some((
-        normalize(image, &x),
-        digits.iter().map(|b| normalize(image, b)).collect(),
-    ))
+/// The characters of the card's count as `glyph` scales them: its "x", and
+/// its digits left to right.
+pub fn shapes(image: &RgbImage, card: &Card) -> Option<(Vec<f32>, Vec<Vec<f32>>)> {
+    let cut = cut(image, card)?;
+    let shape = |blob: &Blob| glyph::normalized(&cut.ink, cut.width, cut.height, blob);
+    Some((shape(&cut.x), cut.digits.iter().map(shape).collect()))
 }
 
 /// A count as the list shows it.
@@ -290,57 +216,19 @@ fn parse(text: &str) -> Option<Count> {
     }
 }
 
-/// Reference glyphs of each character of a count, the "x" before it, the
-/// digits and "K": for each size the list is drawn at, from a PC window to a
-/// small phone's screen (small digits lose their holes, an "8" coming near a
-/// "6"), and for each stop and size of a tablet's stream (H.264 blurs them
-/// further).
-#[derive(Serialize, Deserialize)]
-pub struct Digits {
-    pub glyphs: BTreeMap<char, Vec<Vec<f32>>>,
-}
-
-/// The nearest character must be at most this share of the distance to the
-/// next nearest one, or the character is unknown: a small "8" near a "6" is no
-/// digit. Measured on 2026-10-15 over the evaluation screens: characters read
-/// right are at most 0.83 at the screens' own size; over a tablet's stream at
-/// 1600 wide (119 px cards), the ones read wrong 0.94 or more, 90% of those
-/// read right under 0.41.
-const LEAD: f32 = 0.85;
-
-impl Digits {
-    /// The character the glyph shows, if it is close enough to one and clearly
-    /// nearer to it than to any other (see `LEAD`) of those `possible`.
-    fn closest(&self, glyph: &[f32], possible: impl Fn(char) -> bool) -> Option<char> {
-        let dist = |r: &Vec<f32>| {
-            r.iter()
-                .zip(glyph)
-                .map(|(a, b)| (a - b).powi(2))
-                .sum::<f32>()
-        };
-        let mut nearest: Vec<(char, f32)> = self
-            .glyphs
-            .iter()
-            .filter(|(c, _)| possible(**c))
-            .filter_map(|(c, refs)| Some((*c, refs.iter().map(dist).min_by(f32::total_cmp)?)))
-            .collect();
-        nearest.sort_by(|a, b| a.1.total_cmp(&b.1));
-        let (c, d) = *nearest.first()?;
-        let next = nearest.get(1).map_or(f32::INFINITY, |n| n.1);
-        (d <= MAX_DISTANCE && d <= LEAD * next).then_some(c)
+/// The card's count, told with the counts' references among `fonts` (see
+/// `FONT`): for each size the list is drawn at, from a PC window to a small
+/// phone's screen (small digits lose their holes, an "8" coming near a "6"),
+/// and for a tablet's stream (H.264 blurs them further).
+pub fn read(fonts: &Fonts, image: &RgbImage, card: &Card) -> Option<Count> {
+    let (x, digits) = shapes(image, card)?;
+    // What stands before the digits must be told as the "x" (a "K", which
+    // only ends a count, is not taken for it): a piece of a digit broken
+    // on a small screen would leave the count short.
+    if fonts.character_among(FONT, &x, |c| c != 'K') != Some('x') {
+        return None;
     }
-
-    pub fn read(&self, image: &RgbImage, card: &Card) -> Option<Count> {
-        let (x, digits) = count_glyphs(image, card)?;
-        // What stands before the digits must be told as the "x" (a "K", which
-        // only ends a count, is not taken for it): a piece of a digit broken
-        // on a small screen would leave the count short.
-        if self.closest(&x, |c| c != 'K') != Some('x') {
-            return None;
-        }
-        let text: Option<String> = digits.iter().map(|g| self.closest(g, |_| true)).collect();
-        parse(&text?)
-    }
+    parse(&fonts.read(FONT, &digits)?)
 }
 
 #[cfg(test)]
@@ -415,17 +303,27 @@ mod tests {
     #[test]
     fn a_character_without_a_reference_is_unreadable() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let mut digits: Digits =
-            serde_json::from_str(&std::fs::read_to_string(root.join("data/digits.json")).unwrap())
-                .unwrap();
-        digits.glyphs.remove(&'K');
+        let (picture, index) = glyph::bank::COUNTS;
+        let bank = glyph::bank::Bank::decode(
+            &std::fs::read(root.join("data").join(picture)).unwrap(),
+            &std::fs::read_to_string(root.join("data").join(index)).unwrap(),
+        )
+        .unwrap();
+        let mut fonts = bank.fonts();
+        fonts.0.get_mut(FONT).unwrap().remove(&'K');
         let image = image::open(root.join("tests/fixtures/equipment-16x9-end.png"))
             .unwrap()
             .to_rgb8();
         let cards = find_cards(&image);
-        let read: Vec<Option<Count>> = cards[16..].iter().map(|c| digits.read(&image, c)).collect();
+        let read: Vec<Option<Count>> = cards[16..]
+            .iter()
+            .map(|c| super::read(&fonts, &image, c))
+            .collect();
         assert_eq!(read, vec![None; 9]);
-        assert_eq!(digits.read(&image, &cards[11]), Some(Count::Exact(1444)));
+        assert_eq!(
+            super::read(&fonts, &image, &cards[11]),
+            Some(Count::Exact(1444))
+        );
     }
     use crate::grid::find_cards;
     use std::path::Path;
@@ -454,7 +352,7 @@ mod tests {
             let image = image::open(dir.join(&fixture.image)).unwrap().to_rgb8();
             for (i, (card, label)) in find_cards(&image).iter().zip(&fixture.cells).enumerate() {
                 let want = label.quantity.as_ref().map(|q| q.chars().count());
-                let got = glyphs(&image, card).map(|g| g.len());
+                let got = shapes(&image, card).map(|(_, digits)| digits.len());
                 // Under the selected card's frame the count may be unreadable.
                 if got != want && !(label.selected && got.is_none()) {
                     wrong.push(format!(

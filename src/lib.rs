@@ -76,7 +76,7 @@ use image::{RgbImage, RgbaImage};
 use serde::{Deserialize, Serialize};
 
 use catalog::Catalog;
-use quantity::{Count, Digits};
+use quantity::Count;
 
 /// One fully visible cell of a list, in reading order.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -196,7 +196,8 @@ pub struct Recognizer {
     /// The choice boxes that make up what a plan is short of.
     boxes: Vec<supply::ChoiceBox>,
     equipment: Catalog,
-    digits: Digits,
+    /// The references of the lists' counts (see `quantity`).
+    counts: glyph::Fonts,
     /// The sort buttons in the default order (`data/sort-default.png`).
     sort_template: RgbImage,
     /// Each list's screen title (`data/title-*.png`).
@@ -282,13 +283,16 @@ impl Recognizer {
     }
 
     fn build(read: &Read) -> Result<Self, String> {
+        let bank = |picture: &str, index: &str| {
+            let index = String::from_utf8(read(index)?).map_err(|e| e.to_string())?;
+            glyph::bank::Bank::decode(&read(picture)?, &index)
+                .map_err(|e| format!("{picture}: {e}"))
+        };
         let texts = screen::WIDTHS
             .into_iter()
             .map(|width| {
                 let (picture, index) = glyph::bank::files(width);
-                let index = String::from_utf8(read(&index)?).map_err(|e| e.to_string())?;
-                let glyphs = glyph::bank::Bank::decode(&read(&picture)?, &index)
-                    .map_err(|e| format!("{picture}: {e}"))?;
+                let glyphs = bank(&picture, &index)?;
                 Ok(Texts {
                     width,
                     fonts: glyphs.fonts(),
@@ -341,7 +345,7 @@ impl Recognizer {
             stages: json(read, "schaledb/stages.json")?,
             boxes: json(read, "schaledb/boxes.json")?,
             equipment: equipment::catalog(read)?,
-            digits: json(read, "digits.json")?,
+            counts: bank(glyph::bank::COUNTS.0, glyph::bank::COUNTS.1)?.fonts(),
             sort_template: template("sort-default.png")?,
             titles: vec![
                 (List::Items, template("title-items.png")?),
@@ -1092,7 +1096,7 @@ impl Recognizer {
     /// Reads the fully visible cells in reading order as cells of `list`.
     pub fn read(&self, image: &RgbImage, list: List) -> Vec<Cell> {
         self.catalog(list)
-            .read_cards(image, &grid::find_cards(image), &self.digits, None)
+            .read_cards(image, &grid::find_cards(image), &self.counts, None)
     }
 
     /// Reads the cells, and whether the list's start shows, when the frame
@@ -1107,7 +1111,7 @@ impl Recognizer {
         let list = self.titles[screen::title(image, panel.card_height, &pictures)?].0;
         let cells = self
             .catalog(list)
-            .read_cards(image, &cards, &self.digits, None);
+            .read_cards(image, &cards, &self.counts, None);
         Some((list, cells, panel.shows_start))
     }
 }
@@ -1244,7 +1248,7 @@ mod tests {
             let cards = grid::find_cards(&image);
             for id in fixture.cells.iter().filter_map(|l| l.id) {
                 let missing = catalog.icon_of(id);
-                let read = catalog.read_cards(&image, &cards, &recognizer.digits, missing);
+                let read = catalog.read_cards(&image, &cards, &recognizer.counts, missing);
                 for (cell, label) in read.iter().zip(&fixture.cells) {
                     let expected = label.id.filter(|&l| l != id);
                     if cell.id.is_some() && cell.id != expected {

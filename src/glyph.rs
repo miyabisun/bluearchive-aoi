@@ -93,12 +93,19 @@ const LEAD: f32 = 0.6;
 /// A rectangle of the screen in pixels: left, top, right, bottom.
 pub type Rect = (u32, u32, u32, u32);
 
+/// A part of a text's ink, by the columns and rows of its area it spans.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Blob {
-    left: u32,
-    right: u32,
-    top: u32,
-    bottom: u32,
+pub(crate) struct Blob {
+    pub(crate) left: u32,
+    pub(crate) right: u32,
+    pub(crate) top: u32,
+    pub(crate) bottom: u32,
+}
+
+impl Blob {
+    pub(crate) fn height(&self) -> u32 {
+        self.bottom - self.top + 1
+    }
 }
 
 /// Whether a blob too wide for a character (characters run together) of a
@@ -195,7 +202,7 @@ fn on_baseline(blobs: Vec<Blob>, tallest: u32) -> Option<Vec<Blob>> {
 
 /// Which pixels of `rect` are of the ink, each row moved right by `skew`
 /// times its height from the top; the mask and its width and height.
-fn mask(image: &RgbImage, rect: Rect, ink: Ink, skew: f32) -> (Vec<bool>, usize, usize) {
+pub(crate) fn mask(image: &RgbImage, rect: Rect, ink: Ink, skew: f32) -> (Vec<bool>, usize, usize) {
     let (x0, y0, x1, y1) = rect;
     let (w, height) = ((x1 - x0) as usize, (y1 - y0) as usize);
     let width = w + (skew * height as f32).ceil() as usize;
@@ -265,7 +272,7 @@ const BADGE_PART: f32 = 0.1;
 /// The blobs (8-connected) of the mask `on`, left to right, and the mask they
 /// were found in. With `thin_away`, lines a pixel or two thin (the ring of the
 /// tier badge, which touches its characters) are worn off first.
-fn blobs(
+pub(crate) fn blobs(
     mut on: Vec<bool>,
     width: usize,
     height: usize,
@@ -465,40 +472,44 @@ pub fn shapes(image: &RgbImage, rect: Rect, style: Style) -> Vec<Vec<f32>> {
         .collect();
     blobs
         .iter()
-        .map(|b| {
-            let (gw, gh) = GLYPH;
-            let scale = (b.bottom - b.top + 1) as f32 / gh as f32;
-            let mut out = vec![0.0; gw * gh];
-            // Each cell the share of its area the ink covers, so a character
-            // drawn small and one drawn large come out alike.
-            let right = (b.right + 1) as f32;
-            for gy in 0..gh {
-                for gx in 0..gw {
-                    let (ax, ay) = (
-                        b.left as f32 + gx as f32 * scale,
-                        b.top as f32 + gy as f32 * scale,
-                    );
-                    let (bx, by) = ((ax + scale).min(right), ay + scale);
-                    if ax >= right {
-                        continue;
+        .map(|b| normalized(&on, width, height, b))
+        .collect()
+}
+
+/// The character `b` spans of the mask `on` (`width` by `height`), scaled to
+/// `GLYPH` high, keeping its width for its height, from the left.
+pub(crate) fn normalized(on: &[bool], width: usize, height: usize, b: &Blob) -> Vec<f32> {
+    let (gw, gh) = GLYPH;
+    let scale = b.height() as f32 / gh as f32;
+    let mut out = vec![0.0; gw * gh];
+    // Each cell the share of its area the ink covers, so a character
+    // drawn small and one drawn large come out alike.
+    let right = (b.right + 1) as f32;
+    for gy in 0..gh {
+        for gx in 0..gw {
+            let (ax, ay) = (
+                b.left as f32 + gx as f32 * scale,
+                b.top as f32 + gy as f32 * scale,
+            );
+            let (bx, by) = ((ax + scale).min(right), ay + scale);
+            if ax >= right {
+                continue;
+            }
+            let (mut ink, mut area) = (0.0, 0.0);
+            for py in ay.floor() as usize..(by.ceil() as usize).min(height) {
+                let wy = by.min(py as f32 + 1.0) - ay.max(py as f32);
+                for px in ax.floor() as usize..bx.ceil() as usize {
+                    let wx = bx.min(px as f32 + 1.0) - ax.max(px as f32);
+                    area += wx * wy;
+                    if on[py * width + px] {
+                        ink += wx * wy;
                     }
-                    let (mut ink, mut area) = (0.0, 0.0);
-                    for py in ay.floor() as usize..(by.ceil() as usize).min(height) {
-                        let wy = by.min(py as f32 + 1.0) - ay.max(py as f32);
-                        for px in ax.floor() as usize..bx.ceil() as usize {
-                            let wx = bx.min(px as f32 + 1.0) - ax.max(px as f32);
-                            area += wx * wy;
-                            if on[py * width + px] {
-                                ink += wx * wy;
-                            }
-                        }
-                    }
-                    out[gy * gw + gx] = if area > 0.0 { ink / area } else { 0.0 };
                 }
             }
-            out
-        })
-        .collect()
+            out[gy * gw + gx] = if area > 0.0 { ink / area } else { 0.0 };
+        }
+    }
+    out
 }
 
 /// How far apart two normalized characters are, the second moved up to a
@@ -512,29 +523,52 @@ pub fn distance(a: &[f32], b: &[f32]) -> f32 {
 /// out as some distance past it, sooner (a reference farther than the nearest
 /// ones found needs no more measuring).
 pub fn distance_within(a: &[f32], b: &[f32], bound: f32) -> f32 {
-    let (w, h) = (GLYPH.0 as i32, GLYPH.1 as i32);
-    let at = |x: i32, y: i32| {
-        if (0..w).contains(&x) && (0..h).contains(&y) {
-            b[(y * w + x) as usize]
-        } else {
-            0.0
+    Moving::new(b).within(a, bound)
+}
+
+/// A normalized character with a pixel of ground around it, so that moved a
+/// pixel either way it is read without a look at its edges: a character is
+/// measured against many references.
+struct Moving([f32; (GLYPH.0 + 2) * (GLYPH.1 + 2)]);
+
+impl Moving {
+    fn new(shape: &[f32]) -> Self {
+        let (w, across) = (GLYPH.0, GLYPH.0 + 2);
+        let mut padded = [0.0; (GLYPH.0 + 2) * (GLYPH.1 + 2)];
+        for (y, row) in shape.chunks(w).enumerate() {
+            padded[(y + 1) * across + 1..][..w].copy_from_slice(row);
         }
-    };
-    let mut nearest = f32::INFINITY;
-    for (dx, dy) in (-1..=1).flat_map(|dy| (-1..=1).map(move |dx| (dx, dy))) {
-        let limit = nearest.min(bound);
+        Self(padded)
+    }
+
+    /// How far `a` is from the character (see `distance_within`).
+    fn within(&self, a: &[f32], bound: f32) -> f32 {
+        let mut nearest = f32::INFINITY;
+        // Unmoved first: most references meet their character as they are,
+        // and the other ways are then measured no further than that.
+        let moved = (-1..=1).flat_map(|dy| (-1..=1).map(move |dx| (dx, dy)));
+        for by in std::iter::once((0, 0)).chain(moved.filter(|&m| m != (0, 0))) {
+            nearest = nearest.min(self.moved_within(a, by, nearest.min(bound)));
+        }
+        nearest
+    }
+
+    /// How far `a` is from the character moved by `(dx, dy)` pixels, measured
+    /// only as far as `limit`.
+    fn moved_within(&self, a: &[f32], (dx, dy): (i32, i32), limit: f32) -> f32 {
+        let (w, across) = (GLYPH.0, GLYPH.0 + 2);
         let mut sum = 0.0;
-        for y in 0..h {
-            for x in 0..w {
-                sum += (a[(y * w + x) as usize] - at(x + dx, y + dy)).powi(2);
+        for (y, row) in a.chunks(w).enumerate() {
+            let from = (y as i32 + 1 + dy) as usize * across + (1 + dx) as usize;
+            for (a, b) in row.iter().zip(&self.0[from..from + w]) {
+                sum += (a - b).powi(2);
             }
             if sum > limit {
                 break;
             }
         }
-        nearest = nearest.min(sum);
+        sum
     }
-    nearest
 }
 
 /// Reference characters of each text style; a character drawn in more than
@@ -567,12 +601,35 @@ impl Fonts {
     /// The character `shape` is in `style`, if it is close to a reference and
     /// clearly nearer to it than to any other character.
     pub fn character(&self, style: &str, shape: &[f32]) -> Option<char> {
+        self.character_among(style, shape, |_| true)
+    }
+
+    /// `character`, told among the characters `possible` alone.
+    pub fn character_among(
+        &self,
+        style: &str,
+        shape: &[f32],
+        possible: impl Fn(char) -> bool,
+    ) -> Option<char> {
+        let font = self.0.get(style)?;
+        let among = || font.iter().filter(|(c, _)| possible(**c));
+        // A first look at every reference unmoved: none lies nearer unmoved
+        // than moved to meet the character, so the nearest there is lies no
+        // farther than the nearest so found (or than `MAX_DISTANCE`, to tell
+        // anything).
+        let shape = Moving::new(shape);
+        let unmoved = among()
+            .flat_map(|(_, refs)| refs)
+            .fold(MAX_DISTANCE, |d, r| d.min(shape.moved_within(r, (0, 0), d)));
         // The nearest character and the next nearest one's distance: a
         // reference no nearer than both is measured no further.
-        let (mut nearest, mut next) = (None, f32::INFINITY);
-        for (c, refs) in self.0.get(style)? {
+        let (mut nearest, mut next) = (None::<(char, f32)>, f32::INFINITY);
+        for (c, refs) in among() {
+            // Nor one too far to tell anything: another character's past
+            // `LEAD` of the nearest one's leaves the nearest told.
+            let far = nearest.map_or(unmoved, |(_, best)| best.min(unmoved)) / LEAD;
             let d = refs.iter().fold(f32::INFINITY, |d, r| {
-                d.min(distance_within(r, shape, d.min(next)))
+                d.min(shape.within(r, d.min(next).min(far)))
             });
             match nearest {
                 Some((_, best)) if d >= best => next = next.min(d),
@@ -600,6 +657,67 @@ mod tests {
             top,
             bottom,
         }
+    }
+
+    /// A reference is measured no further than it can matter (see
+    /// `character_among`): every character is told as measuring them all in
+    /// full tells it. The lists' counts' references, each blended with
+    /// another: some near a character, some between two, some far from all.
+    #[test]
+    fn measuring_no_further_than_matters_tells_the_same() {
+        let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
+        let (picture, index) = bank::COUNTS;
+        let fonts = bank::Bank::decode(
+            &std::fs::read(data.join(picture)).unwrap(),
+            &std::fs::read_to_string(data.join(index)).unwrap(),
+        )
+        .unwrap()
+        .fonts();
+        let font = &fonts.0["count"];
+        let in_full = |shape: &[f32]| {
+            let mut near: Vec<(char, f32)> = font
+                .iter()
+                .map(|(c, refs)| {
+                    let d = refs.iter().map(|r| distance(r, shape));
+                    (*c, d.fold(f32::INFINITY, f32::min))
+                })
+                .collect();
+            near.sort_by(|a, b| a.1.total_cmp(&b.1));
+            let ((c, d), next) = (near[0], near[1].1);
+            (d <= MAX_DISTANCE && d <= LEAD * next && d < next).then_some(c)
+        };
+        let all: Vec<&Vec<f32>> = font.values().flatten().collect();
+        let mut told = Vec::new();
+        for i in (0..all.len()).step_by(7) {
+            let other = all[(i * 37 + 11) % all.len()];
+            let blend = all[i].iter().zip(other).map(|(a, b)| 0.7 * a + 0.3 * b);
+            let shape: Vec<f32> = blend.collect();
+            assert_eq!(fonts.character("count", &shape), in_full(&shape), "{i}");
+            told.push(in_full(&shape).is_some());
+        }
+        assert!(told.contains(&true) && told.contains(&false));
+    }
+
+    /// The "x" before a count is told among the "x" and the digits: a "K",
+    /// which only ends a count, lies as near and would leave it untold.
+    #[test]
+    fn a_character_is_told_among_those_possible() {
+        let rows = |from: usize| -> Vec<f32> {
+            (0..GLYPH.0 * GLYPH.1)
+                .map(|i| f32::from(u8::from((from..from + 4).contains(&(i / GLYPH.0)))))
+                .collect()
+        };
+        let count = [
+            ('x', vec![rows(0)]),
+            ('K', vec![rows(0)]),
+            ('1', vec![rows(10)]),
+        ];
+        let fonts = Fonts([("count".to_owned(), count.into())].into());
+        assert_eq!(fonts.character("count", &rows(0)), None);
+        let no_k = |c: char| c != 'K';
+        assert_eq!(fonts.character_among("count", &rows(0), no_k), Some('x'));
+        assert_eq!(fonts.character_among("count", &rows(10), no_k), Some('1'));
+        assert_eq!(fonts.character_among("count", &rows(5), no_k), None);
     }
 
     /// A badge's extent is that of its colour's large parts, the text's

@@ -25,9 +25,9 @@ the widest of the widths the texts are read at no wider than it (`screen::WIDTHS
 1600 and 1500; `screen::normalize`); the readers measure in a 16:9 window's height
 (`screen::unit`), each part kept to the top, the middle or the bottom of a wider screen
 (`screen::Anchor`). Each width has references of its own, drawn from the tuning fixtures
-scaled to it (`data/glyphs-*.png`, `data/digits.json`; `examples/build_glyphs.rs`,
-`examples/build_digits.rs`), and the tests read the evaluation fixtures drawn at widths between
-them too: right or not at all. A stream blurs the counts and the student screen's texts beyond any
+scaled to it (`data/glyphs-*.png`; `examples/build_glyphs.rs`), the lists' counts one bank
+for all of them (`data/counts.png`; `examples/build_counts.rs`), and the tests read the
+evaluation fixtures drawn at widths between them too: right or not at all. A stream blurs the counts and the student screen's texts beyond any
 scaling, so their references also come from a tablet's own stream at 1920 (and 1600) wide, and
 the tests read a few of its frames (`tests/fixtures/tablet.json`, the `android/tablet-stu-*`
 student screens). A phone sending fewer lines (a Pixel 9 1920 by 854, the game 1646 wide, read
