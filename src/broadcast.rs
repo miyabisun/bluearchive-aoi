@@ -30,7 +30,7 @@ use tokio::{
 use crate::{
     android::{qr_modules, word},
     screen::{self, Turn},
-    video::H264,
+    video::{H264, payload},
 };
 
 /// Where waiting for a streaming app stands, for the window.
@@ -436,20 +436,6 @@ pub async fn publish(
     let stopped = session.stop_publishing().map_err(text)?;
     send(&mut socket, stopped).await?;
     Ok(())
-}
-
-/// A unit of Annex B without its start code (nor the zeros a longer start
-/// code leaves after the unit before).
-fn payload(unit: &[u8]) -> &[u8] {
-    let start = unit
-        .iter()
-        .position(|&b| b != 0)
-        .map_or(unit.len(), |at| at + 1);
-    let end = unit
-        .iter()
-        .rposition(|&b| b != 0)
-        .map_or(start, |at| at + 1);
-    &unit[start..end.max(start)]
 }
 
 /// The FLV video tags an encoder's access unit is sent as: the configuration
