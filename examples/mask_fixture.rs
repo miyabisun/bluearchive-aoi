@@ -17,9 +17,7 @@ use std::path::Path;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 
 use aoi::{
-    Recognizer, campaign, credit,
-    glyph::bank::Bank,
-    grid,
+    Recognizer, campaign, credit, grid,
     screen::{self, Region},
     shop, student, title,
 };
@@ -146,15 +144,6 @@ fn main() {
         screen::normalize(&image).into_owned(),
         screen::normalize(&masked).into_owned(),
     );
-    if only == Some("level") {
-        let fonts = Bank::load(&data).expect("the glyph bank loads").fonts();
-        let (whole, part) = (
-            student::level(&image, &fonts),
-            student::level(&read, &fonts),
-        );
-        assert_eq!(whole, part, "{from} reads otherwise once masked");
-        return save(&masked, to);
-    }
     if only == Some("title") {
         let (whole, part) = (title::ink(&image), title::ink(&read));
         assert!(whole.is_some(), "{from} shows no title");
@@ -185,6 +174,13 @@ fn main() {
         return save(&masked, to);
     }
     let recognizer = Recognizer::load(&data).expect("the recognizer loads data/");
+    if only == Some("level") {
+        // Masking keeps the size, so both are read with the same width's references.
+        let fonts = recognizer.references(&image).1;
+        let (whole, part) = (student::level(&image, fonts), student::level(&read, fonts));
+        assert_eq!(whole, part, "{from} reads otherwise once masked");
+        return save(&masked, to);
+    }
     if only == Some("list") {
         let (list, _, _) = recognizer.read_list(&image).expect("no list");
         let (whole, part) = (recognizer.read(&image, list), recognizer.read(&read, list));

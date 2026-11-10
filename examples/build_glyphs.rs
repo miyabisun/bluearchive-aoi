@@ -1,5 +1,6 @@
-//! Writes the glyph bank (`data/glyphs.png` and `data/glyphs.json`, see
-//! `aoi::glyph::bank`) from the fixtures labeled `"role": "tune"` and a font.
+//! Writes the glyph banks (`data/glyphs-<width>.png` and `.json` for each
+//! width read at, see `aoi::glyph::bank`) from the fixtures labeled
+//! `"role": "tune"` and a font.
 //! Evaluation fixtures are never used here.
 //!
 //! - The text styles of the student screen (`tests/fixtures/students.json`,

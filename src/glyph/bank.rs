@@ -1,6 +1,7 @@
 //! The glyph bank: the reference pictures of the texts Aoi reads, each a grey
-//! tile of one picture (`data/glyphs.png`), with what the tiles stand for
-//! (`data/glyphs.json`). `examples/build_glyphs.rs` writes both from the
+//! tile of one picture (`data/glyphs-<width>.png`, one for each width read at,
+//! see `files`), with what the tiles stand for (`data/glyphs-<width>.json`).
+//! `examples/build_glyphs.rs` writes both from the
 //! tuning fixtures and, for the students' names, from a font. Small grey tiles
 //! in a PNG keep the bank small on disk and in memory, and need no decoder
 //! besides the one the screenshots use.
@@ -81,13 +82,6 @@ pub struct Bank {
 }
 
 impl Bank {
-    /// The bank kept under `data` (the crate's `data` directory).
-    pub fn load(data: &std::path::Path) -> Result<Self, String> {
-        let read = |name: &str| std::fs::read(data.join(name)).map_err(|e| format!("{name}: {e}"));
-        let index = String::from_utf8(read("glyphs.json")?).map_err(|e| e.to_string())?;
-        Self::decode(&read("glyphs.png")?, &index)
-    }
-
     /// The bank from its picture (a PNG) and its index (JSON).
     pub fn decode(png: &[u8], index: &str) -> Result<Self, String> {
         let index: Index = serde_json::from_str(index).map_err(|e| e.to_string())?;
