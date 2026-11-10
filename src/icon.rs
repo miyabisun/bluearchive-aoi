@@ -133,8 +133,10 @@ const BACKGROUND_ROOM: i64 = 2;
 
 struct Template {
     width: u32,
-    /// Colour of each pixel taking part in the comparison, row by row.
-    grid: Vec<Option<Rgb>>,
+    /// Colour of each pixel taking part in the comparison, row by row: as the picture's
+    /// bytes (4 a pixel where the numbers compared took 16; the two catalogs' templates held
+    /// 165 MB of the app's 200 so, 2026-11-10).
+    grid: Vec<Option<[u8; 3]>>,
     /// Where the card shows behind the icon, `BACKGROUND_ROOM` from the drawing.
     clear: Vec<bool>,
 }
@@ -148,10 +150,7 @@ impl Template {
         };
         let grid = small
             .enumerate_pixels()
-            .map(|(x, y, p)| {
-                (p.0[3] >= OPAQUE && !covered(x, y))
-                    .then(|| [f32::from(p.0[0]), f32::from(p.0[1]), f32::from(p.0[2])])
-            })
+            .map(|(x, y, p)| (p.0[3] >= OPAQUE && !covered(x, y)).then(|| [p.0[0], p.0[1], p.0[2]]))
             .collect();
         let bare = |x: i64, y: i64| {
             let inside = (0..i64::from(width)).contains(&x) && (0..i64::from(height)).contains(&y);
@@ -197,11 +196,11 @@ impl Template {
         (0u32..)
             .zip(&self.grid)
             .skip((from * self.width) as usize)
-            .filter_map(|(i, p)| p.map(|rgb| (i % self.width, i / self.width, rgb)))
+            .filter_map(|(i, p)| p.map(|rgb| (i % self.width, i / self.width, rgb.map(f32::from))))
     }
 
     fn at(&self, x: u32, y: u32) -> Option<Rgb> {
-        self.grid[(y * self.width + x) as usize]
+        self.grid[(y * self.width + x) as usize].map(|rgb| rgb.map(f32::from))
     }
 
     /// How far the average hue of `image` under the icon is from the icon's own:
