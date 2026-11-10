@@ -138,6 +138,12 @@ const GEAR_TIER: Area = on_panel((0.447, 0.402), (0.851, 0.883));
 /// area (measured on 2026-10-15 over the student fixtures, down to 1280 wide:
 /// none without one; 0.105 or more with one).
 const ABILITY_BADGE: f32 = 0.03;
+/// A pixel darker than this share of an `ABILITY` row's ground (its 90th percentile of
+/// brightness) is dark; a row with no badge holds less than `NO_BADGE` of them. Measured on
+/// 2026-11-10 over the student fixtures: the stat's text alone 0.105 to 0.195 of the row,
+/// with a badge 0.311 to 0.362.
+const DARKER: f32 = 0.75;
+const NO_BADGE: f32 = 0.25;
 /// The badge's blue covers at least this share of `GEAR_TIER` where there is a
 /// favorite item (measured on 2026-10-14 over the student fixtures: none
 /// without one; 0.19 to 0.27 with one, 0.19 on a phone's H.264 video).
@@ -359,28 +365,101 @@ fn count(image: &RgbImage, area: Area, ink: Ink) -> Option<usize> {
     )
 }
 
+/// The brightness of `rect`'s pixels, the darkest first.
+fn levels(image: &RgbImage, (x0, y0, x1, y1): Rect) -> Vec<f32> {
+    let mut levels: Vec<f32> = (y0..y1)
+        .flat_map(|y| (x0..x1).map(move |x| (x, y)))
+        .map(|(x, y)| luminance(image.get_pixel(x, y).0))
+        .collect();
+    levels.sort_by(f32::total_cmp);
+    levels
+}
+
+/// The level `share` of the way up `levels` (sorted), 0 for none.
+fn level_at(levels: &[f32], share: f32) -> f32 {
+    let at = (levels.len().saturating_sub(1) as f32 * share) as usize;
+    levels.get(at).copied().unwrap_or(0.0)
+}
+
+/// Whether `rect` holds its ground alone, nothing drawn on it: all but a twentieth of its
+/// pixels at either end lie within `PLAIN` of `bright` (the brightness of what is drawn
+/// around it) of each other. A badge or a star whose colour came off (a stream dimmer or
+/// paler than the game) is still drawn there: where it may be, nothing is read for "none".
+fn plain(image: &RgbImage, rect: Rect, bright: f32) -> bool {
+    let levels = levels(image, rect);
+    level_at(&levels, 0.95) - level_at(&levels, 0.05) <= PLAIN * bright
+}
+
+/// How far apart a plain ground's pixels lie, as a share of the brightness around.
+/// Measured on 2026-11-10 over the student fixtures: an empty favourite-item slot and a
+/// locked weapon's row within 0.01, the name plate left of four stars within 0.11; a slot
+/// with its item, a row with stars, 0.5 or more.
+const PLAIN: f32 = 0.2;
+
 /// How many stars of `ink` stand in a row in `area`, `pitch` window heights
-/// apart: counted from the right one, a place at a time, while the place holds
-/// a star's worth of ink. A picture beside the row (Eimi's gun hangs a tag
-/// left of her weapon's stars) is never taken for one.
-fn stars(image: &RgbImage, area: Area, ink: Ink, pitch: f32) -> Option<u8> {
+/// apart, `most` at most: counted from the right one, a place at a time, while
+/// the place holds a star's worth of ink. A picture beside the row (Eimi's gun
+/// hangs a tag left of her weapon's stars) is never taken for one. The count
+/// stands where the row shows it ends: the place past the last star holds
+/// nothing `like` a star (or the row has no room for more, or none where the
+/// row's right end is plain); a star there whose colour was not told would
+/// count short, so then unknown.
+fn stars(
+    image: &RgbImage,
+    area: Area,
+    (ink, like): (Ink, Like),
+    pitch: f32,
+    most: u8,
+) -> Option<u8> {
     let (x0, y0, x1, y1) = rect(image, area)?;
+    let bright = level_at(&levels(image, (x0, y0, x1, y1)), 0.95);
     let inked = |x: u32| (y0..y1).filter(|&y| ink(image.get_pixel(x, y).0)).count();
-    let Some(right) = (x0..x1).rev().find(|&x| inked(x) > 0) else {
-        return Some(0);
-    };
     let step = pitch * screen::unit(image.width(), image.height());
-    let star = |k: u8| {
+    let Some(right) = (x0..x1).rev().find(|&x| inked(x) > 0) else {
+        // Where the first stars stand, at the row's right end (one star alone is too
+        // little of the whole row to show).
+        let first = (x1 as f32 - 2.0 * step).max(x0 as f32) as u32;
+        return plain(image, (first, y0, x1, y1), bright).then_some(0);
+    };
+    let place = |k: u8| {
         let end = right as f32 + 1.0 - f32::from(k) * step;
         let start = end - step;
-        if start < x0 as f32 {
-            return false;
-        }
-        let ink: usize = (start as u32..end as u32).map(inked).sum();
-        ink as f32 >= STAR_SHARE * step * (y1 - y0) as f32
+        (start >= x0 as f32).then_some((start as u32, end as u32))
     };
-    Some((0..=u8::MAX).take_while(|&k| star(k)).count() as u8)
+    let star = |k: u8| {
+        place(k).is_some_and(|(start, end)| {
+            let ink: usize = (start..end).map(inked).sum();
+            ink as f32 >= STAR_SHARE * step * (y1 - y0) as f32
+        })
+    };
+    let count = (0..most).take_while(|&k| star(k)).count() as u8;
+    let ends = count == most
+        || place(count).is_none_or(|(start, end)| {
+            let alike = (start..end)
+                .flat_map(|x| (y0..y1).map(move |y| (x, y)))
+                .filter(|&(x, y)| like(image.get_pixel(x, y).0, bright))
+                .count();
+            (alike as f32) < STAR_SHARE * step * (y1 - y0) as f32
+        });
+    ends.then_some(count)
 }
+
+/// Whether a pixel is of a star's colour, however dim or pale it came, beside the
+/// brightness of what is drawn around it: what a place holds that was not counted as a
+/// star, yet may be one (a weapon's picture reaching into the row is grey, no star).
+type Like = fn([u8; 3], f32) -> bool;
+/// A rarity star's yellow: red well over its blue (drawn (255, 238, 0); paled to a half,
+/// the blue is still under half the red).
+const LIKE_STAR: Like =
+    |c, bright| f32::from(c[0]) >= 0.6 * bright && f32::from(c[0]) * 0.7 >= f32::from(c[2]);
+/// A weapon star's light blue: blue over its red (drawn about (150, 235, 255); paled to a
+/// half, the red is still under 0.8 of the blue).
+const LIKE_WEAPON_STAR: Like =
+    |c, bright| f32::from(c[2]) >= 0.6 * bright && f32::from(c[2]) * 0.85 >= f32::from(c[0]);
+
+/// The most stars a student's rarity and a unique weapon come to (the weapon's four so
+/// far; five is said to be the most there will be).
+const MOST_STARS: u8 = 5;
 
 /// Rarity stars stand this far apart (window heights). Measured on
 /// 2026-10-12 at 1250 high: 3, 4 and 5 stars span 77, 101 and 124 pixels.
@@ -408,7 +487,13 @@ pub fn read(image: &RgbImage, fonts: &Fonts) -> Training {
         number(image, fonts, "skill", "Lv", area).filter(|&n| (1..SKILL_MAX[i]).contains(&n))
     };
     let weapon_level = number(image, fonts, "weapon", "Lv", WEAPON_LEVEL);
-    let weapon_stars = stars(image, WEAPON_STARS, WEAPON_STAR, WEAPON_PITCH);
+    let weapon_stars = stars(
+        image,
+        WEAPON_STARS,
+        (WEAPON_STAR, LIKE_WEAPON_STAR),
+        WEAPON_PITCH,
+        MOST_STARS,
+    );
     let weapon = match (weapon_level, weapon_stars) {
         (None, Some(0)) => Some(None),
         // Four stars so far; five is said to be the most there will be.
@@ -419,27 +504,33 @@ pub fn read(image: &RgbImage, fonts: &Fonts) -> Training {
         let tier = number(image, fonts, "tier", "T", EQUIPMENT_TIER[i])?;
         Some(Gear { tier })
     };
-    // Not released where the badge's slate is missing; a badge whose text
-    // does not read is unknown.
+    // Not released where the row shows no badge: none of its slate, and only
+    // the stat's thin text dark on it (a badge whose colour came off is a dark
+    // block still, then unknown). A badge whose text does not read is unknown.
     let ability = |i: usize| -> Option<u8> {
         let (x0, y0, x1, y1) = rect(image, ABILITY[i])?;
         let slate = count(image, ABILITY[i], SLATE)?;
         if (slate as f32) < ABILITY_BADGE * ((x1 - x0) * (y1 - y0)) as f32 {
-            return Some(0);
+            let levels = levels(image, (x0, y0, x1, y1));
+            let dark = DARKER * level_at(&levels, 0.9);
+            let share = levels.partition_point(|&level| level < dark) as f32 / levels.len() as f32;
+            return (share < NO_BADGE).then_some(0);
         }
         text(image, fonts, "ability", ABILITY[i])?
             .strip_prefix("Lv")?
             .parse()
             .ok()
     };
-    // No favorite item where its badge's blue is missing; a badge whose tier
-    // does not read (a video's blur) is unknown, not missing.
+    // No favorite item where its slot is plain, none of the badge's blue in
+    // it; a badge whose tier does not read (a video's blur), or whose blue
+    // came off, is unknown, not missing.
     let badge = rect(image, GEAR_TIER).zip(count(image, GEAR_TIER, BLUE));
     let gear = match badge {
         Some(((x0, y0, x1, y1), blue))
             if (blue as f32) < GEAR_BADGE * ((x1 - x0) * (y1 - y0)) as f32 =>
         {
-            Some(0)
+            let slot = (x0, y0, x1, y1);
+            plain(image, slot, level_at(&levels(image, slot), 0.95)).then_some(0)
         }
         Some(_) => {
             text(image, fonts, "tier", GEAR_TIER).and_then(|t| t.strip_prefix('T')?.parse().ok())
@@ -461,7 +552,8 @@ pub fn read(image: &RgbImage, fonts: &Fonts) -> Training {
 pub fn plate(image: &RgbImage, fonts: &Fonts) -> Training {
     Training {
         level: level(image, fonts),
-        rarity: stars(image, RARITY, STAR, RARITY_PITCH).filter(|n| (1..=5).contains(n)),
+        rarity: stars(image, RARITY, (STAR, LIKE_STAR), RARITY_PITCH, MOST_STARS)
+            .filter(|n| *n >= 1),
         bond: number(image, fonts, "bond", "", BOND),
         skills: [None; 4],
         weapon: None,

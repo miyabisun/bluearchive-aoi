@@ -438,3 +438,52 @@ fn the_level_up_tab_reads_the_name_plate() {
     assert_eq!(read.gear, None);
     assert_eq!(read.ability, [None; 3]);
 }
+
+/// A screen come dimmer or paler than it was drawn (a stream's colours off) reads its fields
+/// right or not at all: a badge or a star whose colour is lost is not taken for none. Measured
+/// on 2026-11-10 over these screens: dimmed to 0.8, 74 fields read wrong (an ability release
+/// "0" for 25), paled to 0.75, 51 (a rarity 4 for 5), each for a colour not found.
+#[test]
+fn a_dim_or_pale_screen_reads_fields_right_or_not_at_all() {
+    type Off = fn([f32; 3]) -> [f32; 3];
+    fn paled(c: [f32; 3], share: f32) -> [f32; 3] {
+        let luma = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+        c.map(|v| luma + (v - luma) * share)
+    }
+    let ways: [(&str, Off); 4] = [
+        ("dimmed to 0.8", |c| c.map(|v| v * 0.8)),
+        ("dimmed to 0.7", |c| c.map(|v| v * 0.7)),
+        ("paled to 0.75", |c| paled(c, 0.75)),
+        ("paled to 0.5", |c| paled(c, 0.5)),
+    ];
+    let recognizer = recognizer();
+    let mut wrong = Vec::new();
+    for label in labels() {
+        let drawn = image::open(root().join("tests/fixtures").join(&label.image))
+            .unwrap()
+            .to_rgb8();
+        for (way, off) in ways {
+            let mut image = drawn.clone();
+            for pixel in image.pixels_mut() {
+                pixel.0 = off(pixel.0.map(f32::from)).map(|v| v.round().clamp(0.0, 255.0) as u8);
+            }
+            let image = aoi::screen::normalize(&image).into_owned();
+            let read = fields(&student::read(&image, recognizer.references(&image).1));
+            for ((name, got), (_, want)) in read.into_iter().zip(fields(&label.training())) {
+                // A slot the label leaves out is not read for.
+                if got.is_some() && want.is_some() && got != want {
+                    wrong.push(format!(
+                        "{way}: {} {name}: read {got:?}, is {want:?}",
+                        label.image
+                    ));
+                }
+            }
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "{} wrong\n{}",
+        wrong.len(),
+        wrong.join("\n")
+    );
+}
