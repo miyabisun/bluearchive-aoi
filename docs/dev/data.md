@@ -105,8 +105,9 @@ Whenever something read changes, Aoi writes everything read so far to
 `Documents\Aoi\aoi.yaml`, headed by when each list was last read, and keeps it for its
 next run with the students marked for training and their targets
 (`%APPDATA%\io.github.miyabisun.bluearchive-aoi\state.json`). A list read again replaces
-what it showed, entry by entry. **YAMLを書き出す**, in the menu, writes the same as
-`Documents\Aoi\aoi-<date>-<time>.yaml`.
+what it showed, entry by entry. **データを保存**, on the settings page, writes the same as
+`Documents\Aoi\aoi-<date>-<time>.yaml`, ending with a line (`aoi_state`) of everything kept; **データを復元**
+puts back what a file chosen there kept and starts the app again.
 
 <!-- prettier-ignore -->
 ```yaml

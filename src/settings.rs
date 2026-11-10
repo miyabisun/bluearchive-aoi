@@ -20,14 +20,44 @@ pub enum ThemeChoice {
 impl ThemeChoice {
     /// The menu's choices, in order, with their names.
     pub const ALL: [(Self, &'static str); 3] = [
+        (Self::Auto, "自動"),
         (Self::Light, "ライト"),
         (Self::Dark, "ダーク"),
-        (Self::Auto, "自動"),
     ];
 }
 
 /// The mouse cursor (the user's of 2026-11-03): Windows' own (the default), or an
 /// arrow after the game's in blue, red or green.
+/// Where the game is read from (the settings page's 配信方法).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Feed {
+    /// The PC's game, its window captured (Windows alone runs it).
+    Window,
+    /// An Android phone's screen over ADB.
+    Phone,
+    /// A streaming app's stream.
+    Cast,
+}
+
+impl Feed {
+    /// The choices offered where the app runs, with their names, the default first.
+    pub fn offered() -> &'static [(Self, &'static str)] {
+        const ALL: [(Feed, &str); 3] = [
+            (Feed::Window, "PC版アプリ"),
+            (Feed::Phone, "Androidとの通信"),
+            (Feed::Cast, "配信アプリとの連携"),
+        ];
+        if cfg!(windows) { &ALL } else { &ALL[1..] }
+    }
+}
+
+impl Default for Feed {
+    fn default() -> Self {
+        Self::offered()[0].0
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CursorChoice {
@@ -80,6 +110,8 @@ pub struct Settings {
     pub theme: ThemeChoice,
     pub cursor: CursorChoice,
     pub work_follow: bool,
+    /// Where the game is read from; none chosen yet in a file of before it was asked.
+    pub feed: Option<Feed>,
     pub window: Option<Placement>,
 }
 
@@ -89,6 +121,7 @@ impl Default for Settings {
             theme: ThemeChoice::Auto,
             cursor: CursorChoice::None,
             work_follow: true,
+            feed: None,
             window: None,
         }
     }
@@ -114,6 +147,11 @@ impl Settings {
         }
         if let Some(serde_json::Value::Bool(follow)) = fields.get("work_follow") {
             settings.work_follow = *follow;
+        }
+        if let Some(feed) = fields.get("feed") {
+            settings.feed = Feed::deserialize(feed.clone())
+                .ok()
+                .filter(|feed| Feed::offered().iter().any(|(offered, _)| offered == feed));
         }
         if let Some(window) = fields.get("window") {
             settings.window = Placement::deserialize(window.clone())
@@ -153,6 +191,7 @@ mod tests {
             theme: ThemeChoice::Light,
             cursor: CursorChoice::Green,
             work_follow: false,
+            feed: Some(Feed::Phone),
             window: None,
         };
         let text = serde_json::to_string(&kept).unwrap();
@@ -208,5 +247,36 @@ mod tests {
             Settings::default(),
             "nothing readable"
         );
+    }
+
+    /// The theme's choices as the settings page lists them: what follows the system first
+    /// (the user's of 2026-11-10: 「自動が一番上であるべき」).
+    #[test]
+    fn the_theme_follows_the_system_first() {
+        let names: Vec<&str> = ThemeChoice::ALL.iter().map(|(_, name)| *name).collect();
+        assert_eq!(names, ["自動", "ライト", "ダーク"]);
+    }
+
+    /// Where the game is read from is kept; a file of before it was asked keeps none, and
+    /// one naming what is not offered here (the PC's game on a Mac) none either.
+    #[test]
+    fn where_the_game_is_read_from_is_kept() {
+        assert_eq!(Settings::parse(r#"{"theme":"dark"}"#).feed, None);
+        assert_eq!(Settings::parse(r#"{"feed":"cast"}"#).feed, Some(Feed::Cast));
+        assert_eq!(Settings::parse(r#"{"feed":"tv"}"#).feed, None);
+        let window = Settings::parse(r#"{"feed":"window"}"#).feed;
+        assert_eq!(window, cfg!(windows).then_some(Feed::Window));
+        // The PC's game where there is one, first and by default; else a phone.
+        let offered: Vec<&str> = Feed::offered().iter().map(|(_, name)| *name).collect();
+        if cfg!(windows) {
+            assert_eq!(
+                offered,
+                ["PC版アプリ", "Androidとの通信", "配信アプリとの連携"]
+            );
+            assert_eq!(Feed::default(), Feed::Window);
+        } else {
+            assert_eq!(offered, ["Androidとの通信", "配信アプリとの連携"]);
+            assert_eq!(Feed::default(), Feed::Phone);
+        }
     }
 }

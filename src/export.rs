@@ -141,6 +141,31 @@ pub fn reserved_yaml(
     })
 }
 
+/// The key of a saved file's last line.
+const STATE: &str = "aoi_state";
+
+/// The line a saved file ends with: everything kept, as the app keeps it (JSON, which YAML
+/// reads as it stands), for `restore`.
+pub fn state(kept: &crate::keep::Kept) -> String {
+    let json = serde_json::to_string(kept).unwrap_or_else(|_| "null".to_owned());
+    format!("# 以下は「データを復元」が読む行です。書き換えないでください。\n{STATE}: {json}\n")
+}
+
+/// What a saved file (`yaml` with its `state` line) kept; why not, for a file without it.
+pub fn restore(yaml: &str) -> Result<crate::keep::Kept, String> {
+    let file: serde_yaml::Value =
+        serde_yaml::from_str(yaml).map_err(|e| format!("YAML として読めません: {e}"))?;
+    let kept = file.get(STATE).ok_or(
+        "復元用のデータがありません（v0.3.22 より前に書き出したファイルは復元できません）",
+    )?;
+    // Through JSON: its maps are keyed by ids written as strings.
+    let kept = serde_json::to_value(kept).map_err(|e| e.to_string())?;
+    if !kept.is_object() {
+        return Err("復元用のデータが壊れています".to_owned());
+    }
+    serde_json::from_value(kept).map_err(|e| format!("復元用のデータが壊れています: {e}"))
+}
+
 /// A list under `key`, one mapping per entry with the fields `fields` gives.
 fn list<T>(key: &str, entries: &[T], fields: impl Fn(&T) -> Vec<String>) -> String {
     if entries.is_empty() {
@@ -463,5 +488,43 @@ shops: []
             text.lines().any(|l| l == r#"    name: "Lv: \"MAX\" #1""#),
             "{text}"
         );
+    }
+
+    /// What is saved comes back as it was kept: the readable lists are for a reader, the
+    /// line under `aoi_state` for the restoring.
+    #[test]
+    fn what_is_saved_restores_as_it_was_kept() {
+        use crate::{keep::Kept, quantity::Count};
+        let mut kept = Kept {
+            credits: Some(243_797_319),
+            ..Kept::default()
+        };
+        kept.items.insert(110, Count::Exact(1875));
+        kept.items.insert(5, Count::Thousands(51));
+        kept.equipment.insert(2, Count::Exact(3));
+        kept.read_at.items = Some("2026-11-10 12:00:00".to_owned());
+        kept.reserved.insert(crate::strategy::Reserve {
+            shop: "総力戦".to_owned(),
+            id: 9999,
+            coin: "総力戦コイン".to_owned(),
+        });
+        let saved = format!(
+            "# Aoi の読み取り結果\ncredits: 243797319\nitems: []\n{}",
+            state(&kept)
+        );
+        assert_eq!(restore(&saved), Ok(kept));
+    }
+
+    /// A file that is no save of Aoi's restores nothing, and says why.
+    #[test]
+    fn a_file_without_what_was_kept_restores_nothing() {
+        let old = "# Aoi の読み取り結果\ncredits: 5\nitems: []\n";
+        assert!(
+            restore(old)
+                .unwrap_err()
+                .contains("復元用のデータがありません")
+        );
+        assert!(restore("aoi_state: 7\n").is_err());
+        assert!(restore("{ not yaml").is_err());
     }
 }

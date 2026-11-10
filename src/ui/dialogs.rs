@@ -1,16 +1,16 @@
-//! The dialogs over the window: the link to a phone (paired by a QR code, then connected or
-//! not) and waiting for a streaming app (a QR code to send the phone's screen to). Their face is
-//! the menu's, over the window darkened.
+//! Where a phone's screen comes from, as the settings page shows it under the feed chosen: the
+//! link to a phone (paired by a QR code, then connected or not) and waiting for a streaming app
+//! (a QR code to send the phone's screen to).
 
 use gpui::{
     AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
-    Role, SharedString, StatefulInteractiveElement as _, Styled as _, canvas, deferred, div, fill,
-    point, prelude::FluentBuilder as _, px, rgb, size,
+    Role, SharedString, StatefulInteractiveElement as _, Styled as _, canvas, div, fill, point,
+    prelude::FluentBuilder as _, px, rgb, size,
 };
 
 use super::{
-    Aoi, CastCode, Dialog,
-    theme::{FS_SM, FS_TITLE, RADIUS_SM, SP_1, SP_2, SP_3, SP_4, Theme, backdrop},
+    Aoi, CastCode,
+    theme::{FS_SM, SP_1, SP_2, SP_3, Theme},
     widgets::{outlined_button, text},
 };
 use crate::{android::Link, broadcast::Cast, view};
@@ -91,7 +91,7 @@ impl Aoi {
             .when(open, |help| help.child(div().mt(SP_2).child(text(body))))
     }
 
-    fn phone_dialog(&mut self, theme: &Theme, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    pub(super) fn phone_link(&mut self, theme: &Theme, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let phone = self.shown.phone.clone();
         let mut parts = vec![
             div()
@@ -160,11 +160,11 @@ impl Aoi {
                     .into_any_element(),
             ),
         }
-        parts.push(Self::dialog_actions(actions, theme, cx).into_any_element());
+        parts.push(actions_row(actions).into_any_element());
         parts
     }
 
-    fn cast_dialog(&mut self, theme: &Theme, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    pub(super) fn cast_link(&mut self, theme: &Theme, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let cast = self.shown.cast.clone();
         let mut parts = vec![
             div()
@@ -282,79 +282,12 @@ impl Aoi {
             Cast::Off => outlined_button(theme, "wait", "待ち受ける", true)
                 .on_click(cx.listener(|this, _, _, _| this.core.wait_for_stream(true))),
         };
-        parts.push(
-            Self::dialog_actions(vec![action.into_any_element()], theme, cx).into_any_element(),
-        );
+        parts.push(actions_row(vec![action.into_any_element()]).into_any_element());
         parts
     }
+}
 
-    /// A dialog's buttons at its right foot, the close button last.
-    fn dialog_actions(
-        mut actions: Vec<AnyElement>,
-        theme: &Theme,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        actions.push(
-            outlined_button(theme, "close-dialog", "閉じる", false)
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.dialog = None;
-                    cx.notify();
-                }))
-                .into_any_element(),
-        );
-        div()
-            .flex()
-            .flex_wrap()
-            .justify_end()
-            .gap(SP_2)
-            .children(actions)
-    }
-
-    pub(super) fn dialog_view(
-        &mut self,
-        dialog: Dialog,
-        theme: &Theme,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let (title, body) = match dialog {
-            Dialog::Phone => ("Androidとの通信", self.phone_dialog(theme, cx)),
-            Dialog::Cast => ("配信アプリとの連携", self.cast_dialog(theme, cx)),
-        };
-        deferred(
-            div()
-                .absolute()
-                .inset_0()
-                .flex()
-                .items_center()
-                .justify_center()
-                .bg(backdrop())
-                .occlude()
-                .child(
-                    div()
-                        .id(SharedString::from(format!("dialog-{title}")))
-                        .role(Role::Dialog)
-                        .aria_label(title)
-                        .w(px(480.))
-                        .max_w(gpui::relative(0.95))
-                        .max_h(gpui::relative(0.95))
-                        .overflow_y_scroll()
-                        .p(SP_4)
-                        .border_1()
-                        .border_color(theme.border)
-                        .rounded(RADIUS_SM)
-                        .bg(theme.surface)
-                        .text_color(theme.on_surface)
-                        .child(
-                            div()
-                                .mb(SP_3)
-                                .text_size(FS_TITLE)
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child(text(title)),
-                        )
-                        .children(body),
-                ),
-        )
-        .with_priority(3)
-        .into_any_element()
-    }
+/// A link's buttons in a row under it.
+fn actions_row(actions: Vec<AnyElement>) -> impl IntoElement {
+    div().flex().flex_wrap().gap(SP_2).children(actions)
 }

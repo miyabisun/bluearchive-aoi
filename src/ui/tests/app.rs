@@ -380,7 +380,7 @@ fn shows_why_the_capture_failed(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn puts_the_tabs_the_status_and_the_menu_on_one_row(cx: &mut TestAppContext) {
+fn puts_the_tabs_the_status_and_the_settings_on_one_row(cx: &mut TestAppContext) {
     let (_, core, vcx) = open(cx, &Kept::default());
     set(&core, vcx, |s| s.status = reading(Screen::Shops, 20.));
     let middle = |vcx: &mut gpui::VisualTestContext, selector: &str| {
@@ -390,32 +390,11 @@ fn puts_the_tabs_the_status_and_the_menu_on_one_row(cx: &mut TestAppContext) {
             .y
     };
     let row = middle(vcx, "tab:アイテム");
-    for other in ["tab:お仕事", "status", "menu-button"] {
+    for other in ["tab:お仕事", "status", "settings-button"] {
         let y = middle(vcx, other);
         assert!((y - row).abs() < gpui::px(4.), "{other} on the tabs' row");
     }
     assert!(!shows(vcx, "Aoi"), "the title bar names the app");
-}
-
-#[gpui::test]
-fn writes_everything_read_to_a_file_and_tells_where(cx: &mut TestAppContext) {
-    let (_, core, vcx) = open(cx, &Kept::default());
-    set(&core, vcx, |s| s.items = items());
-    click(vcx, "menu-button");
-    click(vcx, "menu-export");
-    let written = std::fs::read_dir(&core.places.exports)
-        .expect("the export folder")
-        .count();
-    assert_eq!(written, 1, "one file written");
-    assert!(has(vcx, "exported"), "and where it is told");
-}
-
-#[gpui::test]
-fn has_nothing_to_export_before_anything_is_read(cx: &mut TestAppContext) {
-    let (_, _core, vcx) = open(cx, &Kept::default());
-    click(vcx, "menu-button");
-    click(vcx, "menu-export");
-    assert!(!has(vcx, "exported"), "nothing written");
 }
 
 #[gpui::test]

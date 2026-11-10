@@ -474,16 +474,47 @@ impl Core {
         });
     }
 
-    /// Writes everything read to `<Documents>\Aoi\aoi-<date>-<time>.yaml`; the path
-    /// written, or why it could not be.
+    /// Saves everything read to `<Documents>\Aoi\aoi-<date>-<time>.yaml`, readable lists
+    /// and the line `restore` reads; the path written, or why it could not be.
     pub fn export(&self) -> Result<String, String> {
         let snapshot = self.snapshot();
         let path = self.places.exports.join(format!(
             "aoi-{}.yaml",
             chrono::Local::now().format("%Y%m%d-%H%M%S")
         ));
-        keep::write(&path, snapshot.yaml(&now()).as_bytes())?;
+        let saved = snapshot.yaml(&now()) + &export::state(&snapshot.kept());
+        keep::write(&path, saved.as_bytes())?;
         Ok(path.display().to_string())
+    }
+
+    /// The files saved (see `export`), by name, the newest first.
+    pub fn saved(&self) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(&self.places.exports)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|entry| entry.file_name().into_string().ok())
+            .filter(|name| {
+                name.starts_with("aoi-")
+                    && std::path::Path::new(name)
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("yaml"))
+            })
+            .collect();
+        names.sort_by(|a, b| b.cmp(a));
+        names
+    }
+
+    /// Puts back what the saved file `name` kept, for the app to start again over: the
+    /// reading is paused first, so nothing read meanwhile is kept over it. A file that is no
+    /// save changes nothing; why not.
+    pub fn restore(&self, name: &str) -> Result<(), String> {
+        let path = self.places.exports.join(name);
+        let saved =
+            std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let kept = export::restore(&saved)?;
+        self.set_paused(true);
+        keep::save(&self.places.state, &kept)
     }
 
     /// Pauses reading the game, or resumes it; the status tells which.

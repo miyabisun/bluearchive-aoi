@@ -12,6 +12,7 @@ pub mod icons;
 mod items;
 mod parts;
 mod plan;
+mod setup;
 mod shops;
 mod students;
 #[cfg(test)]
@@ -32,14 +33,14 @@ use gpui::{
     App, AppContext as _, AsyncApp, Bounds, Context, Entity, FocusHandle, Focusable, FontWeight,
     InteractiveElement as _, IntoElement, KeyBinding, ParentElement as _, Pixels, Render,
     ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled as _, Task,
-    TitlebarOptions, WeakEntity, Window, WindowBounds, WindowOptions, actions, anchored, deferred,
-    div, point, prelude::FluentBuilder as _, px, size,
+    TitlebarOptions, WeakEntity, Window, WindowBounds, WindowOptions, actions, div, point,
+    prelude::FluentBuilder as _, px, size,
 };
 
 use crate::{
     Recognizer,
     app::{Core, Places, Snapshot, UpdateCheck},
-    settings::{CursorChoice, Placement, Settings, ThemeChoice, WORK_FOLLOW},
+    settings::{Placement, Settings},
     view,
 };
 
@@ -120,6 +121,8 @@ pub enum UpdateState {
 pub struct Updates {
     pub check: fn() -> Result<UpdateCheck, String>,
     pub apply: fn() -> Result<(), String>,
+    /// Starts the app again, as the version taken or over what was restored.
+    pub restart: fn(),
 }
 
 impl Default for Updates {
@@ -127,15 +130,9 @@ impl Default for Updates {
         Self {
             check: crate::app::check_update,
             apply: crate::app::apply_update,
+            restart: || crate::app::restart(),
         }
     }
-}
-
-/// A dialog over the window.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Dialog {
-    Phone,
-    Cast,
 }
 
 /// The QR code shown while waiting for a streaming app: Moblin's link or the plain URL.
@@ -160,8 +157,12 @@ pub struct Aoi {
     tab: Tab,
     items_sub: items::Sub,
     equipment_sub: equipment::Sub,
-    menu_open: bool,
-    menu_focus: FocusHandle,
+    /// Whether the settings page shows in the tabs' place.
+    settings_open: bool,
+    /// The saved file chosen to restore, until the user says so or not.
+    restoring: Option<String>,
+    /// Why the last file chosen was not restored.
+    restore_error: Option<String>,
     /// The window's own focus, where it starts (the search field is not focused at start).
     root_focus: FocusHandle,
     /// Whether the cursor can be changed here (Windows), so the menu offers it.
@@ -187,7 +188,6 @@ pub struct Aoi {
     star_menu: Option<StarMenu>,
     /// The fields of the targets being typed, by student and column.
     target_fields: HashMap<(i64, usize), Entity<TextInput>>,
-    dialog: Option<Dialog>,
     cast_code: CastCode,
     content: ScrollHandle,
     /// A held chip paying again and again.
@@ -235,8 +235,9 @@ impl Aoi {
             tab: Tab::Items,
             items_sub: items::Sub::All,
             equipment_sub: equipment::Sub::All,
-            menu_open: false,
-            menu_focus: cx.focus_handle(),
+            settings_open: false,
+            restoring: None,
+            restore_error: None,
             root_focus: cx.focus_handle(),
             cursor_shown,
             query,
@@ -253,7 +254,6 @@ impl Aoi {
             paid_for,
             star_menu: None,
             target_fields: HashMap::new(),
-            dialog: None,
             cast_code: CastCode::Moblin,
             content: ScrollHandle::new(),
             repeating: None,
@@ -400,7 +400,7 @@ impl Aoi {
                 Ok(()) if check.installs => {
                     // The cursor chosen is put back in by the window of the new version.
                     this.core.set_cursor(None);
-                    crate::app::restart();
+                    (this.updates.restart)();
                 }
                 Ok(()) => {}
                 Err(error) => {
@@ -420,30 +420,6 @@ impl Aoi {
     fn toggle_fold(&mut self, key: &str, cx: &mut Context<Self>) {
         if !self.opened.remove(key) {
             self.opened.insert(key.to_owned());
-        }
-        cx.notify();
-    }
-
-    fn open_dialog(&mut self, dialog: Dialog, cx: &mut Context<Self>) {
-        self.menu_open = false;
-        self.dialog = Some(dialog);
-        match dialog {
-            Dialog::Phone => {
-                if matches!(
-                    self.shown.phone,
-                    crate::android::Link::Unpaired | crate::android::Link::Failed { .. }
-                ) {
-                    self.core.pair_phone(true);
-                }
-            }
-            Dialog::Cast => {
-                if matches!(
-                    self.shown.cast,
-                    crate::broadcast::Cast::Off | crate::broadcast::Cast::Failed { .. }
-                ) {
-                    self.core.wait_for_stream(true);
-                }
-            }
         }
         cx.notify();
     }
@@ -469,7 +445,7 @@ impl Aoi {
             .px(SP_1)
             .overflow_x_scroll()
             .children(Tab::ALL.into_iter().map(|tab| {
-                let selected = self.tab == tab;
+                let selected = self.tab == tab && !self.settings_open;
                 let name = if tab == Tab::Students && students > 0 {
                     format!("{} {students}", tab.name())
                 } else {
@@ -515,6 +491,7 @@ impl Aoi {
                     })
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.tab = tab;
+                        this.settings_open = false;
                         cx.notify();
                     }))
             }));
@@ -575,12 +552,12 @@ impl Aoi {
                 this.core.set_paused(!paused);
                 cx.notify();
             }));
-        let menu_button = div()
-            .id("menu-button")
-            .debug_selector(|| "menu-button".to_owned())
+        let settings_button = div()
+            .id("settings-button")
+            .debug_selector(|| "settings-button".to_owned())
             .role(gpui::Role::Button)
-            .aria_label("メニュー")
-            .when(self.menu_open, |b| b.aria_description("開いています"))
+            .aria_label("設定")
+            .when(self.settings_open, |b| b.aria_description("開いています"))
             .tab_stop(true)
             .flex()
             .flex_none()
@@ -590,11 +567,10 @@ impl Aoi {
             .rounded(RADIUS_SM)
             .cursor_pointer()
             .child(glyph(Glyph::Menu, px(20.), theme.on_surface))
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.menu_open = !this.menu_open;
-                if this.menu_open {
-                    this.menu_focus.focus(window, cx);
-                }
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.settings_open = !this.settings_open;
+                this.restoring = None;
+                this.restore_error = None;
                 cx.notify();
             }));
         div()
@@ -617,150 +593,8 @@ impl Aoi {
                             .role(gpui::Role::Status)
                             .child(badge),
                     )
-                    .child(
-                        div()
-                            .relative()
-                            .flex_none()
-                            .child(menu_button)
-                            .when(self.menu_open, |m| m.child(self.menu(theme, cx))),
-                    ),
+                    .child(div().flex_none().child(settings_button)),
             )
-    }
-
-    /// The menu under its button: exports, updates, the phone and the streaming app, then the
-    /// theme, the work tab's following and (on Windows) the cursor, each a group of choices.
-    fn menu(&mut self, theme: &Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let nothing_read = self.nothing_read();
-        let item = |id: &str, label: &str, disabled: bool| {
-            widgets::menu_item(theme, id, label, None, disabled)
-        };
-        let group = |heading: &str| {
-            div()
-                .flex()
-                .flex_col()
-                .mt(SP_1)
-                .pt(SP_1)
-                .border_t_1()
-                .border_color(theme.border)
-                .child(
-                    div()
-                        .px(SP_3)
-                        .pt(SP_1)
-                        .text_size(FS_CAPTION)
-                        .text_color(theme.muted)
-                        .child(heading.to_owned()),
-                )
-        };
-        let themes =
-            group("テーマ").children(ThemeChoice::ALL.into_iter().map(|(choice, name)| {
-                widgets::menu_item(
-                    theme,
-                    &format!("theme-{name}"),
-                    name,
-                    Some(self.settings.theme == choice),
-                    false,
-                )
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.settings.theme = choice;
-                    this.keep_settings();
-                    this.menu_open = false;
-                    this.apply_theme(window, cx);
-                }))
-            }));
-        let follow =
-            group("お仕事の自動開閉").children(WORK_FOLLOW.into_iter().map(|(on, name)| {
-                widgets::menu_item(
-                    theme,
-                    &format!("follow-{name}"),
-                    name,
-                    Some(self.settings.work_follow == on),
-                    false,
-                )
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.settings.work_follow = on;
-                    this.keep_settings();
-                    this.menu_open = false;
-                    cx.notify();
-                }))
-            }));
-        let cursors = self.cursor_shown.then(|| {
-            group("マウスカーソル変更").children(CursorChoice::ALL.into_iter().map(
-                |(choice, name)| {
-                    widgets::menu_item(
-                        theme,
-                        &format!("cursor-{name}"),
-                        name,
-                        Some(self.settings.cursor == choice),
-                        false,
-                    )
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.settings.cursor = choice;
-                        this.keep_settings();
-                        this.cursor_shown = this.core.set_cursor(choice.palette());
-                        this.menu_open = false;
-                        cx.notify();
-                    }))
-                },
-            ))
-        });
-        deferred(
-            anchored().snap_to_window().child(
-                div()
-                    .id("menu")
-                    .role(gpui::Role::Menu)
-                    .aria_label("メニュー")
-                    .track_focus(&self.menu_focus)
-                    .key_context("Menu")
-                    .on_action(cx.listener(|this, _: &Escape, _, cx| {
-                        this.menu_open = false;
-                        cx.notify();
-                    }))
-                    .occlude()
-                    .on_mouse_down_out(cx.listener(|this, _, _, cx| {
-                        this.menu_open = false;
-                        cx.notify();
-                    }))
-                    .mt(px(36.))
-                    .flex()
-                    .flex_col()
-                    .min_w(px(11. * 14.))
-                    .py(SP_1)
-                    .border_1()
-                    .border_color(theme.border)
-                    .rounded(RADIUS_SM)
-                    .bg(theme.surface)
-                    .child(
-                        item("export", "YAMLを書き出す", nothing_read).on_click(cx.listener(
-                            move |this, _, _, cx| {
-                                if !nothing_read {
-                                    this.menu_open = false;
-                                    this.export(cx);
-                                }
-                            },
-                        )),
-                    )
-                    .child(
-                        item("check", "アップデートを確認", false).on_click(cx.listener(
-                            |this, _, _, cx| {
-                                this.menu_open = false;
-                                this.check_update(cx);
-                            },
-                        )),
-                    )
-                    .child(item("phone", "Androidとの通信", false).on_click(
-                        cx.listener(|this, _, _, cx| this.open_dialog(Dialog::Phone, cx)),
-                    ))
-                    .child(
-                        item("cast", "配信アプリとの連携", false).on_click(
-                            cx.listener(|this, _, _, cx| this.open_dialog(Dialog::Cast, cx)),
-                        ),
-                    )
-                    .child(themes)
-                    .child(follow)
-                    .children(cursors),
-            ),
-        )
-        .with_priority(2)
     }
 
     /// The notices over the tab's content: the capture's failure, what could not be kept, the
@@ -779,12 +613,12 @@ impl Aoi {
                 widgets::error(
                     theme,
                     "export-error",
-                    format!("書き出せませんでした: {error}"),
+                    format!("保存できませんでした: {error}"),
                 )
                 .into_any_element(),
             ),
             Some(Ok(path)) => notices.push(
-                widgets::quiet(theme, "exported", format!("書き出しました: {path}"))
+                widgets::quiet(theme, "exported", format!("保存しました: {path}"))
                     .into_any_element(),
             ),
             None => {}
@@ -850,15 +684,18 @@ impl Render for Aoi {
         let theme = Theme::get(cx);
         let header = self.header(&theme, cx);
         let notices = self.notices(&theme, cx);
-        let content = match self.tab {
-            Tab::Items => self.items_tab(&theme, window, cx),
-            Tab::Equipment => self.equipment_tab(&theme, window, cx),
-            Tab::Shops => self.shops_tab(&theme, window, cx),
-            Tab::Students => self.students_tab(&theme, window, cx),
-            Tab::Plan => self.plan_tab(&theme, window, cx),
-            Tab::Work => self.work_tab(&theme, window, cx),
+        let content = if self.settings_open {
+            self.settings_page(&theme, cx)
+        } else {
+            match self.tab {
+                Tab::Items => self.items_tab(&theme, window, cx),
+                Tab::Equipment => self.equipment_tab(&theme, window, cx),
+                Tab::Shops => self.shops_tab(&theme, window, cx),
+                Tab::Students => self.students_tab(&theme, window, cx),
+                Tab::Plan => self.plan_tab(&theme, window, cx),
+                Tab::Work => self.work_tab(&theme, window, cx),
+            }
         };
-        let dialog = self.dialog.map(|d| self.dialog_view(d, &theme, cx));
         let star_menu = self
             .star_menu
             .and_then(|m| self.star_menu_view(m, &theme, cx));
@@ -869,9 +706,8 @@ impl Render for Aoi {
             .on_action(cx.listener(|_, _: &FocusNext, window, cx| window.focus_next(cx)))
             .on_action(cx.listener(|_, _: &FocusPrev, window, cx| window.focus_prev(cx)))
             .on_action(cx.listener(|this, _: &Escape, _, cx| {
-                this.menu_open = false;
+                this.settings_open = false;
                 this.star_menu = None;
-                this.dialog = None;
                 cx.notify();
             }))
             .relative()
@@ -888,7 +724,11 @@ impl Render for Aoi {
                 div()
                     .id("list")
                     .role(gpui::Role::TabPanel)
-                    .aria_label(self.tab.name())
+                    .aria_label(if self.settings_open {
+                        "設定"
+                    } else {
+                        self.tab.name()
+                    })
                     .flex()
                     .flex_col()
                     .flex_1()
@@ -902,8 +742,8 @@ impl Render for Aoi {
                     // The tab's pictures are kept while it shows, and dropped as another opens.
                     .child(
                         gpui::image_cache(gpui::retain_all(SharedString::from(format!(
-                            "images-{:?}-{:?}-{:?}",
-                            self.tab, self.items_sub, self.equipment_sub
+                            "images-{:?}-{:?}-{:?}-{}",
+                            self.tab, self.items_sub, self.equipment_sub, self.settings_open
                         ))))
                         .flex()
                         .flex_col()
@@ -938,7 +778,6 @@ impl Render for Aoi {
                 )
             })
             .children(star_menu)
-            .children(dialog)
     }
 }
 

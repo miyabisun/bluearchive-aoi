@@ -69,58 +69,38 @@ pub fn tooltip(
     move |_window, cx| cx.new(|_| Tooltip { text: text.clone() }).into()
 }
 
-/// A menu item: `checked` for a choice of one (a tick before the chosen one, its room kept
-/// before the others).
-pub fn menu_item(
-    theme: &Theme,
-    id: &str,
-    label: &str,
-    checked: Option<bool>,
-    disabled: bool,
-) -> Stateful<Div> {
+/// One of a group's choices on the settings page: a tick before the chosen one, its room kept
+/// before the others.
+pub fn choice(theme: &Theme, id: &str, label: &str, checked: bool) -> Stateful<Div> {
     let hover = theme.wash_base;
-    let selector = format!("menu-{id}");
+    let selector = format!("choice-{id}");
     div()
         .id(SharedString::from(selector.clone()))
         .debug_selector(move || selector.clone())
-        .role(if checked.is_some() {
-            Role::MenuItemRadio
-        } else {
-            Role::MenuItem
-        })
+        .role(Role::RadioButton)
         .aria_label(label.to_owned())
-        .when_some(checked, |item, checked| {
-            item.aria_toggled(if checked {
-                gpui::Toggled::True
-            } else {
-                gpui::Toggled::False
-            })
+        .aria_toggled(if checked {
+            gpui::Toggled::True
+        } else {
+            gpui::Toggled::False
         })
-        .when(disabled, |item| item.aria_description("押せません"))
-        .tab_stop(!disabled)
+        .tab_stop(true)
         .flex()
         .px(SP_3)
         .py(SP_2)
+        .rounded(RADIUS_SM)
         .text_size(FS_SM)
-        .text_color(if disabled {
-            theme.muted
-        } else {
-            theme.on_surface
-        })
-        .when(!disabled, |item| {
-            item.cursor_pointer()
-                .hover(move |s| s.bg(hover))
-                .focus(move |s| s.bg(hover))
-        })
-        .when_some(checked, |item, checked| {
-            item.child(
-                div()
-                    .w(px(14. * 1.4))
-                    .flex_none()
-                    .when(!checked, gpui::Styled::invisible)
-                    .child("✓"),
-            )
-        })
+        .text_color(theme.on_surface)
+        .cursor_pointer()
+        .hover(move |s| s.bg(hover))
+        .focus(move |s| s.bg(hover))
+        .child(
+            div()
+                .w(px(14. * 1.4))
+                .flex_none()
+                .when(!checked, gpui::Styled::invisible)
+                .child("✓"),
+        )
         .child(label.to_owned())
 }
 

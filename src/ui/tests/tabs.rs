@@ -94,11 +94,11 @@ fn the_item_and_equipment_sub_tabs_stay_put_as_another_is_chosen() {
 }
 
 #[test]
-fn the_streaming_dialog_s_tabs_stay_put_as_another_is_chosen() {
+fn the_streaming_codes_tabs_stay_put_as_another_is_chosen() {
     with_real_text(|cx| {
         let (_, core, vcx) = open(cx, &Kept::default());
-        click(vcx, "menu-button");
-        click(vcx, "menu-cast");
+        click(vcx, "settings-button");
+        click(vcx, "choice-feed-配信アプリとの連携");
         set(&core, vcx, |s| {
             s.cast = Cast::Waiting {
                 url: "rtmp://192.168.1.20:1935/live/key".to_owned(),

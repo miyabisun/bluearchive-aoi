@@ -2,9 +2,9 @@
 //! the counterparts of the Playwright suite (`e2e/app.spec.js` before GPUI).
 
 mod app;
-mod menu;
 mod place;
 mod plan;
+mod settings;
 mod shops;
 mod students;
 mod tabs;
@@ -52,7 +52,7 @@ fn places() -> Places {
     }
 }
 
-/// The window, 720×820 as it opens, over `kept`, with the menu's `settings`.
+/// The window, 720×820 as it opens, over `kept`, with the `settings` chosen.
 pub fn open_with<'a>(
     cx: &'a mut TestAppContext,
     kept: &Kept,

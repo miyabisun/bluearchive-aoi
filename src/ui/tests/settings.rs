@@ -1,15 +1,18 @@
-//! The menu: the theme and the cursor kept for the next start, the work tab's following, the
-//! update checked and taken, and the dialogs of the phone and the streaming app.
+//! The settings page: the update checked and taken, where the game is read from (the link to a
+//! phone, waiting for a streaming app), the theme and the cursor kept for the next start, the work
+//! tab's following, and what was read saved and restored.
+
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use gpui::{TestAppContext, VisualTestContext};
 
-use super::{app::items, click, has, open, open_with, set, shows};
+use super::{app::items, bounds, click, has, open, open_with, set, shows};
 use crate::{
     android::Link,
     app::UpdateCheck,
     broadcast::Cast,
     keep::Kept,
-    settings::{CursorChoice, Settings, ThemeChoice},
+    settings::{CursorChoice, Feed, Settings, ThemeChoice},
     ui::{Aoi, Updates, theme::Theme},
     watch::Place,
 };
@@ -18,44 +21,98 @@ fn kept_settings(core: &crate::app::Core) -> Settings {
     Settings::load(&core.places.settings)
 }
 
+/// The page lists what the user asked on top (2026-11-10: 「アップデートを確認: これは一番上にある
+/// べきだろう」「配信方法: 何かのグループでくくるべき」「テーマ: 自動が一番上であるべき」), then the
+/// rest of what the menu held.
 #[gpui::test]
-fn the_menu_chooses_the_theme_kept_for_the_next_start(cx: &mut TestAppContext) {
-    let (_, core, vcx) = open(cx, &Kept::default());
-    click(vcx, "menu-button");
-    click(vcx, "menu-theme-ライト");
-    assert!(!vcx.update(|_, cx| Theme::get(cx).dark), "light now");
-    assert_eq!(kept_settings(&core).theme, ThemeChoice::Light, "kept");
-    click(vcx, "menu-button");
-    click(vcx, "menu-theme-ダーク");
-    assert!(vcx.update(|_, cx| Theme::get(cx).dark), "dark now");
-    assert_eq!(kept_settings(&core).theme, ThemeChoice::Dark, "kept");
-}
-
-#[gpui::test]
-fn the_menu_changes_the_mouse_cursor_kept_for_the_next_start(cx: &mut TestAppContext) {
-    let (_, core, vcx) = open(cx, &Kept::default());
-    click(vcx, "menu-button");
+fn the_settings_page_lists_its_groups_in_order(cx: &mut TestAppContext) {
+    let (_, _core, vcx) = open(cx, &Kept::default());
+    assert!(!has(vcx, "check"), "closed until asked for");
+    click(vcx, "settings-button");
+    let mut down = vec!["check"];
     if cfg!(windows) {
-        click(vcx, "menu-cursor-赤");
-        assert_eq!(kept_settings(&core).cursor, CursorChoice::Red, "kept");
+        down.push("choice-feed-PC版アプリ");
     } else {
         assert!(
-            !has(vcx, "menu-cursor-赤"),
-            "where the cursor cannot change, not offered"
+            !has(vcx, "choice-feed-PC版アプリ"),
+            "the PC's game where it runs alone"
+        );
+    }
+    down.extend([
+        "choice-feed-Androidとの通信",
+        "choice-feed-配信アプリとの連携",
+        "choice-theme-自動",
+        "choice-theme-ライト",
+        "choice-theme-ダーク",
+        "choice-follow-する",
+        "save",
+        "restore",
+    ]);
+    let tops: Vec<gpui::Pixels> = down
+        .iter()
+        .map(|selector| {
+            bounds(vcx, selector)
+                .unwrap_or_else(|| panic!("{selector}"))
+                .top()
+        })
+        .collect();
+    assert!(tops.is_sorted(), "{down:?} at {tops:?}");
+    // A group's choices stand side by side, the first asked for at the left.
+    let left = |vcx: &mut VisualTestContext, selector: &str| bounds(vcx, selector).unwrap().left();
+    assert!(left(vcx, "choice-theme-自動") < left(vcx, "choice-theme-ライト"));
+    assert!(left(vcx, "choice-theme-ライト") < left(vcx, "choice-theme-ダーク"));
+    if cfg!(windows) {
+        assert!(left(vcx, "choice-feed-PC版アプリ") < left(vcx, "choice-feed-Androidとの通信"));
+    }
+    if cfg!(windows) {
+        assert!(
+            shows(vcx, "この PC のブルーアーカイブの画面を読み取ります"),
+            "the PC's game by default"
         );
     }
 }
 
 #[gpui::test]
-fn the_menu_closes_with_escape_and_a_click_outside(cx: &mut TestAppContext) {
+fn the_settings_page_gives_way_to_a_tab_and_to_escape(cx: &mut TestAppContext) {
     let (_, _core, vcx) = open(cx, &Kept::default());
-    click(vcx, "menu-button");
-    assert!(has(vcx, "menu-check"), "open");
+    click(vcx, "settings-button");
+    assert!(has(vcx, "check"), "open");
     super::keys(vcx, "escape");
-    assert!(!has(vcx, "menu-check"), "Escape closes it");
-    click(vcx, "menu-button");
+    assert!(!has(vcx, "check"), "Escape goes back to the tab");
+    click(vcx, "settings-button");
     click(vcx, "tab:装備");
-    assert!(!has(vcx, "menu-check"), "a click outside closes it");
+    assert!(!has(vcx, "check"), "a tab chosen shows");
+    click(vcx, "settings-button");
+    click(vcx, "settings-button");
+    assert!(!has(vcx, "check"), "its button again closes it");
+}
+
+#[gpui::test]
+fn the_settings_choose_the_theme_kept_for_the_next_start(cx: &mut TestAppContext) {
+    let (_, core, vcx) = open(cx, &Kept::default());
+    click(vcx, "settings-button");
+    click(vcx, "choice-theme-ライト");
+    assert!(!vcx.update(|_, cx| Theme::get(cx).dark), "light now");
+    assert_eq!(kept_settings(&core).theme, ThemeChoice::Light, "kept");
+    assert!(has(vcx, "choice-theme-ダーク"), "the page stays");
+    click(vcx, "choice-theme-ダーク");
+    assert!(vcx.update(|_, cx| Theme::get(cx).dark), "dark now");
+    assert_eq!(kept_settings(&core).theme, ThemeChoice::Dark, "kept");
+}
+
+#[gpui::test]
+fn the_settings_change_the_mouse_cursor_kept_for_the_next_start(cx: &mut TestAppContext) {
+    let (_, core, vcx) = open(cx, &Kept::default());
+    click(vcx, "settings-button");
+    if cfg!(windows) {
+        click(vcx, "choice-cursor-赤");
+        assert_eq!(kept_settings(&core).cursor, CursorChoice::Red, "kept");
+    } else {
+        assert!(
+            !has(vcx, "choice-cursor-赤"),
+            "where the cursor cannot change, not offered"
+        );
+    }
 }
 
 fn answering(aoi: &gpui::Entity<Aoi>, vcx: &mut VisualTestContext, updates: Updates) {
@@ -63,7 +120,7 @@ fn answering(aoi: &gpui::Entity<Aoi>, vcx: &mut VisualTestContext, updates: Upda
 }
 
 #[gpui::test]
-fn the_menu_checks_for_an_update_and_tells_what_it_found(cx: &mut TestAppContext) {
+fn the_settings_check_for_an_update_and_tell_what_they_found(cx: &mut TestAppContext) {
     let (aoi, _core, vcx) = open(cx, &Kept::default());
     answering(
         &aoi,
@@ -76,11 +133,11 @@ fn the_menu_checks_for_an_update_and_tells_what_it_found(cx: &mut TestAppContext
                     installs: true,
                 })
             },
-            apply: || Ok(()),
+            ..Updates::default()
         },
     );
-    click(vcx, "menu-button");
-    click(vcx, "menu-check");
+    click(vcx, "settings-button");
+    click(vcx, "check");
     assert!(
         shows(vcx, "最新のバージョンです（v0.3.0）"),
         "up to date, a toast says so"
@@ -102,10 +159,10 @@ fn the_menu_checks_for_an_update_and_tells_what_it_found(cx: &mut TestAppContext
                 })
             },
             apply: || Err("ページを開けませんでした".to_owned()),
+            ..Updates::default()
         },
     );
-    click(vcx, "menu-button");
-    click(vcx, "menu-check");
+    click(vcx, "check");
     assert!(
         shows(vcx, "v0.3.1 があります（今 v0.3.0）"),
         "a newer version stays in the page"
@@ -125,11 +182,10 @@ fn the_menu_checks_for_an_update_and_tells_what_it_found(cx: &mut TestAppContext
         vcx,
         Updates {
             check: || Err("通信できませんでした".to_owned()),
-            apply: || Ok(()),
+            ..Updates::default()
         },
     );
-    click(vcx, "menu-button");
-    click(vcx, "menu-check");
+    click(vcx, "check");
     assert!(
         shows(vcx, "アップデートできませんでした: 通信できませんでした"),
         "a check that fails says why"
@@ -137,11 +193,11 @@ fn the_menu_checks_for_an_update_and_tells_what_it_found(cx: &mut TestAppContext
 }
 
 #[gpui::test]
-fn the_menu_opens_the_link_to_a_phone(cx: &mut TestAppContext) {
+fn the_settings_link_a_phone(cx: &mut TestAppContext) {
     let (_, core, vcx) = open(cx, &Kept::default());
-    click(vcx, "menu-button");
-    click(vcx, "menu-phone");
-    assert!(shows(vcx, "Androidとの通信"), "the dialog");
+    click(vcx, "settings-button");
+    click(vcx, "choice-feed-Androidとの通信");
+    assert_eq!(kept_settings(&core).feed, Some(Feed::Phone), "kept");
     set(&core, vcx, |s| {
         s.phone = Link::Pairing {
             qr: vec![vec![true, false], vec![false, true]],
@@ -164,15 +220,15 @@ fn the_menu_opens_the_link_to_a_phone(cx: &mut TestAppContext) {
         "the phone left unconnected"
     );
     assert!(has(vcx, "connect"), "connect offered");
-    click(vcx, "close-dialog");
-    assert!(!shows(vcx, "Androidとの通信"), "closed");
+    assert!(!has(vcx, "close-dialog"), "in the page, nothing to close");
 }
 
 #[gpui::test]
-fn the_menu_waits_for_a_streaming_app(cx: &mut TestAppContext) {
+fn the_settings_wait_for_a_streaming_app(cx: &mut TestAppContext) {
     let (_, core, vcx) = open(cx, &Kept::default());
-    click(vcx, "menu-button");
-    click(vcx, "menu-cast");
+    click(vcx, "settings-button");
+    click(vcx, "choice-feed-配信アプリとの連携");
+    assert_eq!(kept_settings(&core).feed, Some(Feed::Cast), "kept");
     set(&core, vcx, |s| {
         s.cast = Cast::Waiting {
             url: "rtmp://192.168.1.20:1935/live/key".to_owned(),
@@ -196,6 +252,108 @@ fn the_menu_waits_for_a_streaming_app(cx: &mut TestAppContext) {
         shows(vcx, "192.168.1.30 から画面を受け取っています"),
         "the stream coming in"
     );
+}
+
+/// A phone that streamed before the page asked where the game is read from is the choice
+/// shown, not the default.
+#[gpui::test]
+fn a_phone_linked_before_is_the_feed_shown(cx: &mut TestAppContext) {
+    let (_, core, vcx) = open(cx, &Kept::default());
+    set(&core, vcx, |s| {
+        s.phone = Link::Stopped {
+            device: "Legion Tab".to_owned(),
+        };
+    });
+    click(vcx, "settings-button");
+    if cfg!(windows) {
+        assert!(
+            !shows(vcx, "Legion Tab とは切断しています"),
+            "a phone left unconnected: the PC's game"
+        );
+    }
+    set(&core, vcx, |s| {
+        s.phone = Link::Searching {
+            device: "Legion Tab".to_owned(),
+        };
+    });
+    assert!(
+        has(vcx, "disconnect"),
+        "a phone looked for: the phone's link"
+    );
+}
+
+static RESTARTS: AtomicUsize = AtomicUsize::new(0);
+
+/// What was read is saved to a file and comes back from it: the file chosen among those saved,
+/// the user's word asked before it replaces what is kept, then the app starts again over it
+/// (the user's of 2026-11-10: 「書き出したから何？となる、保存・復元機能として使うのが良いかもしれない」).
+#[gpui::test]
+fn what_is_saved_is_restored_once_the_user_says_so(cx: &mut TestAppContext) {
+    let (aoi, core, vcx) = open(cx, &Kept::default());
+    answering(
+        &aoi,
+        vcx,
+        Updates {
+            restart: || {
+                RESTARTS.fetch_add(1, Ordering::Relaxed);
+            },
+            ..Updates::default()
+        },
+    );
+    set(&core, vcx, |s| s.items = items());
+    click(vcx, "settings-button");
+    click(vcx, "save");
+    assert!(has(vcx, "exported"), "where it was saved is told");
+    let saved: Vec<String> = std::fs::read_dir(&core.places.exports)
+        .expect("the folder of saved files")
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(saved.len(), 1, "one file saved");
+    let held: std::collections::BTreeMap<i64, crate::quantity::Count> =
+        items().iter().map(|row| (row.id, row.count)).collect();
+
+    // Read on after the save: the items are gone from the list.
+    set(&core, vcx, |s| s.items.clear());
+    click(vcx, "restore");
+    click(vcx, &format!("saved-{}", saved[0]));
+    assert!(has(vcx, "restore-now"), "asked before anything is replaced");
+    assert_eq!(RESTARTS.load(Ordering::Relaxed), 0);
+    click(vcx, "restore-cancel");
+    assert!(!has(vcx, "restore-now"), "left as it is");
+    click(vcx, &format!("saved-{}", saved[0]));
+    click(vcx, "restore-now");
+    assert_eq!(
+        crate::keep::load(&core.places.state).unwrap().items,
+        held,
+        "what the file kept is kept again"
+    );
+    assert_eq!(
+        RESTARTS.load(Ordering::Relaxed),
+        1,
+        "and the app starts over it"
+    );
+}
+
+/// A file that is no save of Aoi's replaces nothing, and the page says why.
+#[gpui::test]
+fn a_file_that_is_no_save_restores_nothing(cx: &mut TestAppContext) {
+    let (_, core, vcx) = open(cx, &Kept::default());
+    std::fs::create_dir_all(&core.places.exports).unwrap();
+    std::fs::write(core.places.exports.join("aoi-old.yaml"), "credits: 5\n").unwrap();
+    click(vcx, "settings-button");
+    click(vcx, "restore");
+    click(vcx, "saved-aoi-old.yaml");
+    click(vcx, "restore-now");
+    assert!(has(vcx, "restore-error"), "why not is told");
+    assert!(!core.places.state.exists(), "nothing kept was replaced");
+}
+
+#[gpui::test]
+fn has_nothing_to_save_before_anything_is_read(cx: &mut TestAppContext) {
+    let (_, _core, vcx) = open(cx, &Kept::default());
+    click(vcx, "settings-button");
+    click(vcx, "save");
+    assert!(!has(vcx, "exported"), "nothing written");
 }
 
 #[gpui::test]
@@ -318,7 +476,7 @@ fn the_work_tab_keeps_its_scroll_as_the_game_comes_back_to_an_open_fold(cx: &mut
 }
 
 #[gpui::test]
-fn the_work_tab_follows_nothing_when_the_menu_says_not_to(cx: &mut TestAppContext) {
+fn the_work_tab_follows_nothing_when_the_settings_say_not_to(cx: &mut TestAppContext) {
     let settings = Settings {
         work_follow: false,
         ..Settings::default()
