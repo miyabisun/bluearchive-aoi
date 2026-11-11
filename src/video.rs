@@ -42,7 +42,8 @@ impl H264 {
             }
             if let Some(yuv) = self.decoder.decode(unit).map_err(|e| e.to_string())? {
                 let (width, height) = yuv.dimensions();
-                let pixels = match (self.colour.matrix.unwrap_or(UNSAID), self.colour.full) {
+                let matrix = self.colour.matrix.unwrap_or_else(|| unsaid(width, height));
+                let pixels = match (matrix, self.colour.full) {
                     // The crate's own conversion: a stream read so before comes as it did.
                     (Matrix::Bt601, false) => {
                         let mut pixels = vec![0; width * height * 3];
@@ -240,9 +241,16 @@ fn vui_colour(sps: &[u8]) -> Option<Colour> {
     Some(Colour { matrix, full })
 }
 
-/// The matrix a stream that names none is read with: BT.601, as every stream was read
-/// before its word was (a Legion Tab's stream comes back as drawn so, 2026-11-10).
-const UNSAID: Matrix = Matrix::Bt601;
+/// The matrix a stream of `width` by `height` that names none is read with: by its size, as
+/// video players read one (BT.709 from high definition up). A Legion Tab names BT.601
+/// (2026-11-11), so its stream comes as it did whatever is chosen here.
+fn unsaid(width: usize, height: usize) -> Matrix {
+    if width >= 1280 || height > 576 {
+        Matrix::Bt709
+    } else {
+        Matrix::Bt601
+    }
+}
 
 /// `Y'CbCr` 4:2:0 as RGB, by `matrix` and range, each chroma sample over its four pixels (as
 /// the openh264 crate's own BT.601 conversion does, which the references were cut with).
@@ -319,7 +327,7 @@ mod tests {
 
     use openh264::encoder::{EncoderConfig, VuiConfig};
 
-    use super::{Colour, H264, Matrix, last_start, payload, rbsp, signalled};
+    use super::{Colour, H264, Matrix, last_start, payload, rbsp, signalled, unsaid};
 
     #[test]
     fn a_stream_is_whole_up_to_its_last_start_code() {
@@ -430,7 +438,7 @@ mod tests {
 
     /// A flat picture of `rgb` as a stream of `matrix` and range codes it (the forward
     /// transform, by the matrix's luma weights).
-    fn picture(rgb: [u8; 3], matrix: Matrix, full: bool) -> YUVBuffer {
+    fn picture(rgb: [u8; 3], matrix: Matrix, full: bool, size: (usize, usize)) -> YUVBuffer {
         let (kr, kb) = match matrix {
             Matrix::Bt601 => (0.299, 0.114),
             Matrix::Bt709 => (0.2126, 0.0722),
@@ -450,7 +458,7 @@ mod tests {
                 128.0 + cr * 224.0 / 255.0,
             ]
         };
-        let (width, height) = (64, 48);
+        let (width, height) = size;
         let [luma, cb, cr] = samples.map(|sample| sample.round() as u8);
         let mut yuv = vec![luma; width * height];
         yuv.extend(vec![cb; width * height / 4]);
@@ -464,13 +472,17 @@ mod tests {
     /// yellow came (251, 252, 8)).
     #[test]
     fn colours_come_back_as_the_stream_codes_them() {
-        for (vui, matrix, full) in [
-            (VuiConfig::bt709(), Matrix::Bt709, false),
-            (VuiConfig::bt709_full(), Matrix::Bt709, true),
-            (VuiConfig::bt601(), Matrix::Bt601, false),
+        // The last two name no matrix: a small picture is BT.601's, a large one BT.709's.
+        for (vui, matrix, full, size) in [
+            (Some(VuiConfig::bt709()), Matrix::Bt709, false, (64, 48)),
+            (Some(VuiConfig::bt709_full()), Matrix::Bt709, true, (64, 48)),
+            (Some(VuiConfig::bt601()), Matrix::Bt601, false, (64, 48)),
+            (Some(VuiConfig::bt601()), Matrix::Bt601, false, (1280, 720)),
+            (None, Matrix::Bt601, false, (64, 48)),
+            (None, Matrix::Bt709, false, (1280, 720)),
         ] {
             for drawn in [[255, 238, 0], [15, 136, 188]] {
-                let stream = encoded(&picture(drawn, matrix, full), Some(vui));
+                let stream = encoded(&picture(drawn, matrix, full, size), vui);
                 let mut video = H264::new().unwrap();
                 let frame = video
                     .decode(&stream)
@@ -480,9 +492,20 @@ mod tests {
                 let off = (0..3).map(|c| seen[c].abs_diff(drawn[c])).max();
                 assert!(
                     off <= Some(3),
-                    "{matrix:?} full {full}: {seen:?} for {drawn:?}"
+                    "{matrix:?} full {full} {size:?}: {seen:?} for {drawn:?}"
                 );
             }
+        }
+    }
+
+    /// A stream that names no matrix is read as players read one: by its size.
+    #[test]
+    fn a_stream_that_names_no_matrix_is_read_by_its_size() {
+        for (width, height) in [(1920, 1080), (1280, 720), (886, 1920), (1024, 768)] {
+            assert_eq!(unsaid(width, height), Matrix::Bt709, "{width}x{height}");
+        }
+        for (width, height) in [(720, 576), (1024, 576), (64, 48)] {
+            assert_eq!(unsaid(width, height), Matrix::Bt601, "{width}x{height}");
         }
     }
 
