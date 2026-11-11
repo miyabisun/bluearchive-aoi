@@ -1348,8 +1348,9 @@ pub fn short_time(at: &str) -> String {
         .replacen('-', "/", 1)
 }
 
-/// What the 育成 tab tells of the plan's being behind: when the reads it counts
-/// from were, what was read otherwise since, and that 再読込 counts again; nothing while it counts alike.
+/// What the 育成 tab tells of the plan's being behind: when the students it counts from were
+/// read, who was read trained otherwise since, and that 再読込 counts again; nothing while it
+/// counts them alike.
 pub fn behind_text(behind: Option<&Behind>) -> String {
     let Some(behind) = behind else {
         return String::new();
@@ -1361,16 +1362,9 @@ pub fn behind_text(behind: Option<&Behind>) -> String {
         .map_or_else(String::new, |since| {
             format!("{} の読み取りで計算中。", short_time(since))
         });
-    let what: Vec<&str> = behind
-        .students
-        .iter()
-        .chain(&behind.shops)
-        .map(String::as_str)
-        .chain(behind.held.then_some("所持数"))
-        .collect();
     format!(
-        "{since}{}が変わっています。再読込で数え直します（払った分は取り消されます）",
-        what.join("・")
+        "{since}{}の育成状況が変わっています。再読込で数え直します（払った分は取り消されます）",
+        behind.students.join("・")
     )
 }
 

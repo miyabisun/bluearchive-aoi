@@ -94,11 +94,11 @@ cargo run --release --example build_counts -- <collection>
   bought is taken once three frames in a row read alike. A shop frame whose cards are the
   same to the pixel as the last one's reads as it did. All shops but カケラ(文字) reset as
   the month changes.
-- The 育成 tab counts from what was read when Aoi started or 再読込 was pressed, not from
-  what is read since. The snapshot's `plan_behind` (`ground::Ground::behind`) tells the window
-  when those reads were and what was read otherwise since: the marked students whose level,
-  star, skills or equipment changed, the shops whose goods changed, and whether anything held
-  did.
+- The 育成 tab counts the marked students as they were read when Aoi started or 再読込 was
+  pressed, not as they are read since; what is held (items, equipment, credits, the shops) it
+  counts as read now, again with every reading. The snapshot's `plan_behind`
+  (`ground::Ground::behind`) tells the window when the students were read and which marked
+  ones were read otherwise since: those whose level, star, skills or equipment changed.
 
 ## What is kept
 

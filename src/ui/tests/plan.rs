@@ -10,9 +10,10 @@ use super::{
 };
 use crate::{
     keep::Kept,
-    plan::{Kind, Target},
+    plan::{Held, Kind, Target},
+    quantity::Count,
     supply::{ProcureLine, Source},
-    watch::{Screen, Status},
+    watch::{Screen, Status, Update},
 };
 
 /// アカネ（バニーガール） at ★3 and Lv80, marked for training at the default target.
@@ -192,6 +193,92 @@ fn makes_up_what_is_short_by_hand_and_settles_it(cx: &mut TestAppContext) {
     click(vcx, "reset");
     assert!(!shows(vcx, "+20"), "リセット takes every payment back");
     assert!(!shows(vcx, "精算"), "nothing paid, no settlement");
+}
+
+/// What the plan holds of its line `kind` (the first of them).
+fn held(core: &crate::app::Core, kind: Kind) -> Option<Held> {
+    let plan = core.snapshot().plan;
+    plan.iter().find(|r| r.kind == kind).expect("a line").have
+}
+
+#[gpui::test]
+fn what_is_held_is_counted_as_read_now_without_a_word(cx: &mut TestAppContext) {
+    let (_, core, vcx) = marked(cx);
+    let reading = reading(Screen::Items, 9.);
+    let told = |core: &crate::app::Core| core.snapshot().plan_behind;
+    assert_eq!(told(&core), None, "nothing read since");
+    // The credits, read on nearly every screen.
+    report(&core, vcx, &reading, Some(Update::Credits(123_456_789)));
+    assert_eq!(held(&core, Kind::Credits), Some(Held::Exact(123_456_789)));
+    // Items the plan takes: seven of an activity report.
+    let (id, exp) = core.recognizer().planner.growth.reports[0];
+    let mut rows = items();
+    rows[0].id = id;
+    rows[0].count = Count::Exact(7);
+    report(
+        &core,
+        vcx,
+        &reading,
+        Some(Update::List(crate::List::Items, rows)),
+    );
+    assert_eq!(held(&core, Kind::ReportExp), Some(Held::Exact(7 * exp)));
+    // The shops, as they are read.
+    let shops = super::shops::shops();
+    report(&core, vcx, &reading, Some(Update::Shops(shops)));
+    assert_eq!(told(&core), None, "what is held is not told");
+}
+
+#[gpui::test]
+fn a_marked_student_trained_since_is_told_until_the_plan_is_reloaded(cx: &mut TestAppContext) {
+    let (_, core, vcx) = marked(cx);
+    // The plan's ground taken with her in it (a student it lacks is counted as read now).
+    click(vcx, "reload");
+    let need = |core: &crate::app::Core| core.snapshot().plan[0].need;
+    let before = need(&core);
+    let leveled = |level| {
+        vec![trained(20019, "アカネ（バニーガール）", |t| {
+            t.level = Some(level);
+            t.rarity = Some(3);
+            t.weapon = Some(None);
+        })]
+    };
+    report(
+        &core,
+        vcx,
+        &reading(Screen::Items, 9.),
+        Some(Update::Students(leveled(85))),
+    );
+    let word = "アカネ（バニーガール）の育成状況が変わっています。再読込で数え直します（払った分は取り消されます）";
+    assert!(shows(vcx, word), "trained since: told by name");
+    assert_eq!(need(&core), before, "the plan counts her as she was");
+    click(vcx, "reload");
+    assert!(!shows(vcx, word), "counted again: nothing to tell");
+    assert!(need(&core) < before, "from Lv85 now");
+}
+
+#[gpui::test]
+fn what_was_paid_stays_while_what_is_held_is_read_again(cx: &mut TestAppContext) {
+    let (aoi, core, vcx) = marked(cx);
+    set(&core, vcx, |s| s.procure = procure());
+    press(
+        vcx,
+        "chip-item-4033-shop:総力戦:総力戦コイン",
+        MouseButton::Left,
+        false,
+    );
+    assert!(shows(vcx, "+1"), "one paid");
+    // The credits read otherwise count the plan again: its lines are the snapshot's own.
+    report(
+        &core,
+        vcx,
+        &reading(Screen::Items, 9.),
+        Some(Update::Credits(5)),
+    );
+    let paid = aoi.read_with(vcx, |aoi, _| aoi.payments.len());
+    assert_eq!(paid, 1, "the payment is kept");
+    // The line short again, what was paid for it counts again.
+    set(&core, vcx, |s| s.procure = procure());
+    assert!(shows(vcx, "+1"), "paid still");
 }
 
 #[gpui::test]

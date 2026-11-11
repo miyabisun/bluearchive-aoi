@@ -931,26 +931,23 @@ fn work_fold_opens_nothing_where_the_work_tab_has_no_fold_for_it() {
 // Behind the plan
 
 #[test]
-fn behind_text_tells_when_the_plans_reads_were_and_what_changed_since_the_held_last() {
+fn behind_text_tells_when_the_plans_students_were_read_and_who_was_trained_since() {
     let behind = Behind {
         since: Some("2026-11-03 14:37:12".to_owned()),
-        students: vec!["ラナ".to_owned()],
-        shops: vec!["カケラ(文字)".to_owned()],
-        held: true,
+        students: vec!["ラナ".to_owned(), "アカネ（バニーガール）".to_owned()],
     };
     assert_eq!(
         behind_text(Some(&behind)),
-        "11/03 14:37 の読み取りで計算中。ラナ・カケラ(文字)・所持数が変わっています。再読込で数え直します（払った分は取り消されます）"
+        "11/03 14:37 の読み取りで計算中。ラナ・アカネ（バニーガール）の育成状況が変わっています。再読込で数え直します（払った分は取り消されます）"
     );
-    let held = Behind {
+    // No time kept of the students' reading.
+    let undated = Behind {
         since: None,
-        students: vec![],
-        shops: vec![],
-        held: true,
+        students: vec!["ラナ".to_owned()],
     };
     assert_eq!(
-        behind_text(Some(&held)),
-        "所持数が変わっています。再読込で数え直します（払った分は取り消されます）"
+        behind_text(Some(&undated)),
+        "ラナの育成状況が変わっています。再読込で数え直します（払った分は取り消されます）"
     );
 }
 

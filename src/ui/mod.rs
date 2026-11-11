@@ -187,7 +187,7 @@ pub struct Aoi {
     /// The work tab's fold to bring to the top of its frame as the tab is next drawn.
     bring_up: Option<String>,
     /// What is paid from each source for each line short (`line|source`), the user's choice,
-    /// kept while the plan counts from the same reading (`plan_version`).
+    /// kept while the plan counts the students from the same reading (`plan_version`).
     payments: BTreeMap<String, u64>,
     paid_for: u32,
     star_menu: Option<StarMenu>,

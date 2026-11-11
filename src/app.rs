@@ -17,7 +17,7 @@ use crate::{
     broadcast::Cast,
     cursor::{Highlight, Palette},
     export,
-    ground::{self, Behind, Ground},
+    ground::{Behind, Ground},
     keep::{self, Kept, ReadAt, now},
     kinds::Kinds,
     plan::{BlueprintRow, NeedRow, Target, UnknownRow},
@@ -54,10 +54,11 @@ pub struct Snapshot {
     /// Counts the times the plan's ground was read again (`reload_plan`): the
     /// window's payments hold until it changes.
     pub plan_version: u32,
-    /// What the plan counts from (see `Ground`).
+    /// The students as the plan counts them (see `Ground`); what is held it counts as read now.
     #[serde(skip)]
     pub ground: Ground,
-    /// What was read since the plan's ground and counts otherwise, none while it counts alike.
+    /// The marked students read trained otherwise since the plan's ground, none while there
+    /// is none.
     pub plan_behind: Option<Behind>,
     /// The item and equipment tabs' tables by kind.
     pub kinds: Kinds,
@@ -134,89 +135,88 @@ impl Snapshot {
             cast: Cast::Off,
         };
         snapshot.reground();
-        snapshot.replan(recognizer, &kept.targets);
+        snapshot.retarget(&kept.targets);
         snapshot.rework(recognizer);
         snapshot
     }
 
-    /// What was read, as the plan's ground takes it.
-    fn reads(&self) -> Ground {
-        Ground {
-            students: self.students.clone(),
-            items: self.items.clone(),
-            equipment: self.equipment.clone(),
-            credits: self.credits,
-            shops: self.shops.clone(),
-            read_at: ground::newest(&self.read_at, &self.shops),
-        }
-    }
-
-    /// Takes what was read as the plan's ground (see `Snapshot::ground`).
+    /// Takes the students as read now as the plan's ground (see `Snapshot::ground`).
     fn reground(&mut self) {
-        self.ground = self.reads();
+        self.ground = Ground {
+            students: self.students.clone(),
+            read_at: self.read_at.students.clone(),
+        };
         self.plan_version += 1;
-    }
-
-    /// Tells what was read since the plan's ground and counts otherwise (see `Snapshot::plan_behind`).
-    fn retell(&mut self) {
-        let marked: Vec<i64> = self.targets.iter().map(|t| t.id).collect();
-        self.plan_behind = self.ground.behind(&self.reads(), &marked);
     }
 
     pub fn targets(&self) -> BTreeMap<i64, Target> {
         self.targets.iter().map(|t| (t.id, t.target)).collect()
     }
 
-    /// Counts the plan for `targets` from its ground.
-    fn replan(&mut self, recognizer: &Recognizer, targets: &BTreeMap<i64, Target>) {
-        let ground = &self.ground;
-        let student = |id: i64| {
-            ground
-                .students
-                .iter()
-                .chain(&self.students)
-                .find(|s| s.id == id)
-        };
+    /// A student as the plan counts them: as the ground has them, one read since it was taken
+    /// as read now.
+    fn grounded(&self, id: i64) -> Option<&StudentRow> {
+        let mut students = self.ground.students.iter().chain(&self.students);
+        students.find(|s| s.id == id)
+    }
+
+    /// Marks the students of `targets` for training.
+    fn retarget(&mut self, targets: &BTreeMap<i64, Target>) {
         self.targets = targets
             .iter()
             .map(|(&id, &target)| TargetRow {
                 id,
                 target,
-                name: student(id).map(|s| s.name.clone()).unwrap_or_default(),
-                training: student(id).map(|s| s.training),
+                name: self
+                    .grounded(id)
+                    .map(|s| s.name.clone())
+                    .unwrap_or_default(),
+                training: self.grounded(id).map(|s| s.training),
             })
             .collect();
-        // A student read since the ground was taken counts as read now.
+    }
+
+    /// Marks the students of `targets` and counts the plan for them.
+    fn replan(&mut self, recognizer: &Recognizer, targets: &BTreeMap<i64, Target>) {
+        self.retarget(targets);
+        self.recount(recognizer);
+    }
+
+    /// Counts the plan: the marked students from its ground, against what is held as read now;
+    /// and tells who was read trained otherwise since (see `Snapshot::plan_behind`).
+    fn recount(&mut self, recognizer: &Recognizer) {
+        let targets = self.targets();
         let students: Vec<StudentRow> = targets
             .keys()
-            .filter_map(|&id| student(id).cloned())
+            .filter_map(|&id| self.grounded(id).cloned())
             .collect();
         (self.plan, self.blueprints, self.plan_unknown) = recognizer.plan_rows(
-            targets,
+            &targets,
             &students,
-            &ground.items,
-            &ground.equipment,
-            ground.credits,
+            &self.items,
+            &self.equipment,
+            self.credits,
         );
         self.procure = recognizer.procure_rows(
             &self.plan,
             &self.blueprints,
-            &ground.items,
-            &ground.shops,
+            &self.items,
+            &self.shops,
             &now(),
         );
-        self.retell();
+        let marked: Vec<i64> = targets.keys().copied().collect();
+        self.plan_behind = self.ground.behind(&self.students, &marked);
     }
 
-    /// Counts the tables by kind, the daily plays and the month-end plan again
-    /// from what was read.
+    /// Counts the tables by kind, the daily plays, the month-end plan and the training plan
+    /// again from what was read.
     fn rework(&mut self, recognizer: &Recognizer) {
         self.kinds = recognizer.kinds(&self.items, &self.equipment);
         self.work = recognizer.work_rows(&self.items, &self.equipment, self.credits);
         self.hard = recognizer.hard(&self.items, &self.students, &self.reserved);
         let held = |id| crate::good_held(id, &self.items, &self.equipment, self.credits);
         self.month_end = recognizer.month_end(&self.shops, &self.students, held, &self.reserved);
-        self.retell();
+        self.recount(recognizer);
     }
 
     /// What is kept of the window.
@@ -464,7 +464,7 @@ impl Core {
         })
     }
 
-    /// Takes what was read now as the plan's ground and counts the plan again
+    /// Takes the students as read now as the plan's ground and counts the plan again
     /// (the window's 再読込).
     pub fn reload_plan(&self) {
         self.update(|snapshot, core| {
