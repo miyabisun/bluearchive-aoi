@@ -478,10 +478,10 @@ impl Core {
     /// and the line `restore` reads; the path written, or why it could not be.
     pub fn export(&self) -> Result<String, String> {
         let snapshot = self.snapshot();
-        let path = self.places.exports.join(format!(
-            "aoi-{}.yaml",
-            chrono::Local::now().format("%Y%m%d-%H%M%S")
-        ));
+        let path = self
+            .places
+            .exports
+            .join(format!("aoi-{}.yaml", keep::file_stamp()));
         let saved = snapshot.yaml(&now()) + &export::state(&snapshot.kept());
         keep::write(&path, saved.as_bytes())?;
         Ok(path.display().to_string())
@@ -606,16 +606,12 @@ pub fn places() -> Result<Places, String> {
     })
 }
 
-/// What was kept, and why it could not be brought back, if so.
+/// What was kept, and why it could not be brought back, if so (the file then set aside, see
+/// `keep::load_or_set_aside`).
 pub fn load_kept(recognizer: &Recognizer, places: &Places) -> (Kept, Option<String>) {
-    let (mut kept, trouble) = match keep::load(&places.state) {
-        Ok(kept) => (kept, None),
-        Err(e) => (
-            Kept::default(),
-            Some(format!("前回の読み取り結果を読み戻せませんでした: {e}")),
-        ),
-    };
+    let (mut kept, trouble) = keep::load_or_set_aside(&places.state, &keep::file_stamp());
     kept.renumber(recognizer.renamed());
+    let trouble = trouble.map(|e| format!("前回の読み取り結果を読み戻せませんでした: {e}"));
     (kept, trouble)
 }
 

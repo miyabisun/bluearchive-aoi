@@ -1101,7 +1101,8 @@ impl Recognizer {
 
     /// Reads the cells, and whether the list's start shows, when the frame
     /// shows a list sorted the default way, ascending; any other screen or
-    /// order gives `None`.
+    /// order gives `None`. A card not cut leaves a cell told nothing where it
+    /// stood (see `catalog::with_breaks`).
     pub fn read_list(&self, image: &RgbImage) -> Option<(List, Vec<Cell>, bool)> {
         let (panel, cards) = grid::find(image)?;
         if !screen::sorted_by_default(image, panel.card_height, &self.sort_template) {
@@ -1112,6 +1113,7 @@ impl Recognizer {
         let cells = self
             .catalog(list)
             .read_cards(image, &cards, &self.counts, None);
+        let cells = catalog::with_breaks(cells, &grid::follows(&panel, &cards));
         Some((list, cells, panel.shows_start))
     }
 }

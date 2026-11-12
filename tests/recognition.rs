@@ -180,7 +180,7 @@ fn a_run_of_frames_tallies_to_the_labels() {
                     let tally = tallies.entry(list).or_default();
                     let gone = recognizer
                         .catalog(list)
-                        .gaps(&cells, start, |id| tally.counts().contains_key(&id));
+                        .gaps(&cells, start, |id| tally.held(id));
                     tally.observe(&cells, &gone);
                 }
             }

@@ -765,8 +765,8 @@ pub struct Shelves {
     streaks: HashMap<(&'static str, i64, u8), (u32, u8)>,
     /// The same for the coins held, by shop and coin.
     held: HashMap<(&'static str, usize), (u64, u8)>,
-    /// The coins held taken since last asked (see `fresh_held`).
-    fresh: Vec<(&'static str, usize, u64)>,
+    /// The coins held as the last frame told them (see `held_now`).
+    told: Vec<(&'static str, usize, u64)>,
 }
 
 impl Shelves {
@@ -776,7 +776,7 @@ impl Shelves {
             by_shop: shelves,
             streaks: HashMap::new(),
             held: HashMap::new(),
-            fresh: Vec::new(),
+            told: Vec::new(),
         }
     }
 
@@ -786,6 +786,7 @@ impl Shelves {
     /// clears the offers an earlier month left, but in the `LASTING` shop.
     pub fn observe(&mut self, seen: &Seen, now: &str) -> bool {
         let mut changed = false;
+        self.told.clear();
         for (coin, &count) in seen.held.iter().enumerate() {
             let Some(count) = count else { continue };
             let streak = self.held.entry((seen.shop, coin)).or_insert((count, 0));
@@ -794,8 +795,8 @@ impl Shelves {
             } else {
                 *streak = (count, 1);
             }
-            if streak.1 == CONFIRM {
-                self.fresh.push((seen.shop, coin, count));
+            if streak.1 >= CONFIRM {
+                self.told.push((seen.shop, coin, count));
             }
             let stock = self.by_shop.entry(seen.shop.to_owned()).or_default();
             if streak.1 >= CONFIRM && stock.held.get(coin) != Some(&Some(count)) {
@@ -843,10 +844,14 @@ impl Shelves {
         changed
     }
 
-    /// The coins held taken since this was last asked, each once as its
-    /// reading is confirmed: the shop, the coin (as `Seen::held`) and the count.
-    pub fn fresh_held(&mut self) -> Vec<(&'static str, usize, u64)> {
-        std::mem::take(&mut self.fresh)
+    /// The coins held as the last frame taken told them, each read alike in `CONFIRM`
+    /// frames in a row by then: the shop, the coin (as `Seen::held`) and the count. Told
+    /// with every such frame, and of that frame alone: given out once as each was taken and
+    /// only when a shelf changed (until 2026-11-12), a count the item list had since lost
+    /// did not come back when its shop was opened again, and one left waiting was taken
+    /// later over a newer count.
+    pub fn held_now(&self) -> &[(&'static str, usize, u64)] {
+        &self.told
     }
 
     /// The shelves by shop.
@@ -1096,10 +1101,27 @@ mod tests {
         }
         assert!(shelves.observe(&held(&[Some(530), Some(5940)]), NOW));
         assert_eq!(shelves.shelves()["総力戦"].held, [Some(530), None]);
-        // Each count is given out once, as it is taken.
-        assert_eq!(shelves.fresh_held(), [("総力戦", 0, 530)]);
+        // A count is told with every frame it reads so in, from the frame it is taken.
+        assert_eq!(shelves.held_now(), [("総力戦", 0, 530)]);
         shelves.observe(&held(&[Some(530), Some(5940)]), NOW);
-        assert_eq!(shelves.fresh_held(), []);
+        assert_eq!(shelves.held_now(), [("総力戦", 0, 530)]);
+        shelves.observe(&held(&[Some(530), Some(5940)]), NOW);
+        assert_eq!(
+            shelves.held_now(),
+            [("総力戦", 0, 530), ("総力戦", 1, 5940)]
+        );
+        // A frame that does not read a coin tells nothing of it, however long it read alike
+        // before: the count may be another by now.
+        shelves.observe(&held(&[None, Some(5940)]), NOW);
+        assert_eq!(shelves.held_now(), [("総力戦", 1, 5940)]);
+        // Another shop's frame tells its own coins alone.
+        let other = Seen {
+            shop: "大決戦",
+            offers: Vec::new(),
+            held: vec![Some(7)],
+        };
+        shelves.observe(&other, NOW);
+        assert!(shelves.held_now().is_empty());
     }
 
     fn offer(id: i64, coin: u8, left: u32) -> Offer {

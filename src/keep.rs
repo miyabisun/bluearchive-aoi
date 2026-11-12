@@ -66,6 +66,32 @@ pub fn load(path: &Path) -> Result<Kept, String> {
     }
 }
 
+/// The local time, as a file's name carries it ("20261112-103000").
+pub fn file_stamp() -> String {
+    chrono::Local::now().format("%Y%m%d-%H%M%S").to_string()
+}
+
+/// What `path` keeps; or, where it cannot be read back, nothing and why, the file set aside
+/// first under a name of its own (`state.broken-<stamp>.json` for `state.json`): the next
+/// reading keeps what it read in `path`, which would leave nothing of what the file held.
+pub fn load_or_set_aside(path: &Path, stamp: &str) -> (Kept, Option<String>) {
+    let trouble = match load(path) {
+        Ok(kept) => return (kept, None),
+        Err(e) => e,
+    };
+    let aside = path.with_extension(format!("broken-{stamp}.json"));
+    let told = match std::fs::rename(path, &aside) {
+        Ok(()) => format!(
+            "{trouble}（読めなかったファイルは {} に残しました）",
+            aside.display()
+        ),
+        Err(e) => format!(
+            "{trouble}（読めなかったファイルを別名で残せませんでした: {e}。次の読み取りで上書きされます）"
+        ),
+    };
+    (Kept::default(), Some(told))
+}
+
 /// Keeps `kept` in `path`, written whole beside it first so a run stopped
 /// halfway never leaves half a file.
 pub fn save(path: &Path, kept: &Kept) -> Result<(), String> {
@@ -208,6 +234,36 @@ mod tests {
             load(&folder("none").join("state.json")).unwrap(),
             Kept::default()
         );
+    }
+
+    /// A file that cannot be read back is set aside before anything is kept over it: the
+    /// next reading would keep nearly nothing in its place.
+    #[test]
+    fn a_broken_file_is_set_aside_not_written_over() {
+        let dir = folder("aside");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("state.json");
+        std::fs::write(&path, "{ not json").unwrap();
+        let (back, trouble) = load_or_set_aside(&path, "20261112-103000");
+        assert_eq!(back, Kept::default());
+        let aside = dir.join("state.broken-20261112-103000.json");
+        let trouble = trouble.unwrap();
+        assert!(
+            trouble.contains("state.broken-20261112-103000.json"),
+            "{trouble}"
+        );
+        assert_eq!(std::fs::read_to_string(&aside).unwrap(), "{ not json");
+        assert!(!path.exists());
+        save(&path, &kept()).unwrap();
+        assert_eq!(std::fs::read_to_string(&aside).unwrap(), "{ not json");
+        // What reads back, and no file at all, are left as they are.
+        assert_eq!(load_or_set_aside(&path, "x"), (kept(), None));
+        assert_eq!(
+            load_or_set_aside(&dir.join("none.json"), "x"),
+            (Kept::default(), None)
+        );
+        assert!(!dir.join("state.broken-x.json").exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

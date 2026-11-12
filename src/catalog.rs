@@ -380,6 +380,22 @@ fn rows(entries: &[Item], rules: &Rules, counts: &HashMap<i64, Count>) -> Vec<Ro
         .collect()
 }
 
+/// `cells` with a cell told nothing before each that does not follow the one before it (see
+/// `grid::follows`): it stands for the card not cut there, so the cells either side of it are
+/// not taken as side by side (see `gaps`).
+pub fn with_breaks(cells: Vec<Cell>, follows: &[bool]) -> Vec<Cell> {
+    let untold = Cell {
+        id: None,
+        quantity: None,
+        ignored: false,
+    };
+    cells
+        .into_iter()
+        .zip(follows)
+        .flat_map(|(cell, &follows)| (!follows).then_some(untold).into_iter().chain([cell]))
+        .collect()
+}
+
 /// The most entries `held` that can leave the list between two cells side by
 /// side: an oopart's four tiers used up at once. More is a cell told as an
 /// entry far off, or the start seen where it is not, which would drop much of
@@ -390,7 +406,8 @@ const MOST_GONE: usize = 4;
 /// between two cells shown side by side, both told apart, and, where the
 /// list's `start` shows, before its first cell; but none between two with more
 /// than `MOST_GONE` entries `held` between them. An item used up leaves the
-/// list, and this is how its going is seen.
+/// list, and this is how its going is seen. The cells must stand as the list's
+/// cards do, a cell told nothing where a card was not cut (see `with_breaks`).
 pub fn gaps(
     entries: &[Item],
     rules: &Rules,
@@ -591,6 +608,45 @@ mod tests {
         let cells = [cell(Some(10)), cell(None), cell(Some(12))];
         assert_eq!(
             gaps(&entries, &items::RULES, &cells, false, |_| false),
+            Vec::<i64>::new()
+        );
+    }
+
+    /// A card not cut leaves a cell told nothing where it stood, so the cells either side
+    /// of it are not side by side: nothing between them is gone.
+    #[test]
+    fn a_card_not_cut_stands_as_a_cell_told_nothing() {
+        let entries = [
+            entry(10, "a", "Material", 0),
+            entry(11, "b", "Material", 0),
+            entry(12, "c", "Material", 0),
+        ];
+        let read = vec![cell(Some(10)), cell(Some(12))];
+        let whole = with_breaks(read.clone(), &[true, true]);
+        assert_eq!(whole, read);
+        assert_eq!(
+            gaps(&entries, &items::RULES, &whole, false, |_| false),
+            [11]
+        );
+        let broken = with_breaks(read.clone(), &[true, false]);
+        assert_eq!(broken.len(), 3);
+        assert_eq!((broken[0], broken[2]), (read[0], read[1]));
+        assert_eq!((broken[1].id, broken[1].quantity), (None, None));
+        assert_eq!(
+            gaps(&entries, &items::RULES, &broken, false, |_| false),
+            Vec::<i64>::new()
+        );
+        // The first card not at its row's start: nothing before it is gone, though the
+        // list's start shows.
+        let first = vec![cell(Some(12))];
+        let at_start = with_breaks(first.clone(), &[true]);
+        assert_eq!(
+            gaps(&entries, &items::RULES, &at_start, true, |_| false),
+            [10, 11]
+        );
+        let late = with_breaks(first, &[false]);
+        assert_eq!(
+            gaps(&entries, &items::RULES, &late, true, |_| false),
             Vec::<i64>::new()
         );
     }

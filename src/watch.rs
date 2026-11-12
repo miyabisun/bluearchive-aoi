@@ -289,24 +289,39 @@ impl Latest {
     }
 }
 
-/// Reports the shops after a frame changed them. A coin that is an item takes
-/// the count its shop shows, and the item list with it.
-fn shops_changed(recognizer: &Recognizer, shelves: &mut Shelves, items: &mut Tally, board: &Board) {
+/// A coin that is an item takes the count its shop shows, as the frame just taken told it
+/// (see `Shelves::held_now`); whether a count of the item list changed.
+fn take_coins(recognizer: &Recognizer, shelves: &Shelves, items: &mut Tally) -> bool {
     let mut taken = false;
-    for (shop, coin, count) in shelves.fresh_held() {
+    for &(shop, coin, count) in shelves.held_now() {
         if let (Some(id), Ok(count)) = (recognizer.coin_item(shop, coin), u32::try_from(count)) {
             taken |= items.take(id, Count::Exact(count));
         }
     }
+    taken
+}
+
+/// Takes a shop's frame into the item list (see `take_coins`), and reports the item list
+/// where that changed it, and the shops where it did or the frame `changed` a shelf.
+fn shop_seen(
+    recognizer: &Recognizer,
+    shelves: &Shelves,
+    items: &mut Tally,
+    board: &Board,
+    changed: bool,
+) {
+    let taken = take_coins(recognizer, shelves, items);
     if taken {
         board.changed(Update::List(
             List::Items,
             recognizer.rows(List::Items, items),
         ));
     }
-    board.changed(Update::Shops(
-        recognizer.shop_rows(shelves.shelves(), items.counts()),
-    ));
+    if taken || changed {
+        board.changed(Update::Shops(
+            recognizer.shop_rows(shelves.shelves(), items.counts()),
+        ));
+    }
 }
 
 /// The credits change seldom: they are read this far apart.
@@ -545,7 +560,7 @@ impl Read {
                 let tally = self.tallies.entry(list).or_default();
                 let gone = recognizer
                     .catalog(list)
-                    .gaps(&cells, start, |id| tally.counts().contains_key(&id));
+                    .gaps(&cells, start, |id| tally.held(id));
                 if tally.observe(&cells, &gone) {
                     board.changed(Update::List(list, recognizer.rows(list, tally)));
                     // The shops show the coins held as the item list counts them.
@@ -559,9 +574,10 @@ impl Read {
                 let rows = student_rows(recognizer, self.roster.students());
                 board.changed(Update::Students(rows));
             }
-            Some(Shown::Shop(seen)) if self.shelves.observe(&seen, &now()) => {
+            Some(Shown::Shop(seen)) => {
+                let changed = self.shelves.observe(&seen, &now());
                 let items = self.tallies.entry(List::Items).or_default();
-                shops_changed(recognizer, &mut self.shelves, items, board);
+                shop_seen(recognizer, &self.shelves, items, board, changed);
             }
             _ => {}
         }
@@ -646,6 +662,58 @@ mod tests {
             latest.put_window(image::RgbImage::new(2, 1));
             assert_eq!(latest.take().width(), 2);
         }
+    }
+
+    /// A coin used up counts none as its shop shows it, and stays so when the item list,
+    /// read after, lacks it (the user's of 2026-11-12: 「ショップを開くと0と表示されますが、
+    /// アイテムをスクロールすると?に戻ります」); opening the shop again tells it again, though
+    /// the shelf is as it was.
+    #[test]
+    fn a_coin_used_up_counts_none_in_its_shop_and_after_the_item_list_is_read() {
+        use crate::{
+            Recognizer,
+            quantity::Count,
+            shop::{Seen, Shelves},
+            tally::{CONFIRM, Tally},
+        };
+        let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
+        let recognizer = Recognizer::load(&data).unwrap();
+        let shop = "総力戦";
+        let (left, right) = (
+            recognizer.coin_item(shop, 0).unwrap(),
+            recognizer.coin_item(shop, 1).unwrap(),
+        );
+        let seen = Seen {
+            shop,
+            offers: Vec::new(),
+            held: vec![Some(0), Some(120)],
+        };
+        let (mut shelves, mut items) = (Shelves::default(), Tally::default());
+        let held = |shelves: &Shelves, items: &Tally| -> Vec<Option<Count>> {
+            let rows = recognizer.shop_rows(shelves.shelves(), items.counts());
+            let mut coins = rows[0].coins.clone();
+            coins.sort_by_key(|coin| coin.at);
+            coins.iter().map(|coin| coin.held).collect()
+        };
+        for _ in 0..CONFIRM {
+            shelves.observe(&seen, "2026-11-12 10:00:00");
+        }
+        assert!(super::take_coins(&recognizer, &shelves, &mut items));
+        let both = vec![Some(Count::Exact(0)), Some(Count::Exact(120))];
+        assert_eq!(held(&shelves, &items), both);
+        // The item list shows the cards either side of the coin used up side by side.
+        for _ in 0..CONFIRM {
+            items.observe(&[], &[left]);
+        }
+        assert_eq!(held(&shelves, &items), both);
+        // The list read otherwise meanwhile, the shop opened again counts as it shows.
+        assert!(items.take(right, Count::Exact(7)));
+        assert!(
+            !shelves.observe(&seen, "2026-11-12 10:05:00"),
+            "the shelf as it was"
+        );
+        assert!(super::take_coins(&recognizer, &shelves, &mut items));
+        assert_eq!(held(&shelves, &items), both);
     }
 
     #[test]

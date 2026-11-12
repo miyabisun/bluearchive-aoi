@@ -202,6 +202,41 @@ pub fn find_cards(image: &RgbImage) -> Vec<Card> {
     find(image).map(|(_, cards)| cards).unwrap_or_default()
 }
 
+/// The farthest a card stands from the one it follows, across its row or down to the next,
+/// of the card height: measured on 2026-11-12 over the lists' fixtures at 1500 to 2222 wide,
+/// 1.10 to 1.16 across and 1.02 to 1.08 down. A card not cut between doubles it.
+const NEXT: f32 = 1.5;
+/// The farthest a row's first and last cards stand from the panel's ends, of the card height:
+/// measured so, 0.19 to 0.24 from the left and 0.16 to 0.33 from the right. A card not cut at
+/// a row's end adds a card's width (1.1).
+const ROW_END: f32 = 0.6;
+
+/// Whether each of `cards` (in reading order) stands right after the one before it in the
+/// list: the next of its row, or the first of the next row after a row's last; and the first
+/// of all, whether it is its row's first. Where one does not, a card between was not cut (a
+/// run of cards too narrow to split, see `split_spans`), and the cards either side of it are
+/// not side by side in the list.
+pub fn follows(panel: &Panel, cards: &[Card]) -> Vec<bool> {
+    let height = panel.card_height as f32;
+    let first = |card: &Card| card.left - panel.left as f32 <= ROW_END * height;
+    let last = |card: &Card| panel.right as f32 - (card.left + card.width) <= ROW_END * height;
+    cards
+        .iter()
+        .enumerate()
+        .map(|(i, card)| {
+            let Some(before) = i.checked_sub(1).map(|i| &cards[i]) else {
+                return first(card);
+            };
+            if before.top == card.top {
+                card.left - before.left <= NEXT * height
+            } else {
+                let down = card.top.saturating_sub(before.top) as f32;
+                down <= NEXT * height && last(before) && first(card)
+            }
+        })
+        .collect()
+}
+
 /// The list panel and its fully visible cards, when the frame shows the list.
 pub fn find(image: &RgbImage) -> Option<(Panel, Vec<Card>)> {
     let (panel, rows) = layout(image)?;
@@ -353,6 +388,80 @@ mod tests {
             FilterType::Triangle,
         );
         assert_eq!(find_cards(&small).len(), 20);
+    }
+
+    /// Two rows of five cards as a window 1920 wide draws them, in reading order.
+    fn two_rows() -> (Panel, Vec<Card>) {
+        let panel = Panel {
+            left: 1000,
+            right: 1870,
+            top: 200,
+            card_height: 142,
+            shows_start: false,
+        };
+        let cards = [230, 378]
+            .into_iter()
+            .flat_map(|top| {
+                (0..5).map(move |column| Card {
+                    left: 1030.0 + 159.0 * column as f32,
+                    width: 155.0,
+                    top,
+                    height: 142,
+                })
+            })
+            .collect();
+        (panel, cards)
+    }
+
+    /// Each card stands right after the one before it: the next of its row, or the first of
+    /// the next row after a row's last; the first of all at its row's start.
+    #[test]
+    fn whole_rows_follow_one_another() {
+        let (panel, cards) = two_rows();
+        assert_eq!(follows(&panel, &cards), [true; 10]);
+    }
+
+    /// Where a card was not cut, the card after it follows none: the next of the row, the
+    /// first of the next row after a row cut short, the first of all in a row cut from its
+    /// second card.
+    #[test]
+    fn a_card_after_one_not_cut_follows_none() {
+        let (panel, cards) = two_rows();
+        let without = |gone: usize| -> Vec<bool> {
+            let mut left = cards.clone();
+            left.remove(gone);
+            follows(&panel, &left)
+        };
+        let all_but = |at: usize| -> Vec<bool> { (0..9).map(|i| i != at).collect() };
+        assert_eq!(without(2), all_but(2), "the row's third");
+        assert_eq!(without(4), all_but(4), "the first row's last");
+        assert_eq!(without(5), all_but(5), "the second row's first");
+        assert_eq!(without(0), all_but(0), "the first of all");
+        // A row of cards between not found at all.
+        let mut apart = cards.clone();
+        for card in &mut apart[5..] {
+            card.top += 148;
+        }
+        assert_eq!(follows(&panel, &apart), all_but_ten(5));
+    }
+
+    fn all_but_ten(at: usize) -> Vec<bool> {
+        (0..10).map(|i| i != at).collect()
+    }
+
+    /// The lists' fixtures are cut whole: every card follows the one before it.
+    #[test]
+    fn the_fixtures_cards_follow_one_another() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let fixtures: Vec<Fixture> =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("labels.json")).unwrap())
+                .unwrap();
+        for fixture in fixtures {
+            let image = fixture_image(&dir, &fixture.image);
+            let (panel, cards) = find(&image).unwrap();
+            let follows = follows(&panel, &cards);
+            assert!(follows.iter().all(|f| *f), "{}: {follows:?}", fixture.image);
+        }
     }
 
     #[test]
