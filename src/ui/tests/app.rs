@@ -8,7 +8,7 @@ use crate::{
     Row,
     keep::Kept,
     quantity::Count,
-    watch::{Screen, Status},
+    watch::{Place, Screen, Status, Update},
 };
 
 /// 120 items, the fourth with a long name, the sixth counted in thousands.
@@ -344,6 +344,27 @@ fn the_status_pauses_the_reading_when_pressed_and_resumes_it(cx: &mut TestAppCon
     assert!(shows(vcx, "アイテムを集計中"), "reading");
     report(&core, vcx, &Status::Paused, None);
     assert!(shows(vcx, "一時中断"), "paused, it says so");
+}
+
+#[gpui::test]
+fn the_status_names_a_screen_the_work_tab_follows(cx: &mut TestAppContext) {
+    let (_, core, vcx) = open(cx, &Kept::default());
+    let place = |name| Some(Update::Place(name));
+    report(&core, vcx, &Status::OtherScreen, None);
+    assert!(shows(vcx, "対象外の画面"), "no screen told");
+    report(
+        &core,
+        vcx,
+        &Status::OtherScreen,
+        place(Some(Place::Screen("指名手配"))),
+    );
+    assert!(shows(vcx, "指名手配"), "the screen the game came to");
+    assert!(
+        !shows(vcx, "対象外の画面"),
+        "not told as no screen of Aoi's"
+    );
+    report(&core, vcx, &Status::OtherScreen, place(None));
+    assert!(shows(vcx, "対象外の画面"), "left: no screen told again");
 }
 
 #[gpui::test]

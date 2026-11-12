@@ -500,7 +500,12 @@ impl Aoi {
                         cx.notify();
                     }))
             }));
-        let status = view::status_view(&self.shown.status, &self.shown.phone, &self.shown.cast);
+        let status = view::status_view(
+            &self.shown.status,
+            self.shown.place,
+            &self.shown.phone,
+            &self.shown.cast,
+        );
         let paused = matches!(self.shown.status, crate::watch::Status::Paused);
         let (lamp, words) = match status.tone {
             view::Tone::Active => (theme.accent, theme.on_surface),

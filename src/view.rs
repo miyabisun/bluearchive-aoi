@@ -234,11 +234,17 @@ fn list_name(screen: Screen) -> &'static str {
     LISTS.iter().find(|l| l.id == id).map_or(id, |l| l.name)
 }
 
-/// The watcher's status as a short label and a tone for its badge.
-fn badge(status: &Status) -> (String, Tone) {
+/// The watcher's status as a short label and a tone for its badge. A screen nothing is counted
+/// from is named where its title tells it (`place`), as the work tab names its fold: the tab
+/// follows the game there, and 「対象外の画面」 read as Aoi's failing to (the user's 2026-11-12
+/// 「指名手配の画面に入ったのに「対象外の画面です」で終わってます」).
+fn badge(status: &Status, place: Option<Place>) -> (String, Tone) {
     match status {
         Status::Reading { list, .. } => (format!("{}を集計中", list_name(*list)), Tone::Active),
-        Status::OtherScreen => ("対象外の画面".to_owned(), Tone::Idle),
+        Status::OtherScreen => match place {
+            Some(Place::Screen(name)) => (name.to_owned(), Tone::Idle),
+            _ => ("対象外の画面".to_owned(), Tone::Idle),
+        },
         Status::Failed { .. } => ("キャプチャ失敗".to_owned(), Tone::Danger),
         Status::Paused => ("一時中断".to_owned(), Tone::Paused),
         Status::NoSource => ("取り込み元なし".to_owned(), Tone::Idle),
@@ -269,9 +275,10 @@ fn capture(status: &Status, phone: &Link, cast: &Cast) -> Option<(Capture, Strin
     }
 }
 
-/// The status badge of the watcher's `status`, the phone's link and the streaming app's cast.
-pub fn status_view(status: &Status, phone: &Link, cast: &Cast) -> StatusView {
-    let (label, tone) = badge(status);
+/// The status badge of the watcher's `status`, where the game is (`place`), the phone's link
+/// and the streaming app's cast.
+pub fn status_view(status: &Status, place: Option<Place>, phone: &Link, cast: &Cast) -> StatusView {
+    let (label, tone) = badge(status, place);
     let source = capture(status, phone, cast);
     let mut title = Vec::new();
     if let Some((_, name)) = &source {

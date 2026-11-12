@@ -98,7 +98,7 @@ fn filter_rows_needs_every_word_of_the_query() {
 #[test]
 fn status_view_names_each_state_and_marks_which_are_trouble() {
     let badge = |status: Status| {
-        let view = status_view(&status, &Link::Unpaired, &Cast::Off);
+        let view = status_view(&status, None, &Link::Unpaired, &Cast::Off);
         (view.label, view.tone)
     };
     let label = |text: &str, tone| (text.to_owned(), tone);
@@ -132,6 +132,51 @@ fn status_view_names_each_state_and_marks_which_are_trouble() {
 }
 
 #[test]
+fn status_view_names_the_screen_the_game_is_on_where_nothing_is_counted() {
+    let badge = |status: &Status, place| {
+        let view = status_view(status, place, &Link::Unpaired, &Cast::Off);
+        (view.label, view.tone)
+    };
+    let label = |text: &str, tone| (text.to_owned(), tone);
+    let bounty = Some(Place::Screen("指名手配"));
+    assert_eq!(
+        badge(&Status::OtherScreen, bounty),
+        label("指名手配", Tone::Idle),
+        "a screen told by its title is named as the work tab names it"
+    );
+    assert_eq!(
+        badge(
+            &Status::OtherScreen,
+            Some(Place::Screen("ショップ: 通常アイテム"))
+        ),
+        label("ショップ: 通常アイテム", Tone::Idle)
+    );
+    // A shop is counted from: the place left behind a moment after it names nothing.
+    assert_eq!(
+        badge(&Status::OtherScreen, Some(Place::Shop("総力戦"))),
+        label("対象外の画面", Tone::Idle)
+    );
+    // Every other state tells its own, wherever the game was last.
+    let reading = Status::Reading {
+        list: Screen::Items,
+        fps: 15.,
+        dropped: 0,
+    };
+    assert_eq!(
+        badge(&reading, bounty),
+        label("アイテムを集計中", Tone::Active)
+    );
+    assert_eq!(
+        badge(&Status::Paused, bounty),
+        label("一時中断", Tone::Paused)
+    );
+    assert_eq!(
+        badge(&Status::NoGame, bounty),
+        label("ゲーム未検出", Tone::Idle)
+    );
+}
+
+#[test]
 fn status_view_shows_where_the_frames_come_from_and_says_it_and_the_frame_rate_on_hover() {
     let reading = Status::Reading {
         list: Screen::Shops,
@@ -140,7 +185,7 @@ fn status_view_shows_where_the_frames_come_from_and_says_it_and_the_frame_rate_o
     };
     let tap = "押すと読み取りを一時中断";
     let at = |status: &Status, phone: &Link, cast: &Cast| {
-        let view = status_view(status, phone, cast);
+        let view = status_view(status, None, phone, cast);
         (view.source, view.title)
     };
     assert_eq!(
