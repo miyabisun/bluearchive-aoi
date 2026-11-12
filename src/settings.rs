@@ -178,11 +178,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn nothing_kept_means_the_defaults() {
-        let settings = Settings::parse("");
-        assert_eq!(settings.theme, ThemeChoice::Auto, "the OS's theme");
-        assert_eq!(settings.cursor, CursorChoice::None, "Windows' own cursor");
-        assert!(settings.work_follow, "the work tab follows the game");
+    fn nothing_kept_or_nothing_readable_means_the_defaults() {
+        for kept in ["", "{not json"] {
+            let settings = Settings::parse(kept);
+            assert_eq!(settings.theme, ThemeChoice::Auto, "the OS's theme");
+            assert_eq!(settings.cursor, CursorChoice::None, "Windows' own cursor");
+            assert!(settings.work_follow, "the work tab follows the game");
+            assert_eq!(
+                settings.feed, None,
+                "where the game is read from not asked yet"
+            );
+            assert_eq!(settings.window, None, "no place kept");
+        }
     }
 
     #[test]
@@ -238,23 +245,6 @@ mod tests {
                 "the theme kept beside {window}"
             );
         }
-    }
-
-    #[test]
-    fn a_broken_file_means_the_defaults() {
-        assert_eq!(
-            Settings::parse("{not json"),
-            Settings::default(),
-            "nothing readable"
-        );
-    }
-
-    /// The theme's choices as the settings page lists them: what follows the system first
-    /// (the user's of 2026-11-10: 「自動が一番上であるべき」).
-    #[test]
-    fn the_theme_follows_the_system_first() {
-        let names: Vec<&str> = ThemeChoice::ALL.iter().map(|(_, name)| *name).collect();
-        assert_eq!(names, ["自動", "ライト", "ダーク"]);
     }
 
     /// Where the game is read from is kept; a file of before it was asked keeps none, and

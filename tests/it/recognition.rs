@@ -3,15 +3,13 @@
 //! the game shows them ("1383", "51K"); cut-off cells are not listed and must
 //! not be reported.
 
-mod common;
-
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
 
 use aoi::{
-    Cell, List, Recognizer,
+    Cell, List,
     tally::{CONFIRM, Tally},
 };
 use serde::Deserialize;
@@ -50,9 +48,8 @@ fn fixtures() -> Vec<Fixture> {
     serde_json::from_str(&json).expect("the JSON parses")
 }
 
-fn recognizer() -> Recognizer {
-    Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data"))
-        .expect("the recognizer loads data/")
+fn recognizer() -> &'static aoi::Recognizer {
+    crate::common::recognizer()
 }
 
 fn open(name: &str) -> image::RgbImage {
@@ -251,30 +248,38 @@ fn right_or_not_at_all(
 /// count right or not at all, and most of them right.
 #[test]
 fn a_smaller_screen_reads_right_or_not_at_all() {
+    const WIDTHS: [u32; 7] = [2222, 2100, 1920, 1760, 1600, 1550, 1500];
     let recognizer = recognizer();
-    let mut failures = Vec::new();
-    for width in [2222, 2100, 1920, 1760, 1600, 1550, 1500] {
-        let (mut cells, mut right) = (0, 0);
-        for fixture in fixtures().into_iter().filter(|f| f.role == "eval") {
-            let small = common::drawn_at(&open(&fixture.image), width);
+    let eval: Vec<Fixture> = fixtures()
+        .into_iter()
+        .filter(|f| f.role == "eval")
+        .collect();
+    // Each screen opened once and drawn at every width, the screens side by side: at each
+    // width, its cells labeled, those read right, and what was read wrong.
+    let screens = crate::common::each(&eval, |fixture| {
+        let drawn = open(&fixture.image);
+        WIDTHS.map(|width| {
+            let small = crate::common::drawn_at(&drawn, width);
             let read = recognizer.read(&small, fixture.list);
             let name = format!("{width}: {}", fixture.image);
-            let (c, r) = right_or_not_at_all(&name, &read, &fixture.cells, &mut failures);
+            let mut failures = Vec::new();
+            let (cells, right) = right_or_not_at_all(&name, &read, &fixture.cells, &mut failures);
+            (cells, right, failures)
+        })
+    });
+    let mut failures = Vec::new();
+    for (at, width) in WIDTHS.into_iter().enumerate() {
+        let (mut cells, mut right) = (0, 0);
+        for screen in &screens {
+            let (c, r, wrong) = &screen[at];
             (cells, right) = (cells + c, right + r);
+            failures.extend(wrong.iter().cloned());
         }
         if right * 10 < cells * 9 {
             failures.push(format!("{width}: {right} of {cells} cells read"));
         }
     }
-    assert!(
-        failures.is_empty(),
-        "
-{}",
-        failures.join(
-            "
-"
-        )
-    );
+    assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
 
 /// A tablet's screen as scrcpy streams it (`tests/fixtures/tablet.json`).

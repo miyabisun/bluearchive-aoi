@@ -1,8 +1,6 @@
 //! The student screen read against screenshots labeled by eye
 //! (tests/fixtures/students.json): every field reads right or unknown, never wrong.
 
-mod common;
-
 use std::path::Path;
 
 use aoi::student::{self, Label, LevelLabel, Training};
@@ -17,6 +15,13 @@ fn labels() -> Vec<Label> {
             .expect("the file reads"),
     )
     .expect("the JSON parses")
+}
+
+/// A labeled screen's picture, as it was drawn.
+fn drawn(image: &str) -> image::RgbImage {
+    image::open(root().join("tests/fixtures").join(image))
+        .expect("the image opens")
+        .to_rgb8()
 }
 
 /// The fields of a training, named, each `None` when unknown.
@@ -118,18 +123,18 @@ fn a_phone_stream_reads_every_field() {
 #[test]
 fn a_smaller_screen_reads_fields_right_or_not_at_all() {
     const LEAST: f32 = 0.85;
-    let recognizer = recognizer();
-    let mut wrong = Vec::new();
-    for width in [
+    const WIDTHS: [u32; 11] = [
         2222, 2100, 1920, 1830, 1800, 1760, 1680, 1600, 1550, 1520, 1500,
-    ] {
-        let (mut right, mut total) = (0, 0);
-        for label in labels() {
-            let image = image::open(root().join("tests/fixtures").join(&label.image))
-                .unwrap()
-                .to_rgb8();
-            let image = common::drawn_at(&image, width);
+    ];
+    let recognizer = recognizer();
+    // Each screen opened once and drawn at every width, the screens side by side: at each
+    // width, the fields read right, the fields there are, and those read wrong.
+    let screens = crate::common::each(&labels(), |label| {
+        let drawn = drawn(&label.image);
+        WIDTHS.map(|width| {
+            let image = crate::common::drawn_at(&drawn, width);
             let read = fields(&student::read(&image, recognizer.references(&image).1));
+            let (mut right, mut total, mut wrong) = (0, 0, Vec::new());
             for ((name, got), (_, want)) in read.into_iter().zip(fields(&label.training())) {
                 total += 1;
                 if got.is_some() && got != want {
@@ -141,6 +146,16 @@ fn a_smaller_screen_reads_fields_right_or_not_at_all() {
                     right += 1;
                 }
             }
+            (right, total, wrong)
+        })
+    });
+    let mut wrong = Vec::new();
+    for (at, width) in WIDTHS.into_iter().enumerate() {
+        let (mut right, mut total) = (0, 0);
+        for screen in &screens {
+            let (r, t, w) = &screen[at];
+            (right, total) = (right + r, total + t);
+            wrong.extend(w.iter().cloned());
         }
         if (right as f32) < LEAST * total as f32 {
             wrong.push(format!("{width}: {right} of {total} fields read"));
@@ -149,8 +164,8 @@ fn a_smaller_screen_reads_fields_right_or_not_at_all() {
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
 }
 
-fn recognizer() -> aoi::Recognizer {
-    aoi::Recognizer::load(&root().join("data")).expect("the recognizer loads data/")
+fn recognizer() -> &'static aoi::Recognizer {
+    crate::common::recognizer()
 }
 
 /// Every student screen is told as such, its student named right or not at
@@ -158,22 +173,20 @@ fn recognizer() -> aoi::Recognizer {
 #[test]
 fn each_student_screen_names_its_student() {
     let recognizer = recognizer();
-    let (mut named, mut screens) = (0, 0);
-    for label in labels() {
-        let image = image::open(root().join("tests/fixtures").join(&label.image))
-            .unwrap()
-            .to_rgb8();
+    let read = crate::common::each(&labels(), |label| {
         // As Aoi reads it, scaled down to a width read at.
-        let image = aoi::screen::normalize(&image).into_owned();
+        let image = aoi::screen::normalize(&drawn(&label.image)).into_owned();
         match recognizer.read_frame(&image) {
-            Some(aoi::Frame::Student(id, _)) => {
-                screens += 1;
-                if let Some(id) = id {
-                    assert_eq!(id, label.id, "{}", label.image);
-                    named += 1;
-                }
-            }
+            Some(aoi::Frame::Student(id, _)) => id,
             other => panic!("{}: {other:?}", label.image),
+        }
+    });
+    let (mut named, mut screens) = (0, 0);
+    for (label, id) in labels().iter().zip(read) {
+        screens += 1;
+        if let Some(id) = id {
+            assert_eq!(id, label.id, "{}", label.image);
+            named += 1;
         }
     }
     assert!(named * 10 >= screens * 9, "{named} of {screens} named");
@@ -202,22 +215,22 @@ fn plates() -> Vec<(String, i64)> {
 #[test]
 fn every_name_plate_names_its_student() {
     let recognizer = recognizer();
-    let mut wrong = Vec::new();
-    for (path, id) in plates() {
-        let image = image::open(root().join("tests/fixtures").join(&path))
-            .unwrap()
-            .to_rgb8();
+    let wrong: Vec<String> = crate::common::each(&plates(), |(path, id)| {
+        let image = drawn(path);
+        let mut wrong = Vec::new();
         for image in [
             aoi::screen::normalize(&image).into_owned(),
-            common::drawn_at(&image, 1920),
+            crate::common::drawn_at(&image, 1920),
         ] {
             let glyphs = recognizer.references(&image).0;
             let named = student::name::read(&image, glyphs, &glyphs.index.names);
-            if named != Some(id) {
+            if named != Some(*id) {
                 wrong.push(format!("{path} {}: {named:?}", image.width()));
             }
         }
-    }
+        wrong
+    })
+    .concat();
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
 }
 
@@ -226,21 +239,22 @@ fn every_name_plate_names_its_student() {
 #[test]
 fn a_student_missing_from_the_snapshot_is_never_named_as_another() {
     let recognizer = recognizer();
-    for (path, id) in plates() {
-        let image = image::open(root().join("tests/fixtures").join(&path))
-            .unwrap()
-            .to_rgb8();
+    let plates = plates();
+    let named = crate::common::each(&plates, |(path, id)| {
         // As Aoi reads it, scaled down to a width read at.
-        let image = aoi::screen::normalize(&image).into_owned();
+        let image = aoi::screen::normalize(&drawn(path)).into_owned();
         let glyphs = recognizer.references(&image).0;
         let name = &recognizer
             .students()
             .iter()
-            .find(|(student, _)| *student == id)
+            .find(|(student, _)| student == id)
             .unwrap()
             .1;
         let others = glyphs.index.names.iter().filter(|w| w.text != *name);
-        assert_eq!(student::name::read(&image, glyphs, others), None, "{path}");
+        student::name::read(&image, glyphs, others)
+    });
+    for ((path, _), named) in plates.iter().zip(named) {
+        assert_eq!(named, None, "{path}");
     }
 }
 
@@ -249,14 +263,13 @@ fn a_student_missing_from_the_snapshot_is_never_named_as_another() {
 /// named right or not at all.
 #[test]
 fn a_smaller_screen_names_its_student_right_or_not_at_all() {
+    const WIDTHS: [u32; 7] = [2222, 2100, 1920, 1760, 1600, 1550, 1500];
     let recognizer = recognizer();
-    let mut wrong = Vec::new();
-    for width in [2222, 2100, 1920, 1760, 1600, 1550, 1500] {
-        for label in labels() {
-            let image = image::open(root().join("tests/fixtures").join(&label.image))
-                .unwrap()
-                .to_rgb8();
-            let image = common::drawn_at(&image, width);
+    // Each screen opened once and drawn at every width, the screens side by side.
+    let screens = crate::common::each(&labels(), |label| {
+        let drawn = drawn(&label.image);
+        WIDTHS.map(|width| {
+            let image = crate::common::drawn_at(&drawn, width);
             let glyphs = recognizer.references(&image).0;
             let name = &recognizer
                 .students()
@@ -264,6 +277,7 @@ fn a_smaller_screen_names_its_student_right_or_not_at_all() {
                 .find(|(id, _)| *id == label.id)
                 .unwrap()
                 .1;
+            let mut wrong = Vec::new();
             if let Some(id) = student::name::read(&image, glyphs, &glyphs.index.names)
                 && id != label.id
             {
@@ -273,8 +287,12 @@ fn a_smaller_screen_names_its_student_right_or_not_at_all() {
             if let Some(id) = student::name::read(&image, glyphs, others) {
                 wrong.push(format!("{width} {} left out: {id}", label.image));
             }
-        }
-    }
+            wrong
+        })
+    });
+    let wrong: Vec<String> = (0..WIDTHS.len())
+        .flat_map(|at| screens.iter().flat_map(move |screen| screen[at].clone()))
+        .collect();
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
 }
 
@@ -425,7 +443,7 @@ fn the_level_up_tab_reads_the_name_plate() {
     let image = image::open(root().join("tests/fixtures/students/koyuki-pajama-levelup.png"))
         .unwrap()
         .to_rgb8();
-    let image = common::drawn_at(&image, 1920);
+    let image = crate::common::drawn_at(&image, 1920);
     let (id, read) = recognizer().read_student(&image).expect("a student screen");
     assert_eq!(id, Some(20056));
     assert_eq!(
@@ -457,11 +475,9 @@ fn a_dim_or_pale_screen_reads_fields_right_or_not_at_all() {
         ("paled to 0.5", |c| paled(c, 0.5)),
     ];
     let recognizer = recognizer();
-    let mut wrong = Vec::new();
-    for label in labels() {
-        let drawn = image::open(root().join("tests/fixtures").join(&label.image))
-            .unwrap()
-            .to_rgb8();
+    let wrong: Vec<String> = crate::common::each(&labels(), |label| {
+        let drawn = drawn(&label.image);
+        let mut wrong = Vec::new();
         for (way, off) in ways {
             let mut image = drawn.clone();
             for pixel in image.pixels_mut() {
@@ -479,7 +495,9 @@ fn a_dim_or_pale_screen_reads_fields_right_or_not_at_all() {
                 }
             }
         }
-    }
+        wrong
+    })
+    .concat();
     assert!(
         wrong.is_empty(),
         "{} wrong\n{}",

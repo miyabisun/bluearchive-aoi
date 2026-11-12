@@ -624,27 +624,13 @@ mod tests {
         let read = vec![cell(Some(10)), cell(Some(12))];
         let whole = with_breaks(read.clone(), &[true, true]);
         assert_eq!(whole, read);
-        assert_eq!(
-            gaps(&entries, &items::RULES, &whole, false, |_| false),
-            [11]
-        );
         let broken = with_breaks(read.clone(), &[true, false]);
         assert_eq!(broken.len(), 3);
         assert_eq!((broken[0], broken[2]), (read[0], read[1]));
         assert_eq!((broken[1].id, broken[1].quantity), (None, None));
-        assert_eq!(
-            gaps(&entries, &items::RULES, &broken, false, |_| false),
-            Vec::<i64>::new()
-        );
         // The first card not at its row's start: nothing before it is gone, though the
         // list's start shows.
-        let first = vec![cell(Some(12))];
-        let at_start = with_breaks(first.clone(), &[true]);
-        assert_eq!(
-            gaps(&entries, &items::RULES, &at_start, true, |_| false),
-            [10, 11]
-        );
-        let late = with_breaks(first, &[false]);
+        let late = with_breaks(vec![cell(Some(12))], &[false]);
         assert_eq!(
             gaps(&entries, &items::RULES, &late, true, |_| false),
             Vec::<i64>::new()

@@ -3,8 +3,6 @@
 //! cards shown whole: from the name to the price, which the shops' terms
 //! (`data/shops.yaml`) must give, or the card itself where they leave it to it.
 
-mod common;
-
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -59,8 +57,11 @@ fn every_offer_read_is_right() {
 #[test]
 fn a_smaller_screen_reads_offers_right_or_not_at_all() {
     const LEAST: f32 = 0.7;
-    for width in [2222, 2100, 1920, 1760, 1700, 1600, 1550, 1500] {
-        let (wrong, read, labeled) = offers_read(Some(width));
+    const WIDTHS: [u32; 8] = [2222, 2100, 1920, 1760, 1700, 1600, 1550, 1500];
+    // The widths side by side, each read by a recognizer of its own (`offers_read` loads it:
+    // a recognizer keeps the last shop frame it read).
+    let read = crate::common::each(&WIDTHS, |&width| offers_read(Some(width)));
+    for (width, (wrong, read, labeled)) in WIDTHS.into_iter().zip(read) {
         assert!(wrong.is_empty(), "{width}:\n{}", wrong.join("\n"));
         assert!(
             read as f32 >= LEAST * labeled as f32,
@@ -85,7 +86,7 @@ fn offers_read(width: Option<u32>) -> (Vec<String>, usize, usize) {
             .expect("the image opens")
             .to_rgb8();
         let image = match width {
-            Some(width) => common::drawn_at(&image, width),
+            Some(width) => crate::common::drawn_at(&image, width),
             None => image,
         };
         let image = aoi::screen::normalize(&image).into_owned();
@@ -144,7 +145,7 @@ fn offers_read(width: Option<u32>) -> (Vec<String>, usize, usize) {
 /// The shops' terms give each labeled offer the price its card shows.
 #[test]
 fn the_terms_price_every_labeled_offer_as_its_card() {
-    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let recognizer = crate::common::recognizer();
     let items = recognizer.shop_goods();
     let fixtures: Vec<Fixture> =
         serde_json::from_str(&std::fs::read_to_string(fixtures_dir().join("shops.json")).unwrap())
@@ -195,7 +196,7 @@ fn the_terms_price_every_labeled_offer_as_its_card() {
 /// booster tickets and blueprint boxes; the goods bought up go last.
 #[test]
 fn a_shop_lists_its_goods_worth_buying_first_and_those_bought_up_last() {
-    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let recognizer = crate::common::recognizer();
     let items = recognizer.shop_goods();
     let offer = |name: &str, coin: u8, left: u32| Offer {
         id: items.iter().find(|i| i.name == name).unwrap().id,
@@ -289,7 +290,7 @@ fn a_shop_lists_its_goods_worth_buying_first_and_those_bought_up_last() {
 /// 神名のカケラ.
 #[test]
 fn the_month_end_plan_lists_the_elephs_before_the_notes_and_the_fragments() {
-    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let recognizer = crate::common::recognizer();
     let items = recognizer.shop_goods();
     let offer = |name: &str, coin: u8, left: u32| Offer {
         id: items.iter().find(|i| i.name == name).unwrap().id,
@@ -354,7 +355,7 @@ fn the_month_end_plan_lists_the_elephs_before_the_notes_and_the_fragments() {
 /// its month-end cards tell the same.
 #[test]
 fn a_good_tells_its_rarity_and_whether_it_is_an_eleph() {
-    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let recognizer = crate::common::recognizer();
     let items = recognizer.shop_goods();
     let expected: BTreeMap<String, (Option<Rarity>, bool)> = [
         ("初級テイラーストーン", Rarity::N, false),

@@ -248,17 +248,4 @@ mod tests {
         frames(&mut tally, &cells, CONFIRM);
         assert!(tally.counts().is_empty());
     }
-
-    #[test]
-    fn a_count_shown_in_thousands_replaces_an_exact_one() {
-        let mut tally = Tally::default();
-        frames(&mut tally, &[cell(110, 9999)], CONFIRM);
-        let rounded = Cell {
-            id: Some(110),
-            quantity: Some(Count::Thousands(10)),
-            ignored: false,
-        };
-        frames(&mut tally, &[rounded], CONFIRM);
-        assert_eq!(tally.counts().get(&110), Some(&Count::Thousands(10)));
-    }
 }

@@ -1,12 +1,11 @@
 //! The hard missions' elephs over the built-in data.
 
-use std::{collections::BTreeSet, path::Path};
+use std::collections::BTreeSet;
 
-use aoi::{Recognizer, Row, quantity::Count, strategy::Reserve};
+use aoi::{Row, quantity::Count, strategy::Reserve};
 
-fn recognizer() -> Recognizer {
-    Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data"))
-        .expect("the recognizer loads data/")
+fn recognizer() -> &'static aoi::Recognizer {
+    crate::common::recognizer()
 }
 
 #[test]

@@ -335,7 +335,7 @@ fn tables_the_ooparts_as_the_bounties_counts_alone_their_top_tier_at_the_left(
 }
 
 #[gpui::test]
-fn the_status_pauses_the_reading_when_pressed_and_resumes_it(cx: &mut TestAppContext) {
+fn the_status_says_the_reading_is_paused(cx: &mut TestAppContext) {
     let (_, core, vcx) = open(cx, &Kept::default());
     set(&core, vcx, |s| {
         s.status = reading(Screen::Items, 27.4);

@@ -1,13 +1,10 @@
 //! What could make up what the plan falls short of, over the built-in data:
 //! the choice boxes held, the fragments for elephs, and this month's shops.
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::Path,
-};
+use std::collections::{BTreeMap, HashMap};
 
 use aoi::{
-    Recognizer, Row,
+    Row,
     plan::{Held, Kind, NeedRow, Target},
     quantity::Count,
     shop::{Offer, Shelf},
@@ -63,7 +60,7 @@ fn text(source: &Source) -> String {
 
 #[test]
 fn a_slot_short_of_t10_blueprints_lists_the_t10_box_and_the_universal_ones_left() {
-    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let recognizer = crate::common::recognizer();
     let aru = StudentRow {
         id: 10000,
         name: "アル".to_owned(),
@@ -103,7 +100,7 @@ fn a_slot_short_of_t10_blueprints_lists_the_t10_box_and_the_universal_ones_left(
 
 #[test]
 fn a_line_short_lists_its_boxes_fragments_and_this_months_shops() {
-    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let recognizer = crate::common::recognizer();
     let id = |name: &str| {
         recognizer
             .shop_goods()

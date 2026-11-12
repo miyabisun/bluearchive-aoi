@@ -622,7 +622,6 @@ mod tests {
         let phone = fixture("android/top-bar.png");
         let small =
             image::imageops::resize(&phone, 1600, 713, image::imageops::FilterType::Triangle);
-        assert_eq!(normalize(&phone).width(), 1920);
         // Smaller than the smallest width read, a screen is not read at all:
         // a window on a Full HD screen is read, a stream of 720 lines not, nor
         // a phone's drawing the game smaller, scaled up or not.

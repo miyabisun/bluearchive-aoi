@@ -1,12 +1,9 @@
 //! The item and equipment tabs' tables by kind over the built-in data.
 
-use std::path::Path;
+use aoi::{Row, quantity::Count};
 
-use aoi::{Recognizer, Row, quantity::Count};
-
-fn recognizer() -> Recognizer {
-    Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data"))
-        .expect("the recognizer loads data/")
+fn recognizer() -> &'static aoi::Recognizer {
+    crate::common::recognizer()
 }
 
 fn row(id: i64, count: u32) -> Row {

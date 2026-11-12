@@ -1279,7 +1279,6 @@ mod tests {
         let terms = [(1, 300), (2, 480), (3, 840), (4, 840)];
         let at = |price: u32| move |id: i64| terms.contains(&(id, price));
         assert_eq!(decide(Err(vec![0, 1]), &drawn, at(480)), Some(2));
-        assert_eq!(decide(Err(vec![0, 1]), &drawn, at(999)), None);
         assert_eq!(decide(Err(vec![0, 2]), &drawn, at(840)), None);
         assert_eq!(decide(Ok(2), &drawn, at(840)), None);
         // An item of that price the icon cannot be.

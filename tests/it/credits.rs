@@ -16,8 +16,8 @@ fn root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn recognizer() -> aoi::Recognizer {
-    aoi::Recognizer::load(&root().join("data")).expect("the recognizer loads data/")
+fn recognizer() -> &'static aoi::Recognizer {
+    crate::common::recognizer()
 }
 
 /// Every screen's credits read, right, as Aoi reads them (scaled down to Full

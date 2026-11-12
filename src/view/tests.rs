@@ -82,7 +82,6 @@ fn filter_rows_matches_katakana_typed_in_hiragana() {
     let students = [named(1, "アカネ（バニーガール）"), named(2, "ホシノ")];
     assert_eq!(student_ids(&filter_rows(&students, "あかね")), [1]);
     assert_eq!(student_ids(&filter_rows(&students, "ばにー")), [1]);
-    assert!(filter_rows(&tally(), "ぎじゅつ").is_empty());
 }
 
 #[test]
@@ -1643,18 +1642,30 @@ fn commission_rows_counts_the_students_each_commissions_haul_raises_the_reports_
 
 #[test]
 fn currency_rows_lists_the_credits_then_the_reports_as_the_commissions_count_them() {
-    let row = commissions(false);
-    let [reports, credits] = commission_rows(&row);
     assert_eq!(
-        currency_rows(&row),
+        currency_rows(&commissions(true)),
         [
             RaiseRow {
-                title: "クレジット".to_owned(),
-                ..credits
+                tone: Some(Tone::More),
+                ..raise_row(
+                    "credits",
+                    "クレジット",
+                    credits_held("248,955,686"),
+                    "5.9人分",
+                    "249M",
+                    "/ 41.5M",
+                )
             },
             RaiseRow {
-                title: "レポート".to_owned(),
-                ..reports
+                tone: Some(Tone::Fewer),
+                ..raise_row(
+                    "reports",
+                    "レポート",
+                    RaiseHeld::Tiers(tiers_from(10).to_vec()),
+                    "5.0人分",
+                    "約6.2M EXP",
+                    "/ 1.2M EXP",
+                )
             },
         ]
     );

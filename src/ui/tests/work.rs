@@ -38,9 +38,8 @@ fn tells_the_plays_by_when_they_are_played(cx: &mut TestAppContext) {
         assert!(shows(vcx, heading), "{heading}");
     }
     click(vcx, "fold-work:特別依頼");
-    let rows = crate::view::commission_rows(&core.snapshot().work.commissions);
-    for row in &rows {
-        assert!(shows(vcx, &row.title), "the commissions' row {}", row.title);
+    for title in ["拠点防衛", "クレジット回収"] {
+        assert!(shows(vcx, title), "the commissions' row {title}");
     }
 }
 
@@ -51,10 +50,7 @@ fn reserves_a_hard_mission_s_eleph_by_pressing_its_card(cx: &mut TestAppContext)
     click(vcx, "tab:お仕事");
     click(vcx, "fold-work:任務 Hard");
     assert!(has(vcx, "card:hard-10005"), "the student's eleph a card");
-    assert!(
-        shows(vcx, "148文字") || shows(vcx, "148"),
-        "the elephs held"
-    );
+    assert!(shows(vcx, "148文字"), "the elephs held");
     click(vcx, "card:hard-10005");
     let reserved = Reserve {
         shop: "任務 Hard".to_owned(),

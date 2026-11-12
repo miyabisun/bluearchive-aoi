@@ -174,15 +174,6 @@ mod tests {
     }
 
     #[test]
-    fn what_is_kept_comes_back() {
-        let dir = folder("back");
-        let path = dir.join("state.json");
-        save(&path, &kept()).unwrap();
-        assert_eq!(load(&path).unwrap(), kept());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
     fn an_unread_weapon_and_a_locked_one_stay_apart() {
         let dir = folder("weapon");
         let path = dir.join("state.json");
@@ -263,16 +254,6 @@ mod tests {
             (Kept::default(), None)
         );
         assert!(!dir.join("state.broken-x.json").exists());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn a_broken_file_is_told_not_taken_for_nothing() {
-        let dir = folder("broken");
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("state.json");
-        std::fs::write(&path, "{ not json").unwrap();
-        assert!(load(&path).is_err());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -3,11 +3,8 @@
 //! than one (`tests/fixtures/titles.json`), and every other fixture, whose
 //! screens write another title or none.
 
-mod common;
-
 use std::path::{Path, PathBuf};
 
-use aoi::Recognizer;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -21,9 +18,8 @@ fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
 }
 
-fn recognizer() -> Recognizer {
-    Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data"))
-        .expect("the recognizer loads data/")
+fn recognizer() -> &'static aoi::Recognizer {
+    crate::common::recognizer()
 }
 
 fn open(path: &Path) -> image::RgbImage {
@@ -38,8 +34,9 @@ fn a_screen_reads_as_its_title_at_every_width() {
     let fixtures: Vec<Fixture> =
         serde_json::from_str(&std::fs::read_to_string(fixtures_dir().join("titles.json")).unwrap())
             .unwrap();
-    let mut wrong = Vec::new();
-    for fixture in &fixtures {
+    // The screens side by side, each opened once.
+    let wrong: Vec<String> = crate::common::each(&fixtures, |fixture| {
+        let mut wrong = Vec::new();
         let screen = Some(fixture.screen.as_deref().unwrap_or(&fixture.title));
         let image = open(&fixtures_dir().join(&fixture.image));
         let read = recognizer.read_title(&aoi::screen::normalize(&image));
@@ -47,12 +44,14 @@ fn a_screen_reads_as_its_title_at_every_width() {
             wrong.push(format!("{} own size: {read:?}", fixture.image));
         }
         for width in [2222, 2100, 1920, 1760, 1600, 1550, 1500] {
-            let read = recognizer.read_title(&common::drawn_at(&image, width));
+            let read = recognizer.read_title(&crate::common::drawn_at(&image, width));
             if read != screen {
                 wrong.push(format!("{} at {width}: {read:?}", fixture.image));
             }
         }
-    }
+        wrong
+    })
+    .concat();
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
 }
 
@@ -98,7 +97,7 @@ fn the_shop_screen_with_another_shop_chosen_reads_as_no_screen() {
     for entry in std::fs::read_dir(fixtures_dir().join("shops")).unwrap() {
         let path = entry.unwrap().path();
         // Drawn as wide as the 通常アイテム screen was captured.
-        let other = common::drawn_at(&open(&path), 2370);
+        let other = crate::common::drawn_at(&open(&path), 2370);
         assert_eq!(other.dimensions(), image.dimensions(), "{}", path.display());
         let mut chosen = image.clone();
         for area in shop::areas() {

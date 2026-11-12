@@ -1,10 +1,9 @@
 //! The training plan over the built-in data, against totals known outside it:
 //! the skill credits of the archived SchaleDB site and the game's level table.
 
-use std::{collections::BTreeMap, path::Path};
+use std::collections::BTreeMap;
 
 use aoi::{
-    Recognizer,
     plan::{Kind, Target},
     student::{Gear, Training},
     watch::StudentRow,
@@ -35,7 +34,7 @@ fn need(rows: &[aoi::plan::NeedRow], kind: Kind, id: i64) -> u64 {
 
 #[test]
 fn skills_from_lv1_to_the_top_take_the_known_credits_and_three_notes() {
-    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let recognizer = crate::common::recognizer();
     let target = Target {
         level: 1,
         equipment: [1, 1, 1],
@@ -56,7 +55,7 @@ fn skills_from_lv1_to_the_top_take_the_known_credits_and_three_notes() {
 
 #[test]
 fn lv1_to_90_takes_the_game_tables_exp() {
-    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let recognizer = crate::common::recognizer();
     let target = Target {
         skills: [1; 4],
         equipment: [1, 1, 1],
@@ -77,7 +76,7 @@ fn lv1_to_90_takes_the_game_tables_exp() {
 /// loads, and the kinds of four tiers go by their first tier.
 #[test]
 fn the_planned_goods_have_icons_and_the_tiered_kinds_families() {
-    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let recognizer = crate::common::recognizer();
     let (rows, blueprints, _) = recognizer.plan_rows(
         &BTreeMap::from([(10000, Target::default())]),
         &[aru(1)],
@@ -109,7 +108,7 @@ fn the_planned_goods_have_icons_and_the_tiered_kinds_families() {
 
 #[test]
 fn equipment_from_t1_to_t10_takes_each_slots_blueprints_the_universal_ones_paying_t2_to_t9() {
-    let recognizer = Recognizer::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("data")).unwrap();
+    let recognizer = crate::common::recognizer();
     let target = Target {
         level: 1,
         skills: [1; 4],
