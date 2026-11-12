@@ -451,3 +451,48 @@ fn keeps_the_tab_chosen_when_the_game_shows_another_list(cx: &mut TestAppContext
         "the tab stays as the user chose"
     );
 }
+
+/// The left and right edges of what `selector` finds.
+fn sides(vcx: &mut gpui::VisualTestContext, selector: &str) -> (gpui::Pixels, gpui::Pixels) {
+    let at = super::bounds(vcx, selector).unwrap_or_else(|| panic!("{selector} shows"));
+    (at.left(), at.right())
+}
+
+#[gpui::test]
+fn fills_a_window_made_wider_side_to_side(cx: &mut TestAppContext) {
+    let (_, core, vcx) = open(cx, &Kept::default());
+    set(&core, vcx, |s| {
+        s.items = items();
+        s.shops = super::shops::shops();
+    });
+    vcx.simulate_resize(gpui::size(gpui::px(1200.), gpui::px(820.)));
+    vcx.run_until_parked();
+    // The content's sides are 12 px in from the window's: 1176 px hold 16 tiles of 64 px and more.
+    assert_eq!(
+        sides(vcx, "tile-1000").0,
+        gpui::px(12.),
+        "the first tile at the left side"
+    );
+    assert_eq!(
+        sides(vcx, "tile-1015").1,
+        gpui::px(1188.),
+        "the row's last tile ends at the right side"
+    );
+    assert_eq!(
+        sides(vcx, "tile-1016").0,
+        gpui::px(12.),
+        "the next begins a row: none stands past the side"
+    );
+    click(vcx, "tab:ショップ");
+    assert_eq!(
+        sides(vcx, "fold-shop-総力戦"),
+        (gpui::px(12.), gpui::px(1188.)),
+        "a shop from side to side"
+    );
+    click(vcx, "tab:お仕事");
+    assert_eq!(
+        sides(vcx, "fold:work:任務 Hard"),
+        (gpui::px(12.), gpui::px(1188.)),
+        "a work from side to side"
+    );
+}

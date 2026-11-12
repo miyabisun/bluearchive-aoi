@@ -743,9 +743,10 @@ impl Render for Aoi {
                     .flex_col()
                     .flex_1()
                     .min_h_0()
+                    // As wide as the window: the tiles count their columns from its width
+                    // (`parts::content_width`), and a frame narrower than it cut them (the
+                    // user's of 2026-11-13 「windowサイズを横に広げると盛大にレイアウト崩れをおこします」).
                     .w_full()
-                    .max_w(px(WINDOW.0))
-                    .mx_auto()
                     .pt(SP_4)
                     .px(SP_3)
                     .children(notices)
