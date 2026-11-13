@@ -16,7 +16,7 @@
       {
         id: "double",
         label: "2倍キャンペーン",
-        sub: "任務 Normal・Hard",
+        sub: "任務・特別依頼",
         color: CALC,
         col: 2,
         row: 1,
@@ -57,7 +57,7 @@
         flow: [["work", "double"]],
         token: "設計図",
         note: {
-          node: "work",
+          node: "have",
           side: "above",
           lines: ["どのステージを何回回るか", "AP が一番少なくなるように"],
         },

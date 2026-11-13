@@ -6,8 +6,10 @@ title: Aoi の使い方
 
 ## はじめる
 
-- [ダウンロードと起動](https://github.com/miyabisun/bluearchive-aoi#ダウンロードと起動)（Windows）、[macOS で初めて開く](guide/mac.md)
-- スマホで遊ぶとき: [Android](guide/android.md)、[iPhone](guide/stream.md)（iPhone と、Mac でスマホを読む使い方は、まだ確かめていません）
+- [ダウンロードと起動](https://github.com/miyabisun/bluearchive-aoi#ダウンロードと起動)（Windows）
+- [macOS で初めて開く](guide/mac.md)
+- スマホで遊ぶとき: [Android](guide/android.md)・[iPhone](guide/stream.md)
+- iPhone と、Mac でスマホを読む使い方は、まだ確かめていません
 
 [ゲームの画面を読ませる →](guide/reading.md)
 

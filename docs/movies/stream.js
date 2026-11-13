@@ -7,13 +7,13 @@
   window.SPECS = window.SPECS || {};
   window.SPECS.stream = {
     title: "iPhone から送る流れ",
-    grid: [5, 2],
+    grid: [5, 1],
     nodes: [
-      { id: "qr", label: "Aoi のメニュー", sub: "配信アプリとの連携", color: AOI, col: 0, row: 1 },
+      { id: "qr", label: "Aoi の設定", sub: "配信方法", color: AOI, col: 0, row: 0 },
       { id: "moblin", label: "Moblin", sub: "QR から開く", color: GAME, col: 1, row: 0 },
       { id: "scene", label: "Scenes", sub: "Screen capture", color: GAME, col: 2, row: 0 },
       { id: "rec", label: "画面収録", sub: "ブロードキャスト", color: GAME, col: 3, row: 0 },
-      { id: "recv", label: "Aoi", sub: "画面を受け取る", color: AOI, col: 4, row: 1 },
+      { id: "recv", label: "Aoi", sub: "画面を受け取る", color: AOI, col: 4, row: 0 },
     ],
     edges: [
       { from: "qr", to: "moblin" },
@@ -24,7 +24,7 @@
     steps: [
       {
         kicker: "QR",
-        caption: "Aoi の右上のメニューから「配信アプリとの連携」を押す",
+        caption: "Aoi の設定で、配信方法を「配信アプリとの連携」にする",
         focus: ["qr"],
         note: { node: "qr", side: "above", lines: ["QR コードと", "rtmp:// の URL が出る"] },
       },

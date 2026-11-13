@@ -37,16 +37,16 @@
           ["pc", "start"],
         ],
         token: "画面",
-        note: { node: "pc", side: "left", lines: ["メニューで選ばなくてよい"] },
+        note: { node: "aoi", side: "above", lines: ["配信方法は", "「PC版アプリ」のまま"] },
       },
       {
         kicker: "スマホ",
-        caption: "スマホは、Aoi の右上のメニューで受け取り方を選ぶ",
+        caption: "スマホは、先に Aoi の設定で配信方法を選ぶ",
         focus: ["aoi"],
         note: {
           node: "aoi",
           side: "below",
-          lines: ["Android: Androidとの通信", "iPhone: 配信アプリとの連携"],
+          lines: ["設定 → 配信方法", "Android: Androidとの通信", "iPhone: 配信アプリとの連携"],
         },
       },
       {
