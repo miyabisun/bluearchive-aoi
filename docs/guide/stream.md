@@ -14,7 +14,7 @@ iPhone での動作は、まだ確かめていません。
 
 1. Aoi の右上の ≡ で設定を開き、「配信方法」の「配信アプリとの連携」を選ぶ
 2. iPhone のカメラで、Aoi に出た QR コードを読み取り、Moblin で開く
-3. Moblin の「Scenes」で、映像（Video source）を「Screen capture」にする（初回だけ）
+3. Moblin の設定の「Scenes」で、使うシーンの映像（Video source）を「Screen capture」にする（初回だけ）
 4. コントロールセンターの画面収録を長押しし、Moblin を選んで開始する
 5. Moblin の配信のボタンを押して、ブルーアーカイブを開く
 
