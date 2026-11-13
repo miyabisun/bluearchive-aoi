@@ -1,4 +1,5 @@
-//! Putting the highlighted arrow in for Windows' arrow, and Windows' own back.
+//! Putting the highlighted arrow in for Windows' arrow and for the arrow it shows while
+//! a program starts, and Windows' own back.
 
 use std::{
     ffi::c_void,
@@ -15,8 +16,8 @@ use windows_sys::Win32::{
     UI::{
         HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI},
         WindowsAndMessaging::{
-            GetCursorPos, HCURSOR, IMAGE_CURSOR, LR_LOADFROMFILE, LoadImageW, OCR_NORMAL,
-            SPI_SETCURSORS, SetSystemCursor, SystemParametersInfoW,
+            GetCursorPos, HCURSOR, IMAGE_CURSOR, LR_LOADFROMFILE, LoadImageW, OCR_APPSTARTING,
+            OCR_NORMAL, SPI_SETCURSORS, SetSystemCursor, SystemParametersInfoW,
         },
     },
 };
@@ -87,21 +88,42 @@ fn restore() {
     }
 }
 
-/// The arrow in `palette`, `size` pixels square, in for Windows' arrow. Windows loads
-/// it from a file, written afresh each time and removed once loaded.
+/// The arrow in `palette`, `size` pixels square, in for Windows' arrow, and the same
+/// arrow with a gear beside it, its colours going round, for the arrow Windows shows
+/// while a program starts (Windows' own is smaller than the arrow, so the arrow looked
+/// gone while the game loaded, the user's of 2026-11-13).
 fn apply(size: u32, palette: Palette) -> Result<(), String> {
+    let arrow = super::cur(&super::picture(size, palette), size, super::hotspot(size));
+    put("cur", &arrow, size, OCR_NORMAL)?;
+    // A cursor is at most 256 pixels square, and this one wider than its arrow by the gear.
+    let small = size.min(157);
+    let width = super::busy_side(small);
+    let frames: Vec<Vec<u8>> = super::busy_frames(small, palette)
+        .iter()
+        .map(|frame| super::cur(frame, width, super::hotspot(small)))
+        .collect();
+    put(
+        "ani",
+        &super::ani(&frames, super::TURN_JIFFIES),
+        width,
+        OCR_APPSTARTING,
+    )
+}
+
+/// The cursor `file` (of the kind its extension `kind` names), `size` pixels square, in
+/// for Windows' cursor `id`. Windows loads it from a file, written afresh each time and
+/// removed once loaded.
+fn put(kind: &str, file: &[u8], size: u32, id: u32) -> Result<(), String> {
     let path = std::env::temp_dir().join(format!(
-        "bluearchive-aoi-cursor-{}-{size}-{}.cur",
-        palette.name(),
+        "bluearchive-aoi-cursor-{}.{kind}",
         std::process::id()
     ));
-    let file = super::cur(&super::picture(size, palette), size, super::hotspot(size));
     std::fs::write(&path, file).map_err(|e| e.to_string())?;
     let cursor = load(&path, size);
     let _ = std::fs::remove_file(&path);
     // SAFETY: `cursor` is a cursor `load` just created and nothing else owns; SetSystemCursor takes
     // it over.
-    if unsafe { SetSystemCursor(cursor?, OCR_NORMAL) } == 0 {
+    if unsafe { SetSystemCursor(cursor?, id) } == 0 {
         return Err(std::io::Error::last_os_error().to_string());
     }
     Ok(())

@@ -1,6 +1,8 @@
 //! The mouse cursor chosen in the window's menu (the user's of 2026-11-03): while the
 //! app runs on Windows, an arrow as big as Windows' stands in for the arrow cursor, so
-//! the cursor is easy to find over the game. The game's own highlighted cursor would
+//! the cursor is easy to find over the game. The cursor Windows shows while a program
+//! starts (its arrow with a ring) is changed with it, to the same arrow with a gear
+//! beside it (`busy_frames`), so the arrow does not look gone while the game loads. The game's own highlighted cursor would
 //! show in the screen read; this one is drawn over it by Windows and is not captured.
 //! The arrow is drawn after Blue Archive's own cursor, in the colour chosen, and handed
 //! to Windows as a cursor file (`.cur`). Ported from windows-link's `cursor.highlight`
@@ -19,6 +21,7 @@
 
 use std::sync::LazyLock;
 
+pub mod halo;
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
@@ -130,6 +133,16 @@ const WHITE: [f32; 3] = [248.0, 251.0, 255.0];
 /// Samples a pixel is drawn from, across and down: enough to shade an edge as finely
 /// as the game's.
 const SAMPLES: u32 = 8;
+/// The busy cursor, on the arrow's 32 by 32 units: how wide its picture is, and where
+/// the middle of the gear beside the arrow is and how wide the gear (clear of the
+/// arrow's right point and foot).
+const BUSY_SIDE: f32 = 52.0;
+const MARK_AT: (f32, f32) = (37.5, 37.5);
+const MARK: f32 = 28.0;
+/// The frames in which the gear's colours go once round, and how long each shows, in
+/// sixtieths of a second: a turn in a second and a half.
+const TURN_FRAMES: u32 = 30;
+pub const TURN_JIFFIES: u32 = 3;
 
 /// The point of the arrow, where the cursor points, on a cursor `size` pixels wide:
 /// the point of the outline nearest the corner its short top cuts off, a dot inside
@@ -176,6 +189,66 @@ pub fn picture(size: u32, palette: Palette) -> Vec<[u8; 4]> {
     (0..size * size)
         .map(|at| pixel(size, (at % size, at / size), palette))
         .collect()
+}
+
+/// How many pixels square the busy cursor's picture is, its arrow `size` wide.
+pub fn busy_side(size: u32) -> u32 {
+    to_byte_range(size as f32 * BUSY_SIDE / 32.0, 256.0)
+}
+
+/// The busy cursor's frames (Windows shows it while a program starts, as while the game
+/// loads): the arrow of `picture`, as big and where it is, and a gear low at its right
+/// (`halo`), its colours going once round over the frames. Each is `busy_side` pixels
+/// square, as `picture`. Windows' own is its arrow made smaller with a ring beside it,
+/// so the highlighted arrow looked gone while it showed (the user's of 2026-11-13:
+/// 「ゲームが読み込み中にカーソルが剥がれる事があった」); ported from windows-link's.
+pub fn busy_frames(size: u32, palette: Palette) -> Vec<Vec<[u8; 4]>> {
+    let (width, unit) = (busy_side(size), size as f32 / 32.0);
+    let arrow: Vec<[u8; 4]> = (0..width * width)
+        .map(|at| pixel(size, (at % width, at / width), palette))
+        .collect();
+    let middle = (MARK_AT.0 * unit, MARK_AT.1 * unit);
+    let turns: Vec<f32> = (0..TURN_FRAMES)
+        .map(|frame| 360.0 * frame as f32 / TURN_FRAMES as f32)
+        .collect();
+    halo::gear(width, middle, MARK * unit, &turns)
+        .into_iter()
+        .map(|frame| {
+            frame
+                .into_iter()
+                .zip(&arrow)
+                .map(|(over, &under)| if over[3] > 0 { over } else { under })
+                .collect()
+        })
+        .collect()
+}
+
+/// An animated cursor file (`.ani`) of `frames`, each a cursor file as `cur` writes,
+/// shown in turn for `jiffies` sixtieths of a second.
+pub fn ani(frames: &[Vec<u8>], jiffies: u32) -> Vec<u8> {
+    let length = |bytes: &[u8]| u32::try_from(bytes.len()).unwrap_or(0).to_le_bytes();
+    let count = u32::try_from(frames.len()).unwrap_or(0);
+    let mut list = b"fram".to_vec();
+    for frame in frames {
+        list.extend_from_slice(b"icon");
+        list.extend_from_slice(&length(frame));
+        list.extend_from_slice(frame);
+        // A chunk starts on an even byte.
+        list.extend(std::iter::repeat_n(0u8, frame.len() % 2));
+    }
+    let mut body = b"ACONanih".to_vec();
+    // The header's size twice (the chunk's, then its own field), frames, steps, four
+    // fields unused when the frames are cursor files, the rate, and "frames are icons".
+    for value in [36u32, 36, count, count, 0, 0, 0, 0, jiffies, 1] {
+        body.extend_from_slice(&value.to_le_bytes());
+    }
+    body.extend_from_slice(b"LIST");
+    body.extend_from_slice(&length(&list));
+    body.extend_from_slice(&list);
+    let mut out = b"RIFF".to_vec();
+    out.extend_from_slice(&length(&body));
+    out.extend_from_slice(&body);
+    out
 }
 
 /// One pixel: its samples' colours mixed by how much of each covers it (the arrow
@@ -520,6 +593,61 @@ mod tests {
         assert!(g > b + 30, "red takes green {:?}", point(Palette::Red));
         let [r, _, b, _] = point(Palette::Green);
         assert!(b > r + 60, "green takes blue {:?}", point(Palette::Green));
+    }
+
+    /// The pixel of a busy `frame` at (`across`, `down`) on the arrow's 32 by 32 units.
+    fn busy_at(size: u32, frame: &[[u8; 4]], (across, down): (f32, f32)) -> [u8; 4] {
+        let scale = size as f32 / 32.0;
+        let (column, row) = (
+            to_byte_range(across * scale, f32::from(u16::MAX)),
+            to_byte_range(down * scale, f32::from(u16::MAX)),
+        );
+        frame[usize::try_from(row * busy_side(size) + column).unwrap()]
+    }
+
+    /// While a program starts the arrow stays as big as it is and where it is (Windows'
+    /// own arrow with its ring is smaller): every frame draws the same arrow, dot for
+    /// dot, and beside it the gear, which stays as it is while its colours go round:
+    /// purple at its top at first, light blue there half the frames later.
+    #[test]
+    fn the_busy_cursor_keeps_the_arrow_and_the_gear_changes_colour_beside_it() {
+        let size = 48;
+        let (arrow, width) = (picture(size, Palette::Blue), busy_side(size));
+        assert!(width > size);
+        let frames = busy_frames(size, Palette::Blue);
+        assert!(frames.len() > 1);
+        let shape = |frame: &[[u8; 4]]| frame.iter().map(|dot| dot[3]).collect::<Vec<_>>();
+        for frame in &frames {
+            assert_eq!(frame.len(), usize::try_from(width * width).unwrap());
+            assert_eq!(shape(frame), shape(&frames[0]), "nothing moves");
+            for at in 0..size * size {
+                let drawn = arrow[usize::try_from(at).unwrap()];
+                let place = usize::try_from(at / size * width + at % size).unwrap();
+                assert!(drawn[3] == 0 || frame[place] == drawn, "dot {at}");
+            }
+        }
+        // On the gear's ring, straight above its middle.
+        let top = (MARK_AT.0, MARK_AT.1 - MARK * 0.33);
+        let [r, g, _, a] = busy_at(size, &frames[0], top);
+        assert!(a == 255 && r > g + 20, "purple at first: {r} {g} {a}");
+        let [r, g, _, _] = busy_at(size, &frames[frames.len() / 2], top);
+        assert!(g > r + 60, "light blue half a turn later: {r} {g}");
+    }
+
+    /// Windows takes the frames for one cursor of the size asked.
+    #[cfg(windows)]
+    #[test]
+    fn windows_loads_the_busy_cursor_file_at_its_size() {
+        let (size, width) = (48, busy_side(48));
+        let path = std::env::temp_dir().join(format!("aoi-cursor-test-{}.ani", std::process::id()));
+        let frames: Vec<Vec<u8>> = busy_frames(size, Palette::Green)
+            .iter()
+            .map(|frame| cur(frame, width, hotspot(size)))
+            .collect();
+        std::fs::write(&path, ani(&frames, TURN_JIFFIES)).unwrap();
+        let loaded = windows::loaded_size(&path, width);
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(loaded, Some(width));
     }
 
     /// Windows takes the file for a cursor of the size asked.
