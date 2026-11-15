@@ -18,7 +18,13 @@ pub struct Tally {
     /// The latest value read for each item (`None`: lacking from the list) and
     /// in how many frames in a row.
     streaks: HashMap<i64, (Option<Count>, u8)>,
+    /// What `shift` left out of a count in thousands: the count's thousands and this are
+    /// how many it took the item for. Gone with the next count taken.
+    rest: HashMap<i64, i64>,
 }
+
+/// From so many on the game shows a count in thousands.
+const IN_THOUSANDS: i64 = 10_000;
 
 impl Tally {
     /// A tally starting from counts kept from before; each stays until its
@@ -26,7 +32,7 @@ impl Tally {
     pub fn seeded(counts: HashMap<i64, Count>) -> Self {
         Self {
             counts,
-            streaks: HashMap::new(),
+            ..Self::default()
         }
     }
 
@@ -58,10 +64,8 @@ impl Tally {
                 continue;
             }
             let taken = read.or_else(|| self.held(id).then_some(Count::Exact(0)));
-            if let Some(count) = taken
-                && self.counts.insert(id, count) != Some(count)
-            {
-                changed = true;
+            if let Some(count) = taken {
+                changed |= self.take(id, count);
             }
         }
         changed
@@ -78,7 +82,52 @@ impl Tally {
     /// Takes a count read elsewhere and confirmed there (a coin's held, shown
     /// over a shop's cards); returns whether it changed.
     pub fn take(&mut self, id: i64, count: Count) -> bool {
+        self.rest.remove(&id);
         self.counts.insert(id, count) != Some(count)
+    }
+
+    /// How many of the item are held as counted, a count in thousands with what `shift` left
+    /// out of its thousands; none of one never counted.
+    pub fn amount(&self, id: i64) -> Option<u64> {
+        let rest = self.rest.get(&id).copied().unwrap_or(0);
+        match *self.counts.get(&id)? {
+            Count::Exact(n) => Some(u64::from(n)),
+            Count::Thousands(k) => u64::try_from(i64::from(k) * 1000 + rest).ok(),
+        }
+    }
+
+    /// Counts the item `by` more (fewer, below zero) without the list read: what a training
+    /// took or a purchase gave (see `crate::ledger`). One never counted stays so. A count in
+    /// thousands stays in thousands, rounded as the game rounds it. A count that would fall
+    /// under none is forgotten (some were had unseen), and so is one in thousands fallen
+    /// under what the game shows so: the number it would show is not known.
+    pub fn shift(&mut self, id: i64, by: i64) {
+        let (Some(&count), Some(held)) = (self.counts.get(&id), self.amount(id)) else {
+            return;
+        };
+        let now = i64::try_from(held).unwrap_or(i64::MAX).saturating_add(by);
+        self.rest.remove(&id);
+        let shown = match count {
+            Count::Exact(_) => u32::try_from(now).ok().map(Count::Exact),
+            Count::Thousands(_) if now < IN_THOUSANDS => None,
+            Count::Thousands(_) => {
+                let thousands = (now + 500) / 1000;
+                self.rest.insert(id, now - thousands * 1000);
+                u32::try_from(thousands).ok().map(Count::Thousands)
+            }
+        };
+        match shown {
+            Some(count) => {
+                self.counts.insert(id, count);
+            }
+            None => self.forget(id),
+        }
+    }
+
+    /// Takes the item for one never counted: how many are held is not known any more.
+    pub fn forget(&mut self, id: i64) {
+        self.counts.remove(&id);
+        self.rest.remove(&id);
     }
 
     /// The taken counts by item id.
@@ -99,6 +148,13 @@ mod tests {
             id: Some(id),
             quantity: Some(Count::Exact(quantity)),
             ignored: false,
+        }
+    }
+
+    fn thousands(id: i64, k: u32) -> Cell {
+        Cell {
+            quantity: Some(Count::Thousands(k)),
+            ..cell(id, 0)
         }
     }
 
@@ -187,6 +243,54 @@ mod tests {
             tally.observe(&[cell(120, 3)], &[]);
         }
         assert_eq!(tally.counts().get(&110), Some(&Count::Exact(5)));
+    }
+
+    #[test]
+    fn a_count_shifts_by_what_was_spent_or_bought() {
+        let mut tally = Tally::seeded(HashMap::from([(1, Count::Exact(120))]));
+        tally.shift(1, -100);
+        assert_eq!(tally.counts().get(&1), Some(&Count::Exact(20)));
+        tally.shift(1, 5);
+        assert_eq!(tally.amount(1), Some(25));
+        // One never counted stays so: how many there were is not known.
+        tally.shift(2, 5);
+        assert_eq!((tally.counts().get(&2), tally.amount(2)), (None, None));
+    }
+
+    /// 51K less 300 four times is 49.8K: each alone would round back to 51K.
+    #[test]
+    fn a_count_in_thousands_keeps_what_its_thousands_leave_out() {
+        let mut tally = Tally::seeded(HashMap::from([(2, Count::Thousands(51))]));
+        let shown: Vec<Count> = (0..4)
+            .map(|_| {
+                tally.shift(2, -300);
+                tally.counts()[&2]
+            })
+            .collect();
+        let k = Count::Thousands;
+        assert_eq!(shown, [k(51), k(50), k(50), k(50)]);
+        assert_eq!(tally.amount(2), Some(49_800));
+        // Read again, the count is the list's alone.
+        tally.take(2, k(50));
+        assert_eq!(tally.amount(2), Some(50_000));
+        tally.shift(2, -300);
+        frames(&mut tally, &[thousands(2, 50)], CONFIRM);
+        assert_eq!(tally.amount(2), Some(50_000));
+    }
+
+    /// A count short of what was spent tells of some had unseen, and one in thousands fallen
+    /// under what the game shows in thousands has no number to show: neither is known.
+    #[test]
+    fn a_count_fallen_short_or_out_of_the_thousands_is_forgotten() {
+        let kept = HashMap::from([(1, Count::Exact(20)), (2, Count::Thousands(10))]);
+        let mut tally = Tally::seeded(kept);
+        tally.shift(1, -30);
+        tally.shift(2, -600);
+        assert_eq!((tally.amount(1), tally.amount(2)), (None, None));
+        assert!(tally.counts().is_empty());
+        // Forgotten, an item is one never counted: lacking from the list it counts nothing.
+        let changes: Vec<bool> = (0..CONFIRM).map(|_| tally.observe(&[], &[1])).collect();
+        assert!(changes.iter().all(|changed| !changed));
     }
 
     #[test]

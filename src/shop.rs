@@ -767,6 +767,8 @@ pub struct Shelves {
     held: HashMap<(&'static str, usize), (u64, u8)>,
     /// The coins held as the last frame told them (see `held_now`).
     told: Vec<(&'static str, usize, u64)>,
+    /// What the last frame told was bought (see `bought_now`).
+    bought: Vec<(&'static str, i64, u8, u32)>,
 }
 
 impl Shelves {
@@ -774,9 +776,7 @@ impl Shelves {
     pub fn seeded(shelves: BTreeMap<String, Shelf>) -> Self {
         Self {
             by_shop: shelves,
-            streaks: HashMap::new(),
-            held: HashMap::new(),
-            told: Vec::new(),
+            ..Self::default()
         }
     }
 
@@ -787,6 +787,7 @@ impl Shelves {
     pub fn observe(&mut self, seen: &Seen, now: &str) -> bool {
         let mut changed = false;
         self.told.clear();
+        self.bought.clear();
         for (coin, &count) in seen.held.iter().enumerate() {
             let Some(count) = count else { continue };
             let streak = self.held.entry((seen.shop, coin)).or_insert((count, 0));
@@ -835,7 +836,15 @@ impl Shelves {
                 .position(|o| o.id == offer.id && o.coin == offer.coin);
             match known {
                 Some(i) if stock.offers[i] == *offer => continue,
-                Some(i) => stock.offers[i] = *offer,
+                Some(i) => {
+                    // An earlier month's offers are cleared by here: these are one lineup's.
+                    if let Some(times) = stock.offers[i].left.checked_sub(offer.left)
+                        && times > 0
+                    {
+                        self.bought.push((seen.shop, offer.id, offer.coin, times));
+                    }
+                    stock.offers[i] = *offer;
+                }
                 None => stock.offers.push(*offer),
             }
             now.clone_into(&mut stock.read_at);
@@ -852,6 +861,13 @@ impl Shelves {
     /// later over a newer count.
     pub fn held_now(&self) -> &[(&'static str, usize, u64)] {
         &self.told
+    }
+
+    /// What the last frame taken told was bought: the shop, the good, the coin (as
+    /// `Offer::coin`) and how many times, the offer's times left gone down by so many
+    /// since they were last taken in the shop's month.
+    pub fn bought_now(&self) -> &[(&'static str, i64, u8, u32)] {
+        &self.bought
     }
 
     /// The shelves by shop.
@@ -1150,6 +1166,27 @@ mod tests {
             shelves.observe(&seen("総力戦", &[book, twin]), NOW);
         }
         assert_eq!(shelves.shelves()["総力戦"].offers, [book, twin]);
+    }
+
+    /// A purchase is told with the frame that takes an offer's times left gone down, and by
+    /// how many; times left gone up, or taken first in a new month, tell of none.
+    #[test]
+    fn purchases_are_told_as_the_times_left_go_down() {
+        let mut shelves = Shelves::default();
+        let mut taken = |left: u32, now: &str| {
+            for _ in 0..CONFIRM {
+                shelves.observe(&seen("総力戦", &[offer(1, 1, left)]), now);
+            }
+            let bought = shelves.bought_now().to_vec();
+            shelves.observe(&seen("総力戦", &[offer(1, 1, left)]), now);
+            assert!(shelves.bought_now().is_empty(), "told with one frame alone");
+            bought
+        };
+        assert_eq!(taken(5, NOW), [], "an offer first seen");
+        assert_eq!(taken(3, NOW), [("総力戦", 1, 1, 2)]);
+        assert_eq!(taken(4, NOW), [], "times left gone up");
+        assert_eq!(taken(2, "2026-11-02 10:00:00"), [], "a new month's lineup");
+        assert_eq!(taken(0, "2026-11-02 10:05:00"), [("総力戦", 1, 1, 2)]);
     }
 
     #[test]

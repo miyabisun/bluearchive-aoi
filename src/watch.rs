@@ -26,9 +26,10 @@ use crate::{
     android::{Link, Phone},
     broadcast::{Cast, Receiver},
     keep::{Kept, now},
+    ledger::{self, Ledger},
     quantity::Count,
     screen,
-    shop::{Shelves, ShopRow},
+    shop::{Seen as ShopSeen, Shelves, ShopRow},
     student::{Training, roster::Roster},
     tally::{CONFIRM, Tally},
 };
@@ -302,15 +303,16 @@ fn take_coins(recognizer: &Recognizer, shelves: &Shelves, items: &mut Tally) -> 
 }
 
 /// Takes a shop's frame into the item list (see `take_coins`), and reports the item list
-/// where that changed it, and the shops where it did or the frame `changed` a shelf.
+/// where that changed it or a purchase seen did (`bought`), and the shops where the item
+/// list changed or the frame `changed` a shelf.
 fn shop_seen(
     recognizer: &Recognizer,
     shelves: &Shelves,
     items: &mut Tally,
     board: &Board,
-    changed: bool,
+    (changed, bought): (bool, bool),
 ) {
-    let taken = take_coins(recognizer, shelves, items);
+    let taken = take_coins(recognizer, shelves, items) || bought;
     if taken {
         board.changed(Update::List(
             List::Items,
@@ -493,11 +495,14 @@ struct Read {
     credits_at: Option<Instant>,
     shelves: Shelves,
     place: Steady<Option<Place>>,
+    /// What tells a training or a purchase from one the lists may show already.
+    ledger: Ledger,
 }
 
 impl Read {
     fn seeded(kept: Kept) -> Self {
         Self {
+            ledger: Ledger::default(),
             tallies: HashMap::from([
                 (List::Items, Tally::seeded(kept.items.into_iter().collect())),
                 (
@@ -510,6 +515,69 @@ impl Read {
             credits_at: None,
             place: Steady::new(None),
             shelves: Shelves::seeded(kept.shops),
+        }
+    }
+
+    /// Takes a frame's reading of student `id`: whether what is known of the students
+    /// changed, and the lists whose counts the training seen took from (see `ledger`).
+    fn student(
+        &mut self,
+        recognizer: &Recognizer,
+        id: i64,
+        training: Training,
+    ) -> (bool, Vec<List>) {
+        let before = self.roster.students().get(&id).copied();
+        self.ledger.student(id, before.as_ref(), &training);
+        if !self.roster.observe(id, training) {
+            return (false, Vec::new());
+        }
+        let after = self.roster.students().get(&id).copied();
+        let lists = [&List::Items, &List::Equipment];
+        let (Some(before), Some(after), [Some(items), Some(equipment)]) =
+            (before, after, self.tallies.get_disjoint_mut(lists))
+        else {
+            return (true, Vec::new());
+        };
+        let parts = self.ledger.trained(id, &before, &after);
+        recognizer.charge(id, (&before, &after), &parts, items, equipment);
+        let mut lists: Vec<List> = parts.into_iter().map(ledger::list_of).collect();
+        lists.dedup();
+        (true, lists)
+    }
+
+    /// Takes a frame of a shop at local time `now`: whether a shelf changed, and the
+    /// lists the purchases seen were counted into (see `ledger`).
+    fn shop(&mut self, recognizer: &Recognizer, seen: &ShopSeen, now: &str) -> (bool, Vec<List>) {
+        let known = self.shelves.shelves().get(seen.shop);
+        let known = known.map_or(&[][..], |shelf| &shelf.offers);
+        self.ledger.offers(seen.shop, known, &seen.offers);
+        let changed = self.shelves.observe(seen, now);
+        let mut lists = Vec::new();
+        for &(shop, good, coin, times) in self.shelves.bought_now() {
+            let offer = seen.offers.iter().find(|o| (o.id, o.coin) == (good, coin));
+            let Some((list, id, each)) = offer.and_then(|o| recognizer.purchase(shop, o)) else {
+                continue;
+            };
+            if self.ledger.bought(shop, good, coin, list) {
+                let gained = i64::from(times) * i64::from(each);
+                self.tallies.entry(list).or_default().shift(id, gained);
+                lists.push(list);
+            }
+        }
+        lists.dedup();
+        (changed, lists)
+    }
+
+    /// Tells `board` the counts of `list`, and with the item list the shops, which show
+    /// the coins held as the item list counts them.
+    fn tell_list(&self, recognizer: &Recognizer, board: &Board, list: List) {
+        let Some(tally) = self.tallies.get(&list) else {
+            return;
+        };
+        board.changed(Update::List(list, recognizer.rows(list, tally)));
+        if list == List::Items {
+            let rows = recognizer.shop_rows(self.shelves.shelves(), tally.counts());
+            board.changed(Update::Shops(rows));
         }
     }
 
@@ -555,29 +623,37 @@ impl Read {
                 })
             });
         });
+        self.ledger.frame();
         match read {
             Some(Shown::List(list, cells, start)) => {
+                self.ledger.listed(list);
                 let tally = self.tallies.entry(list).or_default();
                 let gone = recognizer
                     .catalog(list)
                     .gaps(&cells, start, |id| tally.held(id));
                 if tally.observe(&cells, &gone) {
-                    board.changed(Update::List(list, recognizer.rows(list, tally)));
-                    // The shops show the coins held as the item list counts them.
-                    if list == List::Items {
-                        let rows = recognizer.shop_rows(self.shelves.shelves(), tally.counts());
-                        board.changed(Update::Shops(rows));
-                    }
+                    self.tell_list(recognizer, board, list);
                 }
             }
-            Some(Shown::Student(Some(id), training)) if self.roster.observe(id, training) => {
-                let rows = student_rows(recognizer, self.roster.students());
-                board.changed(Update::Students(rows));
+            Some(Shown::Student(Some(id), training)) => {
+                let (changed, lists) = self.student(recognizer, id, training);
+                if changed {
+                    let rows = student_rows(recognizer, self.roster.students());
+                    board.changed(Update::Students(rows));
+                }
+                for list in lists {
+                    self.tell_list(recognizer, board, list);
+                }
             }
             Some(Shown::Shop(seen)) => {
-                let changed = self.shelves.observe(&seen, &now());
+                let (changed, lists) = self.shop(recognizer, &seen, &now());
+                // The item list and the shops are told below, with the coins.
+                if lists.contains(&List::Equipment) {
+                    self.tell_list(recognizer, board, List::Equipment);
+                }
+                let bought = lists.contains(&List::Items);
                 let items = self.tallies.entry(List::Items).or_default();
-                shop_seen(recognizer, &self.shelves, items, board, changed);
+                shop_seen(recognizer, &self.shelves, items, board, (changed, bought));
             }
             _ => {}
         }
@@ -714,6 +790,118 @@ mod tests {
         );
         assert!(super::take_coins(&recognizer, &shelves, &mut items));
         assert_eq!(held(&shelves, &items), both);
+    }
+
+    /// A student seen at ★3, then at ★4: the elephs the star took are counted out of the
+    /// item list at once (the user's of 2026-11-15: 「神名文字がその分減っているはずなのに、まだ
+    /// 減っていない数字を表示している」). With the item list shown between, it is not: the list
+    /// may show the star's elephs gone already.
+    #[test]
+    fn a_star_seen_gained_takes_its_elephs_unless_the_item_list_was_shown_since() {
+        use crate::{
+            List, Recognizer,
+            keep::Kept,
+            quantity::Count,
+            student::{Gear, Training},
+            tally::CONFIRM,
+        };
+        let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
+        let recognizer = Recognizer::load(&data).unwrap();
+        let id = recognizer.students()[0].0;
+        let star = |rarity| Training {
+            level: Some(90),
+            rarity: Some(rarity),
+            bond: Some(20),
+            skills: [Some(5), Some(10), Some(10), Some(10)],
+            weapon: Some(None),
+            equipment: [Some(Gear { tier: 10 }); 3],
+            gear: Some(0),
+            ability: [Some(0); 3],
+        };
+        for (list_shown, left) in [(false, 400), (true, 500)] {
+            let mut read = super::Read::seeded(Kept {
+                items: [(id, Count::Exact(500))].into(),
+                students: [(id, star(3))].into(),
+                ..Kept::default()
+            });
+            read.ledger.frame();
+            assert_eq!(read.student(&recognizer, id, star(3)), (false, vec![]));
+            if list_shown {
+                read.ledger.frame();
+                read.ledger.listed(List::Items);
+            }
+            let mut told = Vec::new();
+            for _ in 0..CONFIRM {
+                read.ledger.frame();
+                told.push(read.student(&recognizer, id, star(4)));
+            }
+            let lists = if list_shown {
+                vec![]
+            } else {
+                vec![List::Items]
+            };
+            assert_eq!(
+                told.last(),
+                Some(&(true, lists)),
+                "list shown: {list_shown}"
+            );
+            let items = read.tallies[&List::Items].counts();
+            assert_eq!(
+                items.get(&id),
+                Some(&Count::Exact(left)),
+                "100 a star to ★4"
+            );
+        }
+    }
+
+    /// A good seen bought (its times left gone down by one) is counted into the
+    /// item list at once, 5 fragments a purchase (the user's of 2026-11-15: 「陳列データが
+    /// 売切れに変化してコインも減っている、なのにアイテムは増えていない」).
+    #[test]
+    fn a_good_seen_bought_is_counted_into_its_list() {
+        use crate::{
+            List, Recognizer,
+            keep::Kept,
+            quantity::Count,
+            shop::{Offer, Seen},
+            tally::CONFIRM,
+        };
+        let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
+        let recognizer = Recognizer::load(&data).unwrap();
+        let goods = recognizer.shop_goods();
+        let fragments = goods.iter().find(|g| g.name == "神名のカケラ").unwrap().id;
+        let seen = |left| Seen {
+            shop: "熟達証書",
+            offers: vec![Offer {
+                id: fragments,
+                coin: 0,
+                left,
+                price: None,
+            }],
+            held: vec![None],
+        };
+        let mut read = super::Read::seeded(Kept {
+            items: [(fragments, Count::Exact(30))].into(),
+            ..Kept::default()
+        });
+        let now = "2026-11-15 10:00:00";
+        let shown = |read: &mut super::Read, left| {
+            let mut told = Vec::new();
+            for _ in 0..CONFIRM {
+                read.ledger.frame();
+                told = read.shop(&recognizer, &seen(left), now).1;
+            }
+            told
+        };
+        assert_eq!(shown(&mut read, 2), [], "an offer first seen");
+        // Bought at once, the offer was never seen as it was known: not counted.
+        let held = |read: &super::Read| read.tallies[&List::Items].counts()[&fragments];
+        assert_eq!(shown(&mut read, 1), []);
+        assert_eq!(held(&read), Count::Exact(30));
+        // Seen as known, then bought.
+        assert_eq!(shown(&mut read, 1), []);
+        assert_eq!(shown(&mut read, 0), [List::Items]);
+        assert_eq!(held(&read), Count::Exact(35), "5 fragments a purchase");
     }
 
     #[test]

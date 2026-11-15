@@ -99,6 +99,18 @@ cargo run --release --example build_counts -- <collection>
   counts as read now, again with every reading. The snapshot's `plan_behind`
   (`ground::Ground::behind`) tells the window when the students were read and which marked
   ones were read otherwise since: those whose level, star, skills or equipment changed.
+- A training or a purchase read as it happened is counted into the lists before they are read
+  again (`ledger`, the user's rules of 2026-11-15). A star takes the student's elephs. A skill
+  takes its materials, then the choice boxes that give one, those of fewest choices first (the
+  game spends the six schools' box before the one of every school). An equipment tier takes
+  its blueprints, then the slot's universal ones at `plan::RATE`, never the blueprints' boxes.
+  A shop's times left gone down add what was bought (`shops.yaml`'s `amount` a purchase). A
+  change is counted only where its old value was read in this run, in a frame that read it,
+  and the list it counts in was not shown since: otherwise the list may show it already. An
+  item never counted stays so; a count short of what was spent is forgotten (some were had
+  unseen), and so is a count in thousands fallen under 10,000. A count in thousands keeps
+  what its thousands leave out until the list is read again. Levels are not counted (reports,
+  enhancement orbs, the unique weapon's parts): which of them were fed is not told.
 
 ## What is kept
 

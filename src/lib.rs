@@ -22,6 +22,7 @@ pub mod icon;
 pub mod items;
 pub mod keep;
 pub mod kinds;
+pub mod ledger;
 mod order;
 pub mod plan;
 pub mod price;
@@ -904,6 +905,36 @@ impl Recognizer {
             }
         }
         for_sale
+    }
+
+    /// Takes from the lists what the `parts` of student `id` took from one training to
+    /// the other (see `ledger::charge`).
+    pub fn charge(
+        &self,
+        id: i64,
+        training: (&student::Training, &student::Training),
+        parts: &[plan::Part],
+        items: &mut tally::Tally,
+        equipment: &mut tally::Tally,
+    ) {
+        ledger::charge(
+            &self.planner,
+            &self.boxes,
+            id,
+            training,
+            parts,
+            items,
+            equipment,
+        );
+    }
+
+    /// What a purchase of `offer` in `shop` gives: the list that counts it, its id there
+    /// and how many; none for the credits, read off the screen, and for a good whose
+    /// terms the shop's rules lack.
+    pub fn purchase(&self, shop: &str, offer: &shop::Offer) -> Option<(List, i64, u32)> {
+        let (list, id) = ledger::counted(offer.id)?;
+        let terms = self.prices.find(shop, offer.id, offer.coin, offer.price)?;
+        Some((list, id, terms.amount))
     }
 
     /// The item a shop's coin is (as `shop::Seen::held` tells it), where it is one.
