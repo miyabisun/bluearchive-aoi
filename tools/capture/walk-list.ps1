@@ -1,15 +1,15 @@
 # Walks the open item list from top to bottom and saves one still screenshot
 # per scroll step, for labeling fixtures. The game window must be visible on
 # screen (it is copied from the screen) with the item list open.
-# Scrolling goes through windows-link's mouse board (POST /buttons/{id}/wheel);
-# while the user holds automation there, this waits.
+# Scrolling goes through windows-link's mouse board (POST /mouse/wheel, windows-link
+# 0.1.55 or later); while the user holds automation there, this waits.
 #   powershell -File tools/capture/walk-list.ps1 -OutDir <dir>
 param(
   [Parameter(Mandatory)][string]$OutDir,
   [int]$NotchesPerStep = 3,
   [int]$MaxSteps = 200,
   [string]$Link = 'http://127.0.0.1:4730',
-  [string]$Button = 'blue-archive'
+  [string]$Process = 'BlueArchive.exe'
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
@@ -28,10 +28,10 @@ New-Item -ItemType Directory -Force $OutDir | Out-Null
 
 # Turns the wheel over the item list, waiting while the user holds automation.
 function Wheel([int]$notches) {
-  $body = @{ x = 0.75; y = 0.55; notches = $notches } | ConvertTo-Json
+  $body = @{ process = $Process; x = 0.75; y = 0.55; notches = $notches } | ConvertTo-Json
   while ($true) {
     try {
-      Invoke-RestMethod -Method Post -Uri "$Link/buttons/$Button/wheel" -ContentType 'application/json' -Body $body | Out-Null
+      Invoke-RestMethod -Method Post -Uri "$Link/mouse/wheel" -ContentType 'application/json' -Body $body | Out-Null
       return
     } catch {
       $answer = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
