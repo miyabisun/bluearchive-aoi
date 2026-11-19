@@ -1,14 +1,22 @@
 # Aoi
 
-<p align="center"><b>A free app that counts how many training materials you are still short of in Blue Archive.</b><br>Show Aoi the game's screens and it reads what you hold.</p>
+<p align="center"><b>A free app that counts your Blue Archive materials, works out how many students they train, and suggests where to farm.</b></p>
 
 <p align="center"><img src="docs/aoi.png" width="240" alt="Aoi, holding a monocle and a finance binder"></p>
 
 <p align="center"><a href="#download-and-run"><b>Download</b></a> | <a href="https://miyabisun.github.io/bluearchive-aoi/">Guide with animated diagrams (Japanese)</a> | <a href="README.md">日本語</a></p>
 
-<p align="center"><img src="docs/shots/plan.png" width="720" alt="Aoi's 育成 tab: under the target of the student to train, each material shows how many are needed and how many are held; the ones that fall short are in red"></p>
+<p align="center"><img src="docs/intro/1-read.webp" width="720" alt="Aoi scrolls the item list with the mouse wheel and says 覚えたわ (I have it). In the corner, someone worn out typing the counts in on a numeric keypad"></p>
 
-<p align="center">Each material shows "needed / held". The red numbers are the materials you lack.</p>
+<p align="center"><b>Scroll the game's lists and Aoi remembers the counts.</b><br>Without Aoi, you would read them yourself and type them into a spreadsheet.</p>
+
+<p align="center"><img src="docs/intro/2-count.webp" width="720" alt="Aoi works with a pen and a calculator: reports for 5.3 students, credits for 3.6 students, with that many students drawn beside them"></p>
+
+<p align="center"><b>Aoi works out how many students your materials train.</b><br>Without Aoi, you would build the formulas and calculate it again.</p>
+
+<p align="center"><img src="docs/intro/3-suggest.webp" width="720" alt="Aoi points at a screen and says 今日はこのプランを推奨するわ (I recommend this plan for today). The screen names a bounty stage and a school exchange"></p>
+
+<p align="center"><b>Aoi suggests where to farm.</b><br>Without Aoi, you would decide by looking back and forth between the game and the spreadsheet.</p>
 
 ## Download and run
 
@@ -41,6 +49,10 @@ If you play on a phone, or want Aoi on a Mac → [Phones and Mac](#phones-and-ma
 <p align="center"><img src="docs/shots/items.png" width="560" alt="Aoi's item tab: the items held in the game, each with its icon and count"></p>
 
 <p align="center">What step 2 has read appears in Aoi's tabs.</p>
+
+<p align="center"><img src="docs/shots/plan.png" width="560" alt="Aoi's 育成 tab: under the target of the student to train, each material shows how many are needed and how many are held; the ones that fall short are in red"></p>
+
+<p align="center">The 育成 tab of step 4. Each material shows "needed / held"; the red numbers are the materials you lack.</p>
 
 The step-by-step guides are in Japanese: [reading the game](https://miyabisun.github.io/bluearchive-aoi/guide/reading.html), [the 育成 tab](https://miyabisun.github.io/bluearchive-aoi/guide/plan.html), [the お仕事 tab](https://miyabisun.github.io/bluearchive-aoi/guide/work.html) and [troubleshooting](https://miyabisun.github.io/bluearchive-aoi/guide/trouble.html).
 

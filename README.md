@@ -1,6 +1,6 @@
 # Aoi（アオイ）
 
-<p align="center"><b>ブルーアーカイブの育成で、素材が「あと何個足りないか」を数える無料のアプリです。</b><br>ゲームの画面を見せると、持っている数を Aoi が読み取ります。</p>
+<p align="center"><b>ブルーアーカイブの素材を数えて、生徒何人分かを計算し、どこを周回するかの目安を出す無料のアプリです。</b></p>
 
 <p align="center"><img src="docs/aoi.png" width="240" alt="アオイのイラスト"></p>
 
@@ -8,9 +8,17 @@
 
 <p align="center"><a href="#ダウンロードと起動"><b>ダウンロード</b></a> ｜ <a href="https://miyabisun.github.io/bluearchive-aoi/">動く図で使い方を見る</a> ｜ <a href="README.en.md">English</a></p>
 
-<p align="center"><img src="docs/shots/plan.png" width="720" alt="Aoi の育成タブ。育てたい生徒の目標の下に、素材ごとの必要な数と持っている数が並び、足りない素材は赤い数字になっている"></p>
+<p align="center"><img src="docs/intro/1-read.webp" width="720" alt="アイテムの一覧をマウスホイールで送りながら「覚えたわ」と言うアオイ。左上には、一覧を見ながらテンキーで数を打ち込んで疲れている人"></p>
 
-<p align="center">素材ごとに「必要な数 / 持っている数」が並びます。赤い数字が、足りない素材です。</p>
+<p align="center"><b>ゲームの一覧をスクロールすると、Aoi が数を覚えます。</b><br>Aoi が無ければ、自分で読み取って、スプレッドシートへテンキーで打ち込むところです。</p>
+
+<p align="center"><img src="docs/intro/2-count.webp" width="720" alt="ペンと電卓で計算するアオイ。「レポート 5.3名分」「クレジット 3.6名分」と、その人数分の生徒の絵"></p>
+
+<p align="center"><b>素材が生徒何人分になるかを、Aoi が計算します。</b><br>Aoi が無ければ、数式を組んで計算し直すところです。</p>
+
+<p align="center"><img src="docs/intro/3-suggest.webp" width="720" alt="画面を指して「今日はこのプランを推奨するわ」と言うアオイ。画面には「指名手配: 線路」「学園交流会: トリニティ」"></p>
+
+<p align="center"><b>どこを周回するかの目安を、Aoi が出します。</b><br>Aoi が無ければ、画面とスプレッドシートを交互に眺めて決めるところです。</p>
 
 ## ダウンロードと起動
 
@@ -43,6 +51,10 @@ Windows 11 のパソコンに入れる手順です。読めるのは、PC 版・
 <p align="center"><img src="docs/shots/items.png" width="560" alt="Aoi のアイテムタブ。ゲームで持っているアイテムが、アイコンと数で並んでいる"></p>
 
 <p align="center">手順 2 で読めたものから、Aoi のタブに並びます。</p>
+
+<p align="center"><img src="docs/shots/plan.png" width="560" alt="Aoi の育成タブ。育てたい生徒の目標の下に、素材ごとの必要な数と持っている数が並び、足りない素材は赤い数字になっている"></p>
+
+<p align="center">手順 4 の育成タブです。素材ごとに「必要な数 / 持っている数」が並び、赤い数字が足りない素材です。</p>
 
 うまく読めないときや、右上の表示の意味が分からないときは → [困ったとき](https://miyabisun.github.io/bluearchive-aoi/guide/trouble.html)
 
