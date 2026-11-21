@@ -278,8 +278,7 @@ impl Aoi {
                         .students
                         .iter()
                         .find(|s| s.id == id)
-                        .map(|s| s.name.clone())
-                        .unwrap_or_default()
+                        .map_or_default(|s| s.name.clone())
                 } else {
                     row.name.clone()
                 };
@@ -979,8 +978,7 @@ impl Aoi {
                 .students
                 .iter()
                 .find(|s| s.id == row.id)
-                .map(|s| s.name.clone())
-                .unwrap_or_default()
+                .map_or_default(|s| s.name.clone())
         } else {
             row.name.clone()
         };

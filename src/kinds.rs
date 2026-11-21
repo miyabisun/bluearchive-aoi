@@ -161,8 +161,7 @@ fn tiers_of<'a, S: BuildHasher>(
         &HashMap::<i64, u64>::new(),
     )
     .pop()
-    .map(|(_, tiers)| tiers)
-    .unwrap_or_default()
+    .map_or_default(|(_, tiers)| tiers)
 }
 
 /// The schools a set of choice boxes chooses from (key, name), and its boxes
@@ -321,8 +320,7 @@ fn school_rows<S: BuildHasher, T: BuildHasher>(
                     .filter(|e| kind(e) == Some(wanted) && stem(e).map(|(_, k)| k) == Some(key));
                 by_tier(found, |_| Some(String::new()), held, needs)
                     .pop()
-                    .map(|(_, tiers)| tiers)
-                    .unwrap_or_default()
+                    .map_or_default(|(_, tiers)| tiers)
             };
             let name = materials
                 .iter()

@@ -246,7 +246,7 @@ mod tests {
         let lines = blueprint_lines(&[row("帽子", 1200, 0)], &boxes, source);
         let short: Vec<(i64, u64)> = lines.iter().map(|l| (l.id, l.short)).collect();
         assert_eq!(short, [(501_000, 200)]);
-        assert!(lines[0].sources.is_empty());
+        assert_eq!(lines[0].sources, []);
     }
 
     #[test]

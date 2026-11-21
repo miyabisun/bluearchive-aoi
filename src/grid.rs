@@ -199,7 +199,7 @@ pub fn find_panel(image: &RgbImage) -> Option<Panel> {
 
 /// Fully visible cards in reading order (rows top to bottom, left to right).
 pub fn find_cards(image: &RgbImage) -> Vec<Card> {
-    find(image).map(|(_, cards)| cards).unwrap_or_default()
+    find(image).map_or_default(|(_, cards)| cards)
 }
 
 /// The farthest a card stands from the one it follows, across its row or down to the next,

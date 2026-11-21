@@ -295,7 +295,7 @@ fn rgb(yuv: &impl YUVSource, matrix: Matrix, full: bool) -> Vec<u8> {
             }
         }
         let y = &yuv.y()[row * y_stride..];
-        for (x, pixel) in line.chunks_exact_mut(3).enumerate() {
+        for (x, pixel) in line.as_chunks_mut::<3>().0.iter_mut().enumerate() {
             let (r, g, b) = chroma[x / 2];
             let level = luma[usize::from(y[x])];
             pixel[0] = ((level + r) >> 14).clamp(0, 255) as u8;

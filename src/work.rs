@@ -773,8 +773,7 @@ pub fn commissions<S: BuildHasher>(
     )
     .into_iter()
     .next()
-    .map(|(_, tiers)| tiers)
-    .unwrap_or_default();
+    .map_or_default(|(_, tiers)| tiers);
     CommissionRow {
         credits_name: names.credits.clone(),
         credits,
@@ -1034,7 +1033,7 @@ mod tests {
         assert_eq!(farm.stages[0].slots, ["帽子"]);
         // Enough held, nothing to play.
         let held = HashMap::from([(101_009, Count::Exact(180)), (101_001, Count::Exact(105))]);
-        assert!(farm_of(&missions, &held).stages.is_empty());
+        assert_eq!(farm_of(&missions, &held).stages, []);
     }
 
     #[test]
@@ -1099,7 +1098,7 @@ mod tests {
             (103_009, Count::Exact(480)),
         ]);
         let farm = farm(&pieces, &entries, &ratio(), &missions, &held, 2).unwrap();
-        assert!(farm.stages.is_empty());
+        assert_eq!(farm.stages, []);
         let next: Vec<&str> = farm.next.iter().map(|n| n.name.as_str()).collect();
         assert_eq!(next, ["29-2", "28-4", "29-9"]);
         assert_eq!(farm.next[0].slots, ["帽子", "靴"]);

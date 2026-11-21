@@ -327,7 +327,7 @@ impl Recognizer {
                     name: g.name.clone(),
                     category: g.category.clone(),
                     subcategory: None,
-                    rarity: g.rarity.map(|r| format!("{r:?}")).unwrap_or_default(),
+                    rarity: g.rarity.map_or_default(|r| format!("{r:?}")),
                 }),
         );
         let (students, renamed) = students(read)?;
@@ -471,8 +471,7 @@ impl Recognizer {
                     .students
                     .iter()
                     .find(|(i, _)| *i == id)
-                    .map(|(_, name)| name.clone())
-                    .unwrap_or_default(),
+                    .map_or_default(|(_, name)| name.clone()),
                 first: self
                     .planner
                     .growers
@@ -729,8 +728,8 @@ impl Recognizer {
         let line = |kind, id, entry: Option<&Item>, need, have| NeedRow {
             kind,
             id,
-            name: entry.map(|e| e.name.clone()).unwrap_or_default(),
-            icon: entry.map(|e| e.icon.clone()).unwrap_or_default(),
+            name: entry.map_or_default(|e| e.name.clone()),
+            icon: entry.map_or_default(|e| e.icon.clone()),
             family: (kind == Kind::Item)
                 .then(|| self.prices.family(id))
                 .flatten(),
@@ -785,8 +784,7 @@ impl Recognizer {
                 name: students
                     .iter()
                     .find(|s| s.id == id)
-                    .map(|s| s.name.clone())
-                    .unwrap_or_default(),
+                    .map_or_default(|s| s.name.clone()),
                 part,
             })
             .collect();
@@ -819,8 +817,8 @@ impl Recognizer {
         let fragments = self.coin_item(shop::LASTING, 0);
         let source = |b: &supply::ChoiceBox| supply::Source::Box {
             id: b.id,
-            name: named(b.id).map(|e| e.name.clone()).unwrap_or_default(),
-            icon: named(b.id).map(|e| e.icon.clone()).unwrap_or_default(),
+            name: named(b.id).map_or_default(|e| e.name.clone()),
+            icon: named(b.id).map_or_default(|e| e.icon.clone()),
             held: held(b.id),
             choices: b.choices.len(),
         };
@@ -835,8 +833,8 @@ impl Recognizer {
                     && let (Some(rate), true) = (offer.shown, offer.left > 0)
                 {
                     sources.push(supply::Source::Fragments {
-                        name: named(coin).map(|e| e.name.clone()).unwrap_or_default(),
-                        icon: named(coin).map(|e| e.icon.clone()).unwrap_or_default(),
+                        name: named(coin).map_or_default(|e| e.name.clone()),
+                        icon: named(coin).map_or_default(|e| e.icon.clone()),
                         held: held(coin),
                         rate,
                         left: offer.left,
@@ -857,8 +855,8 @@ impl Recognizer {
                 supply::ProcureLine {
                     kind,
                     id,
-                    name: line.map(|r| r.name.clone()).unwrap_or_default(),
-                    icon: line.map(|r| r.icon.clone()).unwrap_or_default(),
+                    name: line.map_or_default(|r| r.name.clone()),
+                    icon: line.map_or_default(|r| r.icon.clone()),
                     short,
                     sources,
                 }
@@ -958,7 +956,7 @@ impl Recognizer {
     ) -> Vec<shop::ShopRow> {
         let items = self.items.entries();
         let good = |id: i64| self.shop_goods.iter().find(|g| g.id == id);
-        let named = |id: i64| good(id).map(|g| g.name.clone()).unwrap_or_default();
+        let named = |id: i64| good(id).map_or_default(|g| g.name.clone());
         let item = |name: &str| items.iter().find(|i| i.name == name);
         let icon = |id: i64| good(id).map(|g| g.icon.clone());
         shop::SHOPS

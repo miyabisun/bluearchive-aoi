@@ -167,10 +167,7 @@ impl Snapshot {
             .map(|(&id, &target)| TargetRow {
                 id,
                 target,
-                name: self
-                    .grounded(id)
-                    .map(|s| s.name.clone())
-                    .unwrap_or_default(),
+                name: self.grounded(id).map_or_default(|s| s.name.clone()),
                 training: self.grounded(id).map(|s| s.training),
             })
             .collect();

@@ -695,8 +695,8 @@ mod tests {
         let (frames, told, received, sent) = stream("guess", "Ab3", 64).await;
         assert!(received.is_err());
         assert!(sent.is_err());
-        assert!(told.is_empty());
-        assert!(frames.is_empty());
+        assert_eq!(told, [] as [bool; 0]);
+        assert_eq!(frames, []);
     }
 
     const START: [u8; 4] = [0, 0, 0, 1];

@@ -873,8 +873,7 @@ pub fn run(recognizer: Arc<Recognizer>, places: Places) {
             let phone_dir = places
                 .state
                 .parent()
-                .map(std::path::Path::to_path_buf)
-                .unwrap_or_default();
+                .map_or_default(std::path::Path::to_path_buf);
             let core = Arc::new(Core::new(recognizer, places, &kept, trouble, changed, true));
             core.watch(kept, phone_dir);
             let _ = open(core, changes, settings, cx);

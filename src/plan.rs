@@ -746,7 +746,7 @@ pub(crate) mod tests {
         assert_eq!((u.need, u.have, hat.short), (10, Held::About(1000), 43));
         assert_eq!(u.name, "帽子の万能設計図");
         // A slot nothing is asked of is left out.
-        assert!(blueprints(&BTreeMap::new(), &pieces, &entries, &held).is_empty());
+        assert_eq!(blueprints(&BTreeMap::new(), &pieces, &entries, &held), []);
     }
 
     /// A hat's T1 piece, its blueprints of T2 to T10 and its universal ones.

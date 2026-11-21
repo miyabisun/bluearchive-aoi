@@ -1137,7 +1137,7 @@ mod tests {
             held: vec![Some(7)],
         };
         shelves.observe(&other, NOW);
-        assert!(shelves.held_now().is_empty());
+        assert_eq!(shelves.held_now(), []);
     }
 
     fn offer(id: i64, coin: u8, left: u32) -> Offer {

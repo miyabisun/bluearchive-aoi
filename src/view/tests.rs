@@ -88,7 +88,7 @@ fn filter_rows_matches_katakana_typed_in_hiragana() {
 fn filter_rows_needs_every_word_of_the_query() {
     let rows = tally();
     assert_eq!(ids(&filter_rows(&rows, "BD ゲヘナ")), [10]);
-    assert!(filter_rows(&rows, "BD ミレニアム").is_empty());
+    assert_eq!(ids(&filter_rows(&rows, "BD ミレニアム")), [] as [i64; 0]);
 }
 
 // statusView: the JS snapshot without `phone` or `cast` is a phone never
