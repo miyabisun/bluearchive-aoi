@@ -54,16 +54,38 @@ stands in for a phone.
 
 ## Development
 
-Needs Rust 1.96 (pinned by `rust-toolchain.toml`; GPUI's snapshot `gpui-pre` is pinned
-exactly in `Cargo.toml` and raised on purpose).
+Needs the Rust `rust-toolchain.toml` names, which rustup installs by itself (GPUI's snapshot
+`gpui-pre` is pinned exactly in `Cargo.toml` and raised on purpose).
 
 ```powershell
 cargo run                                   # the app
 cargo fmt --check
 cargo clippy --all-targets --locked -- -D warnings
 cargo test --locked                         # the window, the derivations and recognition
-git config core.hooksPath .githooks         # run those three before pushing main or a tag
+sh tools/checks.sh                          # those three, and the tests of tools/rust/follow.sh
+git config core.hooksPath .githooks         # run the checks before pushing main or a tag
 ```
+
+### Following GitHub's Rust
+
+The Rust is not kept at one version: it follows the one GitHub's runners carry (the newest
+stable GitHub has taken up), and is written in `rust-toolchain.toml` alone.
+
+| | Command | What it does |
+|---|---|---|
+| Watch | `bash tools/rust/follow.sh` | Tells this repository's Rust and the runners'; ends with 10 when this one is behind |
+| Follow | `bash tools/rust/follow.sh --apply` | Writes the newer Rust, runs every check with it and commits; changes nothing if a check fails |
+| Mend, then follow | `bash tools/rust/follow.sh --mend` | Writes the newer Rust and commits nothing: mend the code for its checks (clippy's new lints), and `--apply` then commits the mending and the Rust as one |
+
+- The pre-push gate watches on every push of main. Behind, it follows on the spot (a commit
+  of its own) and stops the push: push again, and that commit is sent too.
+- The runners' Rust is read from the list of software of their image
+  ([actions/runner-images](https://github.com/actions/runner-images)), the list the last
+  release's run named. Without `gh` or a connection nothing is watched and the push goes on.
+- While the checks cannot pass with the newer Rust yet, `FOLLOW_RUST=off` on the push passes
+  the watch by.
+- Pushed, the commit that follows (`chore: follow Rust …`) is built by GitHub Actions and
+  not published: the cache of the new Rust is made then, and the next release need not wait.
 
 The window's tests drive it in GPUI's test context (`src/ui/tests`) over what a test keeps and
 reports in place of the game; what the window derives for display is tested in `src/view.rs`.
@@ -92,7 +114,8 @@ To measure against the running game, run `cargo run --release --example watch --
 A release is its commit "release: vX.Y.Z" on main, pushed with its `vX.Y.Z` tag: GitHub
 Actions builds the exe from that commit (not from the tag, so the Rust cache main keeps serves
 every release) and publishes it with its SHA-256 (`bluearchive-aoi-x86_64-pc-windows-msvc.exe`
-and `.exe.sha256`). Other pushes to main build nothing. The SchaleDB workflow releases new
+and `.exe.sha256`). Other pushes to main build nothing, but the commit that follows GitHub's
+Rust, which is built and not published ([Following GitHub's Rust](#following-githubs-rust)). The SchaleDB workflow releases new
 students the same way by itself (see [Data](data.md)), dispatching the release workflow. The app's
 アップデートを確認 reads the latest release's tag off where `github.com/…/releases/latest`
 sends to (not the GitHub API, whose 60 calls an hour without a token a home shares);

@@ -1,6 +1,7 @@
 #!/bin/sh
-# The gate before main or a release tag reaches GitHub: every check must pass
-# (cargo fmt, clippy and the tests, recognition included). GitHub Actions only builds releases
+# The gate before main or a release tag reaches GitHub: the Rust must not be behind the one
+# GitHub's runners carry (tools/rust/follow.sh), and every check must pass (tools/checks.sh:
+# cargo fmt, clippy and the tests, recognition included). GitHub Actions only builds releases
 # and refreshes the SchaleDB data, so nothing else tests.
 # Other branches are pushed without checks. Enable once per clone:
 #   git config core.hooksPath .githooks
@@ -28,7 +29,21 @@ if [ "$(git rev-parse HEAD)" != "$pushed" ] || [ -n "$(git status --porcelain)" 
   echo "pre-push: check out $pushed with a clean working tree so it can be verified" >&2
   exit 1
 fi
-cargo fmt --check || exit 1
-cargo clippy --all-targets --locked -- -D warnings || exit 1
-cargo test --locked || exit 1
+
+# Behind GitHub's Rust, the gate follows it before anything is pushed (the newer Rust
+# written, every check run with it, a commit of its own) and asks for the push again, which
+# then sends that commit too: a release would otherwise build with an older Rust than GitHub
+# has taken up, and cold (the cache keys on the runners' Rust too). Where the newer Rust
+# cannot be followed yet, FOLLOW_RUST=off passes this by.
+if [ "$FOLLOW_RUST" != off ]; then
+  bash tools/rust/follow.sh --apply >&2 || exit 1
+  followed=$(git rev-parse HEAD) || exit 1
+  if [ "$followed" != "$pushed" ]; then
+    # Its checks ran on this very tree: the push to come need not run them again.
+    echo "$followed" >"$mark"
+    echo "pre-push: GitHub's Rust was followed in a commit of its own: push again to send it too" >&2
+    exit 1
+  fi
+fi
+sh tools/checks.sh || exit 1
 echo "$pushed" >"$mark"

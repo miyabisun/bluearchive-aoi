@@ -1202,6 +1202,28 @@ fn kakera_offer(shops: &[shop::ShopRow], id: i64) -> Option<shop::OfferRow> {
 mod tests {
     use super::*;
 
+    /// GitHub tells of a workflow it cannot read only after the push, by a run that fails at
+    /// once (an expression with ": " in it, written without quotes, did so): each is read
+    /// here as YAML before.
+    #[test]
+    fn the_workflows_are_yaml() {
+        let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".github/workflows");
+        let mut read = Vec::new();
+        for entry in std::fs::read_dir(&folder).expect("the workflows' folder") {
+            let path = entry.expect("an entry of it").path();
+            let text = std::fs::read_to_string(&path).expect("a workflow");
+            let parsed: Result<serde_yaml::Value, _> = serde_yaml::from_str(&text);
+            assert!(parsed.is_ok(), "{}: {:?}", path.display(), parsed.err());
+            read.push(
+                path.file_name()
+                    .map(|name| name.to_string_lossy().into_owned()),
+            );
+        }
+        read.sort();
+        let (release, schaledb) = ("release.yml".to_owned(), "schaledb.yml".to_owned());
+        assert_eq!(read, [Some(release), Some(schaledb)], "every workflow");
+    }
+
     /// A student of the extra list SchaleDB now lists goes by SchaleDB's id, and
     /// the id of Aoi's own they had is told with it; the others keep theirs.
     #[test]

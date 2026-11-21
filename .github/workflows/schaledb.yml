@@ -43,9 +43,9 @@ jobs:
           "data=$([bool](git diff --cached --name-only))" >> $env:GITHUB_OUTPUT
           "students=$([bool](git diff --cached --name-only -- data/schaledb/students.json))" >> $env:GITHUB_OUTPUT
 
-      - name: Set up Rust
+      - name: Set up the Rust of rust-toolchain.toml
         if: steps.changed.outputs.students == 'True'
-        uses: dtolnay/rust-toolchain@1.96.0
+        run: rustup toolchain install
 
       - name: Cache Rust dependencies
         if: steps.changed.outputs.students == 'True'
