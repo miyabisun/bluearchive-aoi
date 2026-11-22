@@ -1,6 +1,6 @@
 [package]
 name = "bluearchive-aoi"
-version = "0.3.34"
+version = "0.3.35"
 edition = "2024"
 license = "MIT"
 description = "Reads item kinds and counts from the Blue Archive item list"
