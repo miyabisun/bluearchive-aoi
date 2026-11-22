@@ -9,7 +9,7 @@ use gpui::{
 
 use super::{
     Aoi, icons,
-    parts::{self, Tile, raise_cell, tier_row},
+    parts::{self, RowSize, Tile, raise_cell, tier_row},
     theme::{FS_CAPTION, FS_SM, SP_1, SP_2, SP_3, SP_4, Theme},
     widgets::{text, tooltip},
 };
@@ -144,9 +144,11 @@ impl Aoi {
 
     /// The bounties' table of counts (the user's 2026-11-09 「アイテムのスキル素材も同じ形にしてく
     /// ださい」): the secret notes, the choice boxes summed, then each school on a row, its BDs'
-    /// and tech notes' counts either side of the slash, the three great schools first.
+    /// and tech notes' counts either side of the slash, the three great schools first. Every row
+    /// half again as tall as the bounties' (see `RowSize::HALF_AGAIN`).
     fn skills(&self, theme: &Theme) -> impl IntoElement + use<> {
         let kinds = &self.shown.kinds;
+        let size = RowSize::HALF_AGAIN;
         let mut rows = Vec::new();
         if let Some(note) = kinds.secret.first() {
             // The note and its fragments split as a school's BD and note, in the top tier's
@@ -156,18 +158,19 @@ impl Aoi {
                 parts::named(
                     "skills-secret".to_owned(),
                     &note.name,
-                    parts::item_picture(&note.icon),
+                    parts::item_picture(&note.icon, size),
                 ),
-                std::array::from_fn(|t| match t {
+                (0..4).map(|t| match t {
                     3 => parts::counts_cell(theme, "skills-secret-3".to_owned(), t, &secret, &[]),
                     _ => parts::blank_cell().into_any_element(),
                 }),
+                size,
             ));
         }
         if let Some(boxes) = view::box_totals(&kinds.skill_boxes) {
             rows.push(parts::counts_row(
                 boxes_label("skills-boxes", "選択ボックスの合計"),
-                std::array::from_fn(|t| {
+                (0..4).map(|t| {
                     let (bd, notes) = (boxes.bd[t].as_ref(), boxes.notes[t].as_ref());
                     parts::counts_cell(
                         theme,
@@ -180,13 +183,14 @@ impl Aoi {
                         ],
                     )
                 }),
+                size,
             ));
         }
         rows.extend(
             kinds
                 .schools
                 .iter()
-                .map(|school| parts::school_row(theme, "skills", school)),
+                .map(|school| parts::school_row(theme, "skills", school, 0..4, size)),
         );
         div().flex().flex_col().gap(px(2.)).children(rows)
     }
@@ -206,6 +210,7 @@ impl Aoi {
                     parts::counts_row(
                         boxes_label("ooparts-boxes", "選択ボックス"),
                         parts::tier_counts(theme, "ooparts-boxes", &kinds.oopart_boxes),
+                        RowSize::LOW,
                     )
                     .mb(SP_2),
                 )

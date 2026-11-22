@@ -378,6 +378,11 @@ fn the_work_tab_opens_the_fold_the_game_comes_to_once(cx: &mut TestAppContext) {
     set(&core, vcx, |s| s.place = Some(Place::Screen("指名手配")));
     assert!(opened(vcx, "work:指名手配"), "the new screen's fold");
     assert!(!opened(vcx, "work:特別依頼"), "the others close");
+    set(&core, vcx, |s| {
+        s.place = Some(Place::Screen("スケジュール"));
+    });
+    assert!(opened(vcx, "work:スケジュール"), "the schedule's fold");
+    assert!(!opened(vcx, "work:指名手配"), "the others close");
 }
 
 /// A month-end shop read on 11/01 with `cards` goods.

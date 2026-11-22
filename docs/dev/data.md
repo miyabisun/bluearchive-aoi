@@ -64,6 +64,10 @@ SIL Open Font License) in a folder:
 cargo run --release --example build_glyphs -- <folder of the fonts>
 ```
 
+A screen newly labeled in `tests/fixtures/titles.json` needs its title alone: `build_glyphs -- titles`
+adds the titles the banks lack and leaves every other tile and word as it is (no font needed), where
+drawing the banks anew would move other readings.
+
 The lists' counts are read as the other texts are, with a bank of their own
 (`data/counts.png` and `.json`, one for every width), from the fixtures and from a collection of
 a tablet's screens as scrcpy streams them (each with the screen as screencap gives it, which

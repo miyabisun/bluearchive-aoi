@@ -238,7 +238,13 @@ pub fn counts_cell(
     cells: &[Option<&HeldCell>],
     parts: &[Option<&str>],
 ) -> AnyElement {
-    let base = blank_cell().py(px(2.)).bg(theme.tiers[tier.min(3)]);
+    // As tall as its row, the counts in the middle of a row taller than they are.
+    let base = blank_cell()
+        .py(px(2.))
+        .flex()
+        .flex_col()
+        .justify_center()
+        .bg(theme.tiers[tier.min(3)]);
     if cells.iter().all(Option::is_none) {
         return base.into_any_element();
     }
@@ -267,9 +273,41 @@ pub fn counts_cell(
         .into_any_element()
 }
 
-/// The height of the picture a row of counts opens with: a line of text's, so the row stays low
-/// (the user's 2026-11-08 「1行の高さをギリギリまで削る」).
-const ROW_PICTURE: Pixels = px(20.);
+/// How large a row of counts is drawn: how tall the picture it opens with, and how tall the row
+/// at least (`None`: as tall as its counts).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RowSize {
+    picture: Pixels,
+    height: Option<Pixels>,
+}
+
+impl RowSize {
+    /// The bounties' and the ooparts': the picture a line of text high, so the row stays low
+    /// (the user's 2026-11-08 「1行の高さをギリギリまで削る」), 29.6 px (a 25.6 px line, 2 px
+    /// above and below).
+    pub const LOW: Self = Self {
+        picture: px(20.),
+        height: None,
+    };
+    /// The item tab's skill materials': the picture and the row half again a low row's (the
+    /// user's 2026-11-22 「アイテム一覧のスキル素材ページのエンブレムも小さすぎるので、行ごと1.5倍
+    /// くらいにして欲しい」).
+    pub const HALF_AGAIN: Self = Self {
+        picture: px(30.),
+        height: Some(px(44.4)),
+    };
+    /// The schedule's: the emblem twice a low row's (the same request: 「学園のエンブレムは
+    /// アイテム一覧画面のものは小さすぎるので2倍程度に大きくして欲しい」), 4 px above and below it.
+    pub const DOUBLE: Self = Self {
+        picture: px(40.),
+        height: Some(px(48.)),
+    };
+
+    /// The width of the column the picture stands in: 32 px for a low row's.
+    fn column(self) -> Pixels {
+        self.picture * 1.6
+    }
+}
 
 /// A picture at a row's left, its name on hover.
 pub fn named(id: String, name: &str, picture: impl IntoElement) -> AnyElement {
@@ -282,44 +320,57 @@ pub fn named(id: String, name: &str, picture: impl IntoElement) -> AnyElement {
         .into_any_element()
 }
 
-/// An item's picture a line high, at its own shape.
-pub fn item_picture(icon: &str) -> gpui::Img {
-    icons::icon(icon, ROW_PICTURE)
-        .w(px(25.))
+/// An item's picture as tall as a row of `size` draws it, at its own shape.
+pub fn item_picture(icon: &str, size: RowSize) -> gpui::Img {
+    icons::icon(icon, size.picture)
+        .w(size.picture * 1.25)
         .object_fit(gpui::ObjectFit::Contain)
 }
 
-/// A row of the tables of counts (the bounties', the skill materials'): its picture in a narrow
-/// column at the left, then the four tiers' cells (see `counts_cell`).
-pub fn counts_row(picture: AnyElement, cells: [AnyElement; 4]) -> Div {
+/// A row of the tables of counts (the bounties', the skill materials', the schedule's): its
+/// picture in a narrow column at the left, then the tiers' cells (see `counts_cell`), each as
+/// tall as the row, which is no lower than `size` has it though nothing is written in it.
+pub fn counts_row(
+    picture: AnyElement,
+    cells: impl IntoIterator<Item = AnyElement>,
+    size: RowSize,
+) -> Div {
     div()
         .flex()
-        .items_center()
+        .when_some(size.height, gpui::Styled::min_h)
         .child(
             div()
-                .w(px(32.))
+                .w(size.column())
                 .flex_none()
                 .flex()
+                .items_center()
                 .justify_center()
                 .child(picture),
         )
         .child(div().flex_1().flex().children(cells))
 }
 
-/// A school's row of counts: its emblem (its name on hover), then each tier's BD and tech note
-/// either side of the slash (the user's 2026-11-08 「学園のエンブレム」「[BD] / [ノート]」).
-pub fn school_row(theme: &Theme, id: &str, school: &SchoolMaterials) -> Div {
+/// A school's row of counts: its emblem (its name on hover), then each of `tiers`' BD and tech
+/// note either side of the slash (the user's 2026-11-08 「学園のエンブレム」「[BD] / [ノート]」).
+pub fn school_row(
+    theme: &Theme,
+    id: &str,
+    school: &SchoolMaterials,
+    tiers: std::ops::Range<usize>,
+    size: RowSize,
+) -> Div {
     let key = format!("{id}-{}", school.icon);
     counts_row(
         named(
             key.clone(),
             &school.name,
-            icons::emblem(&school.icon, theme.emblem, ROW_PICTURE),
+            icons::emblem(&school.icon, theme.emblem, size.picture),
         ),
-        std::array::from_fn(|t| {
+        tiers.map(|t| {
             let cells = [school.bd[t].as_ref(), school.notes[t].as_ref()];
             counts_cell(theme, format!("{key}-{t}"), t, &cells, &[])
         }),
+        size,
     )
 }
 
@@ -333,9 +384,15 @@ pub fn tier_counts(theme: &Theme, key: &str, tiers: &[Option<HeldCell>; 4]) -> [
 pub fn oopart_row(theme: &Theme, key: &str, tiers: &[Option<HeldCell>; 4]) -> Div {
     let picture = tiers.iter().rev().flatten().next().map_or_else(
         || div().into_any_element(),
-        |top| named(key.to_owned(), &top.name, item_picture(&top.icon)),
+        |top| {
+            named(
+                key.to_owned(),
+                &top.name,
+                item_picture(&top.icon, RowSize::LOW),
+            )
+        },
     );
-    counts_row(picture, tier_counts(theme, key, tiers))
+    counts_row(picture, tier_counts(theme, key, tiers), RowSize::LOW)
 }
 
 /// A row of a kind's four tiers.

@@ -29,6 +29,11 @@
 //! a character drawn in more than one way keeps a reference for each.
 //! Run with `cargo run --example build_glyphs -- <folder of the fonts>` after
 //! the fixtures or SchaleDB's students change.
+//!
+//! `cargo run --example build_glyphs -- titles` instead adds to the banks kept
+//! the titles of the tuning screens they lack (a screen newly labeled in
+//! `tests/fixtures/titles.json`) and leaves every other reference as it is,
+//! where drawing the banks anew would move other readings; it needs no font.
 
 use std::{collections::BTreeMap, path::Path};
 
@@ -148,7 +153,7 @@ struct ShopLabel {
 }
 
 /// A screen labeled with the title its top left writes (`tests/fixtures/titles.json`).
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 struct TitleLabel {
     image: String,
     role: String,
@@ -770,18 +775,76 @@ fn drop_bar_letters_near_digits(cuts: &mut Cuts) {
     }
 }
 
+/// The fixtures of `dir` as a window drawn `at` wide shows them (smoothly, as
+/// the game draws them), scaled down as Aoi reads it.
+fn drawn(dir: &Path, at: u32) -> impl Fn(&str) -> RgbImage + '_ {
+    move |path: &str| {
+        let image = image::open(dir.join(path))
+            .expect("the image opens")
+            .to_rgb8();
+        let scale = at as f32 / screen::drawn_width(&image);
+        let (w, h) = (image.width() as f32 * scale, image.height() as f32 * scale);
+        let image = resize(
+            &image,
+            w.round() as u32,
+            h.round() as u32,
+            FilterType::Triangle,
+        );
+        screen::normalize(&image).into_owned()
+    }
+}
+
+/// Adds to each bank kept the titles of the tuning screens it lacks, as the top
+/// left draws them at the bank's width (see `titles`); the tiles and the words
+/// it holds stay as they are, the new ones after them.
+fn add_titles(root: &Path) {
+    let dir = root.join("tests/fixtures");
+    let labels: Vec<TitleLabel> = read_json(&dir.join("titles.json"));
+    for width in screen::WIDTHS {
+        let (picture, index_file) = glyph::bank::files(width);
+        let (picture, index_file) = (
+            root.join("data").join(picture),
+            root.join("data").join(index_file),
+        );
+        let mut bank = Bank::decode(
+            &std::fs::read(&picture).expect("the bank's picture is read"),
+            &std::fs::read_to_string(&index_file).expect("the bank's index is read"),
+        )
+        .expect("the glyph bank decodes");
+        let lacked: Vec<TitleLabel> = labels
+            .iter()
+            .filter(|l| l.role == "tune" && !bank.index.titles.iter().any(|w| w.text == l.title))
+            .cloned()
+            .collect();
+        let before = bank.tiles.len();
+        titles(&mut bank, &lacked, &drawn(&dir, width));
+        let (png, index) = bank.encode().expect("the glyph bank encodes");
+        std::fs::write(picture, png).expect("the file is written");
+        std::fs::write(index_file, index + "\n").expect("the file is written");
+        let added: Vec<&str> = lacked.iter().map(|l| l.title.as_str()).collect();
+        println!(
+            "{width}: {} tiles ({} new), {} titles, added {added:?}",
+            bank.tiles.len(),
+            bank.tiles.len() - before,
+            bank.index.titles.len()
+        );
+    }
+}
+
 fn main() {
-    let fonts = std::path::PathBuf::from(
-        std::env::args()
-            .nth(1)
-            .expect("usage: build_glyphs <folder of the fonts>"),
-    );
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let arg = std::env::args()
+        .nth(1)
+        .expect("usage: build_glyphs <folder of the fonts> | build_glyphs titles");
+    if arg == "titles" {
+        return add_titles(root);
+    }
+    let fonts = std::path::PathBuf::from(arg);
     let weight = |name: &str| {
         let path = fonts.join(format!("NotoSansJP-{name}.otf"));
         let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
         FontVec::try_from_vec(bytes).expect("the Noto Sans JP file is a font")
     };
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let dir = root.join("tests/fixtures");
     let labels: Vec<Label> = read_json(&dir.join("students.json"));
     let levels: Vec<LevelLabel> = read_json(&dir.join("levels.json"));
@@ -811,33 +874,14 @@ fn main() {
     for width in screen::WIDTHS {
         let mut bank = Bank::default();
         names(&mut bank, &weights[0]);
-        // The fixtures as a window drawn at `at` wide shows them (smoothly,
-        // as the game draws them), scaled down as Aoi reads it.
-        let drawn = |at: u32| {
-            let dir = &dir;
-            move |path: &str| {
-                let image = image::open(dir.join(path))
-                    .expect("the image opens")
-                    .to_rgb8();
-                let scale = at as f32 / screen::drawn_width(&image);
-                let (w, h) = (image.width() as f32 * scale, image.height() as f32 * scale);
-                let image = resize(
-                    &image,
-                    w.round() as u32,
-                    h.round() as u32,
-                    FilterType::Triangle,
-                );
-                screen::normalize(&image).into_owned()
-            }
-        };
-        let open = drawn(width);
+        let open = drawn(&dir, width);
         let mut cuts = Cuts::new();
         let between = BETWEEN
             .iter()
             .find(|(w, _)| *w == width)
             .map_or(&[][..], |b| b.1);
         for &at in std::iter::once(&width).chain(between) {
-            let open = drawn(at);
+            let open = drawn(&dir, at);
             student_styles(&mut cuts, &labels, &levels, &open);
             // The shops' names and the titles once, as drawn at the width read.
             let mut words = Bank::default();

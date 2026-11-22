@@ -10,7 +10,7 @@ use gpui::{
 use super::{
     Aoi, icons,
     items::raise_rows,
-    parts,
+    parts::{self, RowSize},
     students::stars,
     theme::{FS_CAPTION, FS_MD, FS_SM, RADIUS_SM, SP_1, SP_2, SP_3, SP_4, SP_5, Theme, tabular},
     widgets::{fold_title, text, tooltip},
@@ -174,6 +174,18 @@ impl Aoi {
                     .into_any_element(),
                 ]
             },
+            cx,
+        );
+        self.fold(
+            &mut folds,
+            theme,
+            "work:スケジュール",
+            Head {
+                label: "スケジュール".to_owned(),
+                title: h3("スケジュール"),
+                extra: None,
+            },
+            |this| vec![schedule_table(&t, &this.shown.kinds.schools)],
             cx,
         );
         folds.push(heading("2倍キャンペーン", false));
@@ -729,13 +741,35 @@ fn bounty_table(theme: &Theme, place: &crate::work::BountyRow) -> AnyElement {
     let schools = place
         .schools
         .iter()
-        .map(|school| parts::school_row(theme, &id, school));
+        .map(|school| parts::school_row(theme, &id, school, 0..4, RowSize::LOW));
     div()
         .flex()
         .flex_col()
         .gap(px(2.))
         .children(ooparts)
         .children(schools)
+        .into_any_element()
+}
+
+/// The schedule's table (the user's 2026-11-22 「基本はスキル素材のページと同様」): a row for each
+/// school the schedule's locations give the materials of, in their order, its emblem twice the
+/// bounties' at the left, then its BDs and tech notes of 中級 to 最上級 as the skill materials'
+/// table writes them.
+fn schedule_table(theme: &Theme, schools: &[crate::kinds::SchoolMaterials]) -> AnyElement {
+    let rows = view::schedule_schools(schools).into_iter().map(|school| {
+        parts::school_row(
+            theme,
+            "schedule",
+            school,
+            view::SCHEDULE_TIERS,
+            RowSize::DOUBLE,
+        )
+    });
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(2.))
+        .children(rows)
         .into_any_element()
 }
 

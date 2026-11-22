@@ -31,6 +31,7 @@ fn tells_the_plays_by_when_they_are_played(cx: &mut TestAppContext) {
         "ショップ: 通常アイテム",
         "指名手配",
         "学園交流会",
+        "スケジュール",
         "任務 Normal",
         "任務 Hard",
         "特別依頼",
@@ -160,4 +161,126 @@ fn tables_a_bounty_s_school_on_a_row_its_bds_and_notes_either_side_of_a_slash(
         "lower than an icon: {:?}",
         first.size.height
     );
+    assert_eq!(
+        at(vcx, "picture:ゲヘナ").size.height,
+        gpui::px(20.),
+        "the emblem a line of text high"
+    );
+}
+
+#[gpui::test]
+fn tables_the_schedule_s_schools_in_its_order_the_three_upper_tiers_beside_emblems_twice_as_tall(
+    cx: &mut TestAppContext,
+) {
+    let (_, core, vcx) = open(cx, &Kept::default());
+    let tier = ["初級", "中級", "上級", "最上級"];
+    let tiers = |first: i64, name: &str, held: [u32; 4]| -> [Option<crate::work::HeldCell>; 4] {
+        std::array::from_fn(|t| {
+            let id = first + i64::try_from(t).expect("a tier");
+            Some(crate::work::HeldCell {
+                id,
+                name: format!("{}{name}", tier[t]),
+                icon: format!("item_icon_{id}"),
+                held: Some(Count::Exact(held[t])),
+                need: Some(300),
+            })
+        })
+    };
+    let school = |first: i64, key: &str, name: &str, bd: [u32; 4], notes: [u32; 4]| {
+        crate::kinds::SchoolMaterials {
+            name: name.to_owned(),
+            icon: format!("school_icon_{key}"),
+            bd: tiers(first, &format!("戦術教育BD（{name}）"), bd),
+            notes: tiers(first + 10, &format!("技術ノート（{name}）"), notes),
+        }
+    };
+    set(&core, vcx, |s| {
+        s.items = items();
+        // As the item tab lists them: トリニティ before ゲヘナ, then a school the schedule has
+        // no location of.
+        s.kinds.schools = vec![
+            school(
+                1000,
+                "trinity",
+                "トリニティ",
+                [501, 502, 503, 504],
+                [511, 512, 513, 514],
+            ),
+            school(
+                2000,
+                "gehenna",
+                "ゲヘナ",
+                [677, 21, 22, 23],
+                [1106, 31, 32, 33],
+            ),
+            school(
+                3000,
+                "valkyrie",
+                "ヴァルキューレ",
+                [901, 902, 903, 904],
+                [911, 912, 913, 914],
+            ),
+        ];
+    });
+    click(vcx, "tab:お仕事");
+    click(vcx, "fold-work:スケジュール");
+    let at = |vcx: &mut gpui::VisualTestContext, selector: &str| {
+        super::bounds(vcx, selector).unwrap_or_else(|| panic!("{selector} shows"))
+    };
+    let gehenna = |t: usize| format!("cell:schedule-school_icon_gehenna-{t}");
+    let trinity = |t: usize| format!("cell:schedule-school_icon_trinity-{t}");
+    // The user's 2026-11-22 「上記の高校の「中級・上級・最上級」のBD/ノートを記述して欲しい」: no
+    // 初級 cell, its counts not written.
+    assert!(!has(vcx, &gehenna(0)), "no 初級 cell");
+    assert!(
+        !shows(vcx, "677") && !shows(vcx, "1,106"),
+        "the 初級 counts are not written"
+    );
+    // 「出てくる学校が限られている、順番も異なる」: ゲヘナ over トリニティ, ヴァルキューレ left out.
+    assert!(
+        at(vcx, &gehenna(1)).top() < at(vcx, &trinity(1)).top(),
+        "ゲヘナ comes before トリニティ"
+    );
+    assert!(
+        !has(vcx, "picture:ヴァルキューレ") && !shows(vcx, "902"),
+        "a school without a location is left out"
+    );
+    // A cell as the skill materials': the BD's count left of the slash in its middle, the
+    // note's right of it, each tier under the same tier of the row above.
+    for (t, bd, note) in [(1, "21", "31"), (2, "22", "32"), (3, "23", "33")] {
+        let cell = at(vcx, &gehenna(t));
+        let (bd, note) = (
+            at(vcx, &format!("text:{bd}")),
+            at(vcx, &format!("text:{note}")),
+        );
+        let middle = cell.center().x;
+        assert!(
+            cell.left() < bd.left()
+                && bd.right() < middle
+                && middle < note.left()
+                && note.right() < cell.right(),
+            "tier {t}: {bd:?} left of the middle, {note:?} right, in {cell:?}"
+        );
+        let under = at(vcx, &trinity(t));
+        assert!(
+            (cell.left() - under.left()).abs() < gpui::px(1.)
+                && (cell.right() - under.right()).abs() < gpui::px(1.),
+            "tier {t}: {under:?} under {cell:?}"
+        );
+    }
+    // 「学園のエンブレムは…2倍程度に大きくして欲しい」: twice the bounties' 20 px, the cells
+    // as tall as the row that holds it.
+    let emblem = at(vcx, "picture:ゲヘナ");
+    assert_eq!(
+        emblem.size.height,
+        gpui::px(40.),
+        "the emblem twice as tall"
+    );
+    for t in 1..4 {
+        let cell = at(vcx, &gehenna(t));
+        assert!(
+            cell.top() <= emblem.top() && emblem.bottom() <= cell.bottom(),
+            "tier {t}'s cell {cell:?} as tall as the emblem's row {emblem:?}"
+        );
+    }
 }

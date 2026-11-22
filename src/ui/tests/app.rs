@@ -187,6 +187,16 @@ fn tables_the_skill_materials_as_the_bounties_a_row_a_school_its_bds_and_notes_e
     // at the right of the right half; the secret notes so in the top tier's column, the summed
     // choice boxes on one row.
     let near = |a: gpui::Pixels, b: gpui::Pixels| (a - b).abs() < gpui::px(1.);
+    // The user's 2026-11-22 「アイテム一覧のスキル素材ページのエンブレムも小さすぎるので、行ごと
+    // 1.5倍くらいにして欲しい」: the pictures half again the bounties' 20 px, and so every row.
+    let low = gpui::px(16. * 1.6 + 2. * 2.);
+    for picture in ["picture:ゲヘナ", "picture:秘伝ノート"] {
+        assert_eq!(
+            at(vcx, picture).size.height,
+            gpui::px(30.),
+            "{picture} half again as tall"
+        );
+    }
     let mut ends = Vec::new();
     for (cell, left, right) in [
         (school(0), "677", "1,106"),
@@ -207,8 +217,8 @@ fn tables_the_skill_materials_as_the_bounties_a_row_a_school_its_bds_and_notes_e
             "{cell}: {left:?} left of the middle, {right:?} right, in {bounds:?}"
         );
         assert!(
-            bounds.size.height < gpui::px(40.),
-            "{cell} lower than an icon: {:?}",
+            near(bounds.size.height, low * 1.5),
+            "{cell} half again as tall as a low row's {low:?}: {:?}",
             bounds.size.height
         );
         ends.push((cell, middle - left.right(), bounds.right() - right.right()));

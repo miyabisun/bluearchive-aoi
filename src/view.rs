@@ -12,7 +12,7 @@ use crate::{
     broadcast::Cast,
     ground::Behind,
     icon::Rarity,
-    kinds::{Enhancement, SkillBoxes},
+    kinds::{Enhancement, SchoolMaterials, SkillBoxes},
     plan::{BlueprintRow, Held, Kind, NeedRow, Part, UnknownRow},
     quantity::Count,
     shop::{self, GoodRow, ShopRow},
@@ -1323,12 +1323,13 @@ pub fn procure_cells(settled: &Settled) -> ProcureCells {
 // The work tab
 
 /// The work tab's folds of the screens told by their title (`title::read`).
-const WORK_SCREENS: [(&str, &str); 5] = [
+const WORK_SCREENS: [(&str, &str); 6] = [
     ("学園交流会", "work:学園交流会"),
     ("指名手配", "work:指名手配"),
     ("任務 Normal", "work:任務"),
     ("特別依頼", "work:特別依頼"),
     ("ショップ: 通常アイテム", "work:通常アイテム"),
+    ("スケジュール", "work:スケジュール"),
 ];
 
 /// The work tab's fold for where the game is: a screen told by its title, or a
@@ -1344,6 +1345,32 @@ pub fn work_fold(place: Option<Place>, month_end: &[PlanShop]) -> Option<String>
             .any(|shop| shop.name == name)
             .then(|| format!("work:月末:{name}")),
     }
+}
+
+/// The schools whose BDs and tech notes the schedule gives, in the order of its locations (the
+/// user's of 2026-11-22: 「出てくる学校が限られている、順番も異なる」).
+const SCHEDULE_SCHOOLS: [&str; 8] = [
+    "ゲヘナ",
+    "アビドス",
+    "ミレニアム",
+    "トリニティ",
+    "レッドウィンター",
+    "百鬼夜行",
+    "山海経",
+    "ワイルドハント",
+];
+
+/// The tiers the schedule's table shows, 中級 to 最上級 (the same request: 「上記の高校の
+/// 「中級・上級・最上級」のBD/ノートを記述して欲しい」).
+pub const SCHEDULE_TIERS: Range<usize> = 1..4;
+
+/// The schedule's schools among `schools` (the skill materials' rows, by name) in the
+/// schedule's order; a school nothing is known of yet is left out.
+pub fn schedule_schools(schools: &[SchoolMaterials]) -> Vec<&SchoolMaterials> {
+    SCHEDULE_SCHOOLS
+        .iter()
+        .filter_map(|name| schools.iter().find(|school| school.name == *name))
+        .collect()
 }
 
 /// The month, day, hour and minute of a local time ("2026-11-03 14:37:12" is "11/03 14:37").

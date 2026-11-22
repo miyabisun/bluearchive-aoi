@@ -19,7 +19,14 @@ use crate::{
 };
 
 /// The screens told by their title, by the title.
-pub const TITLES: [&str; 5] = ["学園交流会", "指名手配", "任務", "特別依頼", "ショップ"];
+pub const TITLES: [&str; 6] = [
+    "学園交流会",
+    "指名手配",
+    "任務",
+    "特別依頼",
+    "ショップ",
+    "スケジュール",
+];
 
 /// Where the title is written, in units (see `screen::unit`), kept to the
 /// top. Measured on 2026-11-06 at 2370x1333: "学園交流会" from 0.150 to 0.326
@@ -32,11 +39,13 @@ pub const AREA: Area = Area {
     anchor: Anchor::Top,
 };
 /// The "?" button after the title ends it: the first run of dark columns at
-/// least `BUTTON` wide whose box is `BUTTON_FILL` dark or more. The gaps tell
-/// it not: measured on 2026-11-06 over the titles drawn 1500 and 2370 wide,
-/// the button starts 0.0142 to 0.0154 after the title, and "ショップ"'s letters
-/// part by up to 0.0130. The button is 0.034 wide and 0.85 dark; no letter as
-/// wide is darker than 0.66 (学).
+/// least `BUTTON` wide whose box is as tall and `BUTTON_FILL` dark or more. The
+/// gaps tell it not: measured on 2026-11-06 over the titles drawn 1500 and 2370
+/// wide, the button starts 0.0142 to 0.0154 after the title, and "ショップ"'s
+/// letters part by up to 0.0130. The button is 0.034 wide, 0.033 tall and 0.85
+/// dark; no letter as wide is darker than 0.66 (学). The "ー" of "スケジュール"
+/// is as wide (0.033) and dark all over (1.00), but 0.004 tall (measured on
+/// 2026-11-22 at 2370x1333).
 const BUTTON: f32 = 0.025;
 const BUTTON_FILL: f32 = 0.75;
 /// Room kept around the letters, short of the area's edges and the button.
@@ -49,7 +58,8 @@ const SPECK: f32 = 6.0 / (1250.0 * 1250.0);
 /// (特別依頼 at 1740: the tops of 特 and 別, kept in the 1600 bank's word, fall
 /// out there and the tiles shift, the mean 12.7), 60 or farther from each
 /// other's, and every other screen's top left 53 or farther (a phone's student
-/// screen, nearest 任務).
+/// screen, nearest 任務). スケジュール, measured so on 2026-11-22: within 6.8 of
+/// its own title, 68.5 or farther from the others'.
 const WORST: f32 = 32.0;
 
 /// The title's dark letters on the light top bar.
@@ -60,8 +70,9 @@ fn dark(c: [u8; 3]) -> bool {
 
 /// The columns the title spans across `rows` (dark or not, each left to
 /// right): from the first dark column to the last before the button, the
-/// first run of dark columns at least `button` wide and `BUTTON_FILL` dark
-/// across its box. `None` without letters before a button.
+/// first run of dark columns at least `button` wide whose box is at least
+/// `button` tall and `BUTTON_FILL` dark. `None` without letters before a
+/// button.
 pub fn span(rows: &[Vec<bool>], button: usize) -> Option<(usize, usize)> {
     let width = rows.first()?.len();
     let inked = |x: usize| rows.iter().any(|row| row[x]);
@@ -83,8 +94,9 @@ pub fn span(rows: &[Vec<bool>], button: usize) -> Option<(usize, usize)> {
         let dark: Vec<usize> = rows.iter().map(on).collect();
         let top = dark.iter().position(|&n| n > 0).unwrap_or(0);
         let bottom = dark.iter().rposition(|&n| n > 0).unwrap_or(0);
-        let box_size = (last - first + 1) * (bottom - top + 1);
-        dark.iter().sum::<usize>() as f32 >= BUTTON_FILL * box_size as f32
+        let height = bottom - top + 1;
+        let box_size = (last - first + 1) * height;
+        height >= button && dark.iter().sum::<usize>() as f32 >= BUTTON_FILL * box_size as f32
     };
     let at = runs
         .iter()
@@ -144,14 +156,28 @@ mod tests {
             "..##..#..#..####.",
             "..#...####..####.",
             "..##..#..#..####.",
+            "..#...#..#..####.",
         ]);
         assert_eq!(span(&screen, 4), Some((2, 9)));
     }
 
     #[test]
+    fn a_long_flat_stroke_among_the_letters_is_not_the_button() {
+        // The "ー" of "スケジュール": as wide as the button and dark all over, a line high.
+        let screen = grid(&[
+            "..##........#.####.",
+            "..#..#####..#.####.",
+            "..##........#.####.",
+            "..#.........#.####.",
+        ]);
+        assert_eq!(span(&screen, 4), Some((2, 12)));
+    }
+
+    #[test]
     fn no_title_is_told_without_the_button_or_before_it() {
+        let square = |row: &'static str| grid(&[row; 4]);
         assert_eq!(span(&grid(&["##..##", "#...##"]), 4), None);
-        assert_eq!(span(&grid(&["####..#", "####..#"]), 4), None);
-        assert_eq!(span(&grid(&["....", "...."]), 4), None);
+        assert_eq!(span(&square("####..#"), 4), None);
+        assert_eq!(span(&square("...."), 4), None);
     }
 }

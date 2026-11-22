@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::{
+    kinds::SchoolMaterials,
     plan::TierBlueprint,
     price::Price,
     shop::{CoinRow, OfferRow},
@@ -950,6 +951,10 @@ fn work_fold_opens_the_fold_of_the_screen_or_the_month_end_shop_the_game_shows()
         Some("work:通常アイテム")
     );
     assert_eq!(
+        fold(Place::Screen("スケジュール")).as_deref(),
+        Some("work:スケジュール")
+    );
+    assert_eq!(
         fold(Place::Shop("総力戦")).as_deref(),
         Some("work:月末:総力戦")
     );
@@ -970,6 +975,68 @@ fn work_fold_opens_nothing_where_the_work_tab_has_no_fold_for_it() {
     assert_eq!(work_fold(Some(Place::Shop("カケラ(文字)")), &shops), None);
     assert_eq!(work_fold(Some(Place::Screen("任務")), &shops), None);
     assert_eq!(work_fold(None, &shops), None);
+}
+
+// The schedule's schools
+
+/// A school's row with nothing counted.
+fn school_materials(name: &str) -> SchoolMaterials {
+    SchoolMaterials {
+        name: name.to_owned(),
+        icon: String::new(),
+        bd: [const { None }; 4],
+        notes: [const { None }; 4],
+    }
+}
+
+#[test]
+fn schedule_schools_come_in_the_order_of_the_schedule_s_locations_the_others_left_out() {
+    // As the item tab lists them (the three great schools first), with schools the schedule
+    // has no location of.
+    let held: Vec<SchoolMaterials> = [
+        "トリニティ",
+        "ゲヘナ",
+        "ミレニアム",
+        "百鬼夜行",
+        "アビドス",
+        "山海経",
+        "レッドウィンター",
+        "ヴァルキューレ",
+        "アリウス",
+        "ハイランダー",
+        "ワイルドハント",
+        "オデュッセイア",
+    ]
+    .map(school_materials)
+    .into();
+    let names: Vec<&str> = schedule_schools(&held)
+        .iter()
+        .map(|school| school.name.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "ゲヘナ",
+            "アビドス",
+            "ミレニアム",
+            "トリニティ",
+            "レッドウィンター",
+            "百鬼夜行",
+            "山海経",
+            "ワイルドハント",
+        ]
+    );
+}
+
+#[test]
+fn schedule_schools_skip_a_school_nothing_is_known_of() {
+    let held = ["ミレニアム", "ゲヘナ"].map(school_materials);
+    let names: Vec<&str> = schedule_schools(&held)
+        .iter()
+        .map(|school| school.name.as_str())
+        .collect();
+    assert_eq!(names, ["ゲヘナ", "ミレニアム"]);
+    assert_eq!(schedule_schools(&[]), Vec::<&SchoolMaterials>::new());
 }
 
 // Behind the plan
