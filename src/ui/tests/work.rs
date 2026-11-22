@@ -3,7 +3,7 @@
 use gpui::TestAppContext;
 
 use super::{app::items, click, has, open, set, shows};
-use crate::{keep::Kept, quantity::Count, strategy::Reserve, work::HardCard};
+use crate::{keep::Kept, quantity::Count, strategy::Reserve, watch::Place, work::HardCard};
 
 fn hoshino_card(reserved: bool) -> HardCard {
     HardCard {
@@ -168,11 +168,14 @@ fn tables_a_bounty_s_school_on_a_row_its_bds_and_notes_either_side_of_a_slash(
     );
 }
 
-#[gpui::test]
-fn tables_the_schedule_s_schools_in_its_order_the_three_upper_tiers_beside_emblems_twice_as_tall(
-    cx: &mut TestAppContext,
-) {
-    let (_, core, vcx) = open(cx, &Kept::default());
+/// A school's skill materials, each tier's BD and tech note held as told (ids from `first`).
+fn school(
+    first: i64,
+    key: &str,
+    name: &str,
+    bd: [u32; 4],
+    notes: [u32; 4],
+) -> crate::kinds::SchoolMaterials {
     let tier = ["初級", "中級", "上級", "最上級"];
     let tiers = |first: i64, name: &str, held: [u32; 4]| -> [Option<crate::work::HeldCell>; 4] {
         std::array::from_fn(|t| {
@@ -186,14 +189,19 @@ fn tables_the_schedule_s_schools_in_its_order_the_three_upper_tiers_beside_emble
             })
         })
     };
-    let school = |first: i64, key: &str, name: &str, bd: [u32; 4], notes: [u32; 4]| {
-        crate::kinds::SchoolMaterials {
-            name: name.to_owned(),
-            icon: format!("school_icon_{key}"),
-            bd: tiers(first, &format!("戦術教育BD（{name}）"), bd),
-            notes: tiers(first + 10, &format!("技術ノート（{name}）"), notes),
-        }
-    };
+    crate::kinds::SchoolMaterials {
+        name: name.to_owned(),
+        icon: format!("school_icon_{key}"),
+        bd: tiers(first, &format!("戦術教育BD（{name}）"), bd),
+        notes: tiers(first + 10, &format!("技術ノート（{name}）"), notes),
+    }
+}
+
+#[gpui::test]
+fn tables_the_schedule_s_schools_in_its_order_the_three_upper_tiers_beside_emblems_twice_as_tall(
+    cx: &mut TestAppContext,
+) {
+    let (_, core, vcx) = open(cx, &Kept::default());
     set(&core, vcx, |s| {
         s.items = items();
         // As the item tab lists them: トリニティ before ゲヘナ, then a school the schedule has
@@ -282,5 +290,92 @@ fn tables_the_schedule_s_schools_in_its_order_the_three_upper_tiers_beside_emble
             cell.top() <= emblem.top() && emblem.bottom() <= cell.bottom(),
             "tier {t}'s cell {cell:?} as tall as the emblem's row {emblem:?}"
         );
+    }
+}
+
+#[gpui::test]
+fn frames_the_row_of_the_school_whose_location_the_game_has_chosen_and_moves_no_row(
+    cx: &mut TestAppContext,
+) {
+    let (aoi, core, vcx) = open(cx, &Kept::default());
+    set(&core, vcx, |s| {
+        s.items = items();
+        s.kinds.schools = vec![
+            school(1000, "trinity", "トリニティ", [1, 2, 3, 4], [5, 6, 7, 8]),
+            school(
+                2000,
+                "gehenna",
+                "ゲヘナ",
+                [11, 12, 13, 14],
+                [15, 16, 17, 18],
+            ),
+        ];
+        s.place = Some(Place::Screen("スケジュール"));
+    });
+    click(vcx, "tab:お仕事");
+    click(vcx, "fold-work:スケジュール");
+    let at = |vcx: &mut gpui::VisualTestContext, selector: &str| {
+        super::bounds(vcx, selector).unwrap_or_else(|| panic!("{selector} shows"))
+    };
+    // Where every part of the two rows lies: the emblems and the three tiers' cells.
+    let parts: Vec<String> =
+        ["picture:ゲヘナ", "picture:トリニティ"]
+            .map(str::to_owned)
+            .into_iter()
+            .chain(["gehenna", "trinity"].into_iter().flat_map(|key| {
+                (1..4).map(move |t| format!("cell:schedule-school_icon_{key}-{t}"))
+            }))
+            .collect();
+    let laid = |vcx: &mut gpui::VisualTestContext| -> Vec<gpui::Bounds<gpui::Pixels>> {
+        parts.iter().map(|part| at(vcx, part)).collect()
+    };
+    let framed = |vcx: &mut gpui::VisualTestContext| {
+        ["ゲヘナ", "トリニティ"].map(|name| has(vcx, &format!("frame:{name}")))
+    };
+    // The schedule's list of locations: no location chosen, no row framed.
+    let before = laid(vcx);
+    assert_eq!(framed(vcx), [false, false], "no frame on the list");
+    // The user's 2026-11-23 「この「ゲヘナ学園・中央区」を認識したらゲヘナ学園の行を黄色のborderで
+    // 括る」: that row alone, the frame on the row's edge around its emblem and cells.
+    set(&core, vcx, |s| {
+        s.place = Some(Place::Schedule(Some("ゲヘナ")));
+    });
+    assert_eq!(framed(vcx), [true, false], "ゲヘナ's row alone");
+    let frame = at(vcx, "frame:ゲヘナ");
+    let (emblem, first, last) = (
+        at(vcx, "picture:ゲヘナ"),
+        at(vcx, "cell:schedule-school_icon_gehenna-1"),
+        at(vcx, "cell:schedule-school_icon_gehenna-3"),
+    );
+    assert!(
+        frame.left() <= emblem.left() && frame.right() == last.right(),
+        "{frame:?} from the emblem {emblem:?} to the last cell {last:?}"
+    );
+    assert!(
+        frame.top() == first.top() && frame.bottom() == first.bottom(),
+        "{frame:?} as tall as the row's cells {first:?}"
+    );
+    assert!(
+        frame.bottom() <= at(vcx, "picture:トリニティ").top(),
+        "short of the next row"
+    );
+    // No row is larger or elsewhere for it (nothing below moves as the frame comes and goes).
+    assert_eq!(laid(vcx), before, "the rows as they were, the frame on");
+    assert!(
+        aoi.read_with(vcx, |aoi, _| aoi.opened.contains("work:スケジュール")),
+        "the fold stays open past the list"
+    );
+    // Another school's location: the frame is on its row.
+    set(&core, vcx, |s| {
+        s.place = Some(Place::Schedule(Some("トリニティ")));
+    });
+    assert_eq!(framed(vcx), [false, true], "トリニティ's row alone");
+    assert_eq!(laid(vcx), before, "the rows as they were, the frame moved");
+    // A location that gives no one school's goods, and the game on a screen Aoi tells
+    // nothing of: no frame, the fold still open.
+    for place in [Some(Place::Schedule(None)), None] {
+        set(&core, vcx, |s| s.place = place);
+        assert_eq!(framed(vcx), [false, false], "{place:?}");
+        assert_eq!(laid(vcx), before, "the rows as they were, the frame off");
     }
 }

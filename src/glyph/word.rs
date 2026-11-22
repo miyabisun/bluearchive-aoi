@@ -19,6 +19,22 @@ const ASPECT: (f32, f32) = (0.75, 1.33);
 /// right name was the nearest on every plate).
 const WIDE: f32 = 20.0;
 
+/// The runs of `on` places, each its first and last: the columns or the rows a
+/// text's letters, or a box beside it, span.
+pub fn runs(on: impl IntoIterator<Item = bool>) -> Vec<(usize, usize)> {
+    let mut runs: Vec<(usize, usize)> = Vec::new();
+    let mut open = false;
+    for (at, on) in on.into_iter().enumerate() {
+        match (on, open) {
+            (true, false) => runs.push((at, at)),
+            (true, true) => runs.last_mut().expect("a run is open").1 = at,
+            _ => {}
+        }
+        open = on;
+    }
+    runs
+}
+
 /// Which pixels of a text's area are ink, row by row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ink {

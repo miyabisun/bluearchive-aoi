@@ -15,6 +15,7 @@ use crate::{
     kinds::{Enhancement, SchoolMaterials, SkillBoxes},
     plan::{BlueprintRow, Held, Kind, NeedRow, Part, UnknownRow},
     quantity::Count,
+    schedule,
     shop::{self, GoodRow, ShopRow},
     strategy::{PlanCard, PlanCoin, PlanShop},
     student::Training,
@@ -241,9 +242,9 @@ fn list_name(screen: Screen) -> &'static str {
 fn badge(status: &Status, place: Option<Place>) -> (String, Tone) {
     match status {
         Status::Reading { list, .. } => (format!("{}を集計中", list_name(*list)), Tone::Active),
-        Status::OtherScreen => match place {
-            Some(Place::Screen(name)) => (name.to_owned(), Tone::Idle),
-            _ => ("対象外の画面".to_owned(), Tone::Idle),
+        Status::OtherScreen => match place.and_then(screen_name) {
+            Some(name) => (name.to_owned(), Tone::Idle),
+            None => ("対象外の画面".to_owned(), Tone::Idle),
         },
         Status::Failed { .. } => ("キャプチャ失敗".to_owned(), Tone::Danger),
         Status::Paused => ("一時中断".to_owned(), Tone::Paused),
@@ -1329,48 +1330,61 @@ const WORK_SCREENS: [(&str, &str); 6] = [
     ("任務 Normal", "work:任務"),
     ("特別依頼", "work:特別依頼"),
     ("ショップ: 通常アイテム", "work:通常アイテム"),
-    ("スケジュール", "work:スケジュール"),
+    (schedule::TITLE, "work:スケジュール"),
 ];
+
+/// The screen `place` is, by the name the work tab's fold and the badge know it by; none for
+/// a shop, which is counted from. The schedule with a location chosen is the schedule still
+/// (the user's 2026-11-23 「「スケジュールを選択」にタイトルが切り替わるため、対象外の画面に
+/// なってしまう事が気になりました」).
+fn screen_name(place: Place) -> Option<&'static str> {
+    match place {
+        Place::Screen(name) => Some(name),
+        Place::Schedule(_) => Some(schedule::TITLE),
+        Place::Shop(_) => None,
+    }
+}
 
 /// The work tab's fold for where the game is: a screen told by its title, or a
 /// month-end shop among `month_end`; `None` where the tab has none.
 pub fn work_fold(place: Option<Place>, month_end: &[PlanShop]) -> Option<String> {
     match place? {
-        Place::Screen(name) => WORK_SCREENS
-            .iter()
-            .find(|&&(screen, _)| screen == name)
-            .map(|&(_, fold)| fold.to_owned()),
         Place::Shop(name) => month_end
             .iter()
             .any(|shop| shop.name == name)
             .then(|| format!("work:月末:{name}")),
+        screen => {
+            let name = screen_name(screen)?;
+            WORK_SCREENS
+                .iter()
+                .find(|&&(screen, _)| screen == name)
+                .map(|&(_, fold)| fold.to_owned())
+        }
     }
 }
-
-/// The schools whose BDs and tech notes the schedule gives, in the order of its locations (the
-/// user's of 2026-11-22: 「出てくる学校が限られている、順番も異なる」).
-const SCHEDULE_SCHOOLS: [&str; 8] = [
-    "ゲヘナ",
-    "アビドス",
-    "ミレニアム",
-    "トリニティ",
-    "レッドウィンター",
-    "百鬼夜行",
-    "山海経",
-    "ワイルドハント",
-];
 
 /// The tiers the schedule's table shows, 中級 to 最上級 (the same request: 「上記の高校の
 /// 「中級・上級・最上級」のBD/ノートを記述して欲しい」).
 pub const SCHEDULE_TIERS: Range<usize> = 1..4;
 
-/// The schedule's schools among `schools` (the skill materials' rows, by name) in the
-/// schedule's order; a school nothing is known of yet is left out.
+/// The schedule's schools among `schools` (the skill materials' rows, by name) in the order
+/// of the schedule's locations (`schedule::LOCATIONS`; the user's 2026-11-22 「出てくる学校が
+/// 限られている、順番も異なる」); a school nothing is known of yet is left out.
 pub fn schedule_schools(schools: &[SchoolMaterials]) -> Vec<&SchoolMaterials> {
-    SCHEDULE_SCHOOLS
-        .iter()
-        .filter_map(|name| schools.iter().find(|school| school.name == *name))
+    schedule::schools()
+        .filter_map(|name| schools.iter().find(|school| school.name == name))
         .collect()
+}
+
+/// The school whose row the schedule's table marks: the one whose location the game has
+/// chosen in its schedule (the user's 2026-11-23 「この「ゲヘナ学園・中央区」を認識したら
+/// ゲヘナ学園の行を黄色のborderで括る」); none at a location that gives no one school's goods,
+/// nor anywhere else.
+pub fn schedule_marked(place: Option<Place>) -> Option<&'static str> {
+    match place? {
+        Place::Schedule(school) => school,
+        Place::Screen(_) | Place::Shop(_) => None,
+    }
 }
 
 /// The month, day, hour and minute of a local time ("2026-11-03 14:37:12" is "11/03 14:37").

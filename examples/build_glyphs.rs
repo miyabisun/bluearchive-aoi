@@ -15,6 +15,8 @@
 //!   the game draws them; again, while that takes more.
 //! - The shops' names, as each shop's chosen menu entry draws them.
 //! - The screens' titles, as the top left draws them (`tests/fixtures/titles.json`).
+//! - The schedule's locations and their first rooms, as the chosen screen and
+//!   its dialog draw them (`tests/fixtures/schedule.json`).
 //! - The students' names, drawn with Noto Sans JP Regular, and the letters the
 //!   tuning screens draw of them.
 //!
@@ -34,6 +36,8 @@
 //! the titles of the tuning screens they lack (a screen newly labeled in
 //! `tests/fixtures/titles.json`) and leaves every other reference as it is,
 //! where drawing the banks anew would move other readings; it needs no font.
+//! `cargo run --example build_glyphs -- schedule` adds so the schedule's
+//! locations and rooms they lack (`tests/fixtures/schedule.json`).
 
 use std::{collections::BTreeMap, path::Path};
 
@@ -45,7 +49,7 @@ use aoi::{
         bank::{Bank, Group, Word, glyph_tile, join},
         word::Ink,
     },
-    screen, shop,
+    schedule, screen, shop,
     student::{self, Label, LevelLabel},
     title,
 };
@@ -159,6 +163,16 @@ struct TitleLabel {
     role: String,
     title: String,
     screen: Option<String>,
+}
+
+/// A screen of the schedule labeled with the location its top right names, or
+/// the first room its dialog lists (`tests/fixtures/schedule.json`).
+#[derive(Clone, Deserialize)]
+struct ScheduleLabel {
+    image: String,
+    role: String,
+    location: Option<String>,
+    room: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -757,6 +771,32 @@ fn titles(bank: &mut Bank, labels: &[TitleLabel], open: &dyn Fn(&str) -> RgbImag
     }
 }
 
+/// Adds the schedule's locations and their first rooms as the tuning screens
+/// draw them, each word's id the location's place in `schedule::LOCATIONS`.
+fn schedule_words(bank: &mut Bank, labels: &[ScheduleLabel], open: &dyn Fn(&str) -> RgbImage) {
+    let place = |of: &dyn Fn(&schedule::Location) -> &str, text: &str| {
+        schedule::LOCATIONS
+            .iter()
+            .position(|l| of(l) == text)
+            .unwrap_or_else(|| panic!("{text} is of none of schedule::LOCATIONS")) as i64
+    };
+    for label in labels.iter().filter(|l| l.role == "tune") {
+        let image = open(&label.image);
+        if let Some(name) = &label.location {
+            let word = schedule::name_ink(&image)
+                .and_then(|ink| entry(bank, place(&|l| l.name, name), name, &ink))
+                .expect("the location's name shows");
+            bank.index.locations.push(word);
+        }
+        if let Some(room) = &label.room {
+            let word = schedule::room_ink(&image)
+                .and_then(|ink| entry(bank, place(&|l| l.room, room), room, &ink))
+                .expect("the room's name shows");
+            bank.index.rooms.push(word);
+        }
+    }
+}
+
 /// Drops the shop bar's letters as near a digit as `APART`: no reference, as a digit
 /// told as one would leave the number short.
 fn drop_bar_letters_near_digits(cuts: &mut Cuts) {
@@ -794,12 +834,15 @@ fn drawn(dir: &Path, at: u32) -> impl Fn(&str) -> RgbImage + '_ {
     }
 }
 
-/// Adds to each bank kept the titles of the tuning screens it lacks, as the top
-/// left draws them at the bank's width (see `titles`); the tiles and the words
-/// it holds stay as they are, the new ones after them.
-fn add_titles(root: &Path) {
+/// What adds words to a bank from the fixtures as `open` draws them, and tells
+/// what it added.
+type Adds<'a> = dyn Fn(&mut Bank, &dyn Fn(&str) -> RgbImage) -> Vec<String> + 'a;
+
+/// Lets `add` add words to each bank kept, drawn at the bank's width, and
+/// writes the bank; the tiles and the words it holds stay as they are, the new
+/// ones after them.
+fn add_to_banks(root: &Path, add: &Adds) {
     let dir = root.join("tests/fixtures");
-    let labels: Vec<TitleLabel> = read_json(&dir.join("titles.json"));
     for width in screen::WIDTHS {
         let (picture, index_file) = glyph::bank::files(width);
         let (picture, index_file) = (
@@ -811,33 +854,72 @@ fn add_titles(root: &Path) {
             &std::fs::read_to_string(&index_file).expect("the bank's index is read"),
         )
         .expect("the glyph bank decodes");
+        let before = bank.tiles.len();
+        let added = add(&mut bank, &drawn(&dir, width));
+        let (png, index) = bank.encode().expect("the glyph bank encodes");
+        std::fs::write(picture, png).expect("the file is written");
+        std::fs::write(index_file, index + "\n").expect("the file is written");
+        println!(
+            "{width}: {} tiles ({} new), {} titles, {} locations, {} rooms, added {added:?}",
+            bank.tiles.len(),
+            bank.tiles.len() - before,
+            bank.index.titles.len(),
+            bank.index.locations.len(),
+            bank.index.rooms.len()
+        );
+    }
+}
+
+/// Adds to each bank kept the titles of the tuning screens it lacks, as the top
+/// left draws them at the bank's width (see `titles`).
+fn add_titles(root: &Path) {
+    let labels: Vec<TitleLabel> = read_json(&root.join("tests/fixtures/titles.json"));
+    add_to_banks(root, &|bank, open| {
         let lacked: Vec<TitleLabel> = labels
             .iter()
             .filter(|l| l.role == "tune" && !bank.index.titles.iter().any(|w| w.text == l.title))
             .cloned()
             .collect();
-        let before = bank.tiles.len();
-        titles(&mut bank, &lacked, &drawn(&dir, width));
-        let (png, index) = bank.encode().expect("the glyph bank encodes");
-        std::fs::write(picture, png).expect("the file is written");
-        std::fs::write(index_file, index + "\n").expect("the file is written");
-        let added: Vec<&str> = lacked.iter().map(|l| l.title.as_str()).collect();
-        println!(
-            "{width}: {} tiles ({} new), {} titles, added {added:?}",
-            bank.tiles.len(),
-            bank.tiles.len() - before,
-            bank.index.titles.len()
-        );
-    }
+        titles(bank, &lacked, open);
+        lacked.into_iter().map(|l| l.title).collect()
+    });
+}
+
+/// Adds to each bank kept the schedule's locations and rooms it lacks (see
+/// `schedule_words`).
+fn add_schedule(root: &Path) {
+    let labels: Vec<ScheduleLabel> = read_json(&root.join("tests/fixtures/schedule.json"));
+    add_to_banks(root, &|bank, open| {
+        let held = |words: &[Word], text: &Option<String>| {
+            text.as_ref()
+                .is_some_and(|text| words.iter().any(|w| w.text == *text))
+        };
+        let lacked: Vec<ScheduleLabel> = labels
+            .iter()
+            .filter(|l| {
+                l.role == "tune"
+                    && !held(&bank.index.locations, &l.location)
+                    && !held(&bank.index.rooms, &l.room)
+            })
+            .cloned()
+            .collect();
+        schedule_words(bank, &lacked, open);
+        lacked
+            .into_iter()
+            .filter_map(|l| l.location.or(l.room))
+            .collect()
+    });
 }
 
 fn main() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let arg = std::env::args()
-        .nth(1)
-        .expect("usage: build_glyphs <folder of the fonts> | build_glyphs titles");
-    if arg == "titles" {
-        return add_titles(root);
+    let arg = std::env::args().nth(1).expect(
+        "usage: build_glyphs <folder of the fonts> | build_glyphs titles | build_glyphs schedule",
+    );
+    match arg.as_str() {
+        "titles" => return add_titles(root),
+        "schedule" => return add_schedule(root),
+        _ => {}
     }
     let fonts = std::path::PathBuf::from(arg);
     let weight = |name: &str| {
@@ -852,6 +934,7 @@ fn main() {
     let plates: Vec<NameLabel> = read_json(&dir.join("names.json"));
     let shops: Vec<ShopLabel> = read_json(&dir.join("shops.json"));
     let title_labels: Vec<TitleLabel> = read_json(&dir.join("titles.json"));
+    let schedule_labels: Vec<ScheduleLabel> = read_json(&dir.join("schedule.json"));
     let weights = ["Regular", "Medium", "Bold"].map(weight);
     // The fixtures' cards at their own size, and where their values were
     // found among their shapes.
@@ -888,6 +971,7 @@ fn main() {
             let names_to = if at == width { &mut bank } else { &mut words };
             dark_digits_and_shops(&mut cuts, names_to, &credits, &shops, &open);
             titles(names_to, &title_labels, &open);
+            schedule_words(names_to, &schedule_labels, &open);
             take_scaled_card_digits(&mut cuts, &at_window, &cards(&shops, &open));
         }
         stream_styles(&mut cuts, &labels, &levels, &dir, width);
@@ -913,13 +997,15 @@ fn main() {
         std::fs::write(root.join("data").join(index_file), index + "\n")
             .expect("the file is written");
         println!(
-            "{width}: {} tiles: {} names, {} letters of the game, {} shops, {} titles, {} campaign words",
+            "{width}: {} tiles: {} names, {} letters of the game, {} shops, {} titles, {} campaign words, {} locations, {} rooms",
             bank.tiles.len(),
             bank.index.names.len(),
             bank.index.letters.len(),
             bank.index.shops.len(),
             bank.index.titles.len(),
-            bank.index.campaign.len()
+            bank.index.campaign.len(),
+            bank.index.locations.len(),
+            bank.index.rooms.len()
         );
     }
 }

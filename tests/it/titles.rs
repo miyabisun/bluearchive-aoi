@@ -119,7 +119,9 @@ fn the_shop_screen_with_another_shop_chosen_reads_as_no_screen() {
 }
 
 /// No other fixture's screen (the lists, the student screen, the shops, the
-/// home screen, phones' and tablets' alike) reads as a title.
+/// home screen, phones' and tablets' alike) reads as a title, nor as a place
+/// the window follows without a title (the schedule's dialog, by its first
+/// room), nor names a location of the schedule at its top right.
 #[test]
 fn other_screens_read_as_no_title() {
     let recognizer = recognizer();
@@ -130,14 +132,21 @@ fn other_screens_read_as_no_title() {
         for entry in std::fs::read_dir(&dir).unwrap() {
             let path = entry.unwrap().path();
             if path.is_dir() {
-                if path.file_name().is_some_and(|n| n != "titles") {
+                // The schedule's own screens are told in `schedule`.
+                if path
+                    .file_name()
+                    .is_some_and(|n| n != "titles" && n != "schedule")
+                {
                     dirs.push(path);
                 }
             } else if path.extension().is_some_and(|e| e == "png") {
                 seen += 1;
                 let image = aoi::screen::normalize(&open(&path)).into_owned();
-                if let Some(title) = recognizer.read_title(&image) {
-                    read.push(format!("{}: {title}", path.display()));
+                if let Some(place) = aoi::watch::place_of(recognizer, &image) {
+                    read.push(format!("{}: {place:?}", path.display()));
+                }
+                if let Some(location) = recognizer.read_location(&image) {
+                    read.push(format!("{}: {}", path.display(), location.name));
                 }
             }
         }

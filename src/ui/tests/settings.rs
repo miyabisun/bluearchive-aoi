@@ -383,6 +383,20 @@ fn the_work_tab_opens_the_fold_the_game_comes_to_once(cx: &mut TestAppContext) {
     });
     assert!(opened(vcx, "work:スケジュール"), "the schedule's fold");
     assert!(!opened(vcx, "work:指名手配"), "the others close");
+    // The schedule with a location chosen, come to from another screen: the same fold.
+    set(&core, vcx, |s| s.place = Some(Place::Screen("指名手配")));
+    assert!(
+        !opened(vcx, "work:スケジュール"),
+        "closed for another screen"
+    );
+    set(&core, vcx, |s| {
+        s.place = Some(Place::Schedule(Some("ゲヘナ")));
+    });
+    assert!(
+        opened(vcx, "work:スケジュール"),
+        "the schedule's fold again"
+    );
+    assert!(!opened(vcx, "work:指名手配"), "the others close");
 }
 
 /// A month-end shop read on 11/01 with `cards` goods.

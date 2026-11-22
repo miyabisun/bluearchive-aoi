@@ -28,6 +28,7 @@ pub mod plan;
 pub mod price;
 pub mod quantity;
 pub mod runtime;
+pub mod schedule;
 pub mod screen;
 pub mod settings;
 pub mod shop;
@@ -1046,6 +1047,17 @@ impl Recognizer {
     /// The screen whose title the top left writes (see `title`).
     pub fn read_title(&self, image: &RgbImage) -> Option<&'static str> {
         title::read(image, &self.texts(image).glyphs)
+    }
+
+    /// The schedule's location the chosen screen names (see `schedule::named`).
+    pub fn read_location(&self, image: &RgbImage) -> Option<&'static schedule::Location> {
+        schedule::named(image, &self.texts(image).glyphs)
+    }
+
+    /// The schedule's location whose first room the dialog's top left card
+    /// names (see `schedule::first_room`).
+    pub fn read_first_room(&self, image: &RgbImage) -> Option<&'static schedule::Location> {
+        schedule::first_room(image, &self.texts(image).glyphs)
     }
 
     pub fn students(&self) -> &[(i64, String)] {

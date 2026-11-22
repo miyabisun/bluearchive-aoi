@@ -36,5 +36,11 @@
     "role": "tune",
     "title": "スケジュール",
     "note": "2026-11-22 capture of the user's game (a screen grab, GDI CopyFromScreen), 2370x1333, the スケジュール screen's Location Select. The top left alone kept, with the campaign's and the shop's areas (other screens', kept by mask_fixture)."
+  },
+  {
+    "image": "titles/schedule-chosen.png",
+    "role": "tune",
+    "title": "スケジュールを選択",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the schedule with ゲヘナ学園・中央区 chosen: no ? button follows the title. The title and the location's name (tests/fixtures/schedule.json) alone kept."
   }
 ]

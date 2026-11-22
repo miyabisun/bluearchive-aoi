@@ -151,6 +151,16 @@ fn status_view_names_the_screen_the_game_is_on_where_nothing_is_counted() {
         ),
         label("ショップ: 通常アイテム", Tone::Idle)
     );
+    // The schedule with a location chosen, or its dialog over it: the schedule still (the
+    // user's 2026-11-23 「「スケジュールを選択」にタイトルが切り替わるため、対象外の画面に
+    // なってしまう事が気になりました」).
+    for school in [Some("ゲヘナ"), None] {
+        assert_eq!(
+            badge(&Status::OtherScreen, Some(Place::Schedule(school))),
+            label("スケジュール", Tone::Idle),
+            "{school:?}"
+        );
+    }
     // A shop is counted from: the place left behind a moment after it names nothing.
     assert_eq!(
         badge(&Status::OtherScreen, Some(Place::Shop("総力戦"))),
@@ -954,6 +964,15 @@ fn work_fold_opens_the_fold_of_the_screen_or_the_month_end_shop_the_game_shows()
         fold(Place::Screen("スケジュール")).as_deref(),
         Some("work:スケジュール")
     );
+    // The schedule past its list, a location chosen: the same fold, at a school's location
+    // or another.
+    for school in [Some("ゲヘナ"), None] {
+        assert_eq!(
+            fold(Place::Schedule(school)).as_deref(),
+            Some("work:スケジュール"),
+            "{school:?}"
+        );
+    }
     assert_eq!(
         fold(Place::Shop("総力戦")).as_deref(),
         Some("work:月末:総力戦")
@@ -1037,6 +1056,25 @@ fn schedule_schools_skip_a_school_nothing_is_known_of() {
         .collect();
     assert_eq!(names, ["ゲヘナ", "ミレニアム"]);
     assert_eq!(schedule_schools(&[]), Vec::<&SchoolMaterials>::new());
+}
+
+#[test]
+fn schedule_marked_is_the_school_of_the_location_the_game_has_chosen() {
+    assert_eq!(
+        schedule_marked(Some(Place::Schedule(Some("ゲヘナ")))),
+        Some("ゲヘナ")
+    );
+    // A location that gives no one school's goods, the schedule's list, another screen, a
+    // shop, nowhere: no row.
+    for place in [
+        Some(Place::Schedule(None)),
+        Some(Place::Screen("スケジュール")),
+        Some(Place::Screen("指名手配")),
+        Some(Place::Shop("総力戦")),
+        None,
+    ] {
+        assert_eq!(schedule_marked(place), None, "{place:?}");
+    }
 }
 
 // Behind the plan

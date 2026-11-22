@@ -1,0 +1,146 @@
+[
+  {
+    "image": "schedule/chosen-schale-office.png",
+    "role": "tune",
+    "location": "シャーレオフィス",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the schedule with シャーレオフィス chosen, at rank 12. The location's name alone kept."
+  },
+  {
+    "image": "schedule/chosen-schale-residence.png",
+    "role": "tune",
+    "location": "シャーレ居住区",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the schedule with シャーレ居住区 chosen, at rank 12. The location's name alone kept."
+  },
+  {
+    "image": "titles/schedule-chosen.png",
+    "role": "tune",
+    "location": "ゲヘナ学園・中央区",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the schedule with ゲヘナ学園・中央区 chosen, at rank 12. The title and the location's name alone kept."
+  },
+  {
+    "image": "schedule/chosen-abydos.png",
+    "role": "tune",
+    "location": "アビドス高等学校",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the schedule with アビドス高等学校 chosen, at rank 12. The location's name alone kept."
+  },
+  {
+    "image": "schedule/chosen-millennium.png",
+    "role": "tune",
+    "location": "ミレニアム・スタディーエリア",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the schedule with ミレニアム・スタディーエリア chosen, at rank 12. The location's name alone kept."
+  },
+  {
+    "image": "schedule/chosen-trinity.png",
+    "role": "tune",
+    "location": "トリニティ・スクエア",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the schedule with トリニティ・スクエア chosen, at rank 12. The location's name alone kept."
+  },
+  {
+    "image": "schedule/chosen-redwinter.png",
+    "role": "tune",
+    "location": "レッドウィンター連邦学園",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the schedule with レッドウィンター連邦学園 chosen, at rank 12. The location's name alone kept."
+  },
+  {
+    "image": "schedule/chosen-hyakkiyako.png",
+    "role": "tune",
+    "location": "百鬼夜行中心部",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the schedule with 百鬼夜行中心部 chosen, at rank 12. The location's name alone kept."
+  },
+  {
+    "image": "schedule/chosen-du-shiratori.png",
+    "role": "tune",
+    "location": "D.U.シラトリ区",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the schedule with D.U.シラトリ区 chosen, at rank 12. The location's name alone kept."
+  },
+  {
+    "image": "schedule/chosen-shanhaijing.png",
+    "role": "tune",
+    "location": "山海経中央特区",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the schedule with 山海経中央特区 chosen, at rank 12. The location's name alone kept."
+  },
+  {
+    "image": "schedule/chosen-haruhabara.png",
+    "role": "tune",
+    "location": "春葉原",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the schedule with 春葉原 chosen, at rank 12. The location's name alone kept."
+  },
+  {
+    "image": "schedule/chosen-wildhunt.png",
+    "role": "tune",
+    "location": "ワイルドハント総合芸術地区",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the schedule with ワイルドハント総合芸術地区 chosen, at rank 12. The location's name alone kept."
+  },
+  {
+    "image": "schedule/rooms-schale-office.png",
+    "role": "tune",
+    "room": "視聴覚室",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the すべてのスケジュール dialog of シャーレオフィス, every room at Lv.6. The first card's name alone kept."
+  },
+  {
+    "image": "schedule/rooms-schale-residence.png",
+    "role": "tune",
+    "room": "自習室",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the すべてのスケジュール dialog of シャーレ居住区, every room at Lv.6. The first card's name alone kept."
+  },
+  {
+    "image": "schedule/rooms-gehenna.png",
+    "role": "tune",
+    "room": "ゲヘナ第一校舎",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the すべてのスケジュール dialog of ゲヘナ学園・中央区, every room at Lv.6. The first card's name alone kept."
+  },
+  {
+    "image": "schedule/rooms-abydos.png",
+    "role": "tune",
+    "room": "アビドス本館",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the すべてのスケジュール dialog of アビドス高等学校, every room at Lv.6. The first card's name alone kept."
+  },
+  {
+    "image": "schedule/rooms-millennium.png",
+    "role": "tune",
+    "room": "ミレニアムタワー",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the すべてのスケジュール dialog of ミレニアム・スタディーエリア, every room at Lv.6. The first card's name alone kept."
+  },
+  {
+    "image": "schedule/rooms-trinity.png",
+    "role": "tune",
+    "room": "トリニティ大聖堂",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the すべてのスケジュール dialog of トリニティ・スクエア, every room at Lv.6. The first card's name alone kept."
+  },
+  {
+    "image": "schedule/rooms-redwinter.png",
+    "role": "tune",
+    "room": "レッドウィンター事務局",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the すべてのスケジュール dialog of レッドウィンター連邦学園, every room at Lv.6. The first card's name alone kept."
+  },
+  {
+    "image": "schedule/rooms-hyakkiyako.png",
+    "role": "tune",
+    "room": "百鬼夜行陰陽部本館",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the すべてのスケジュール dialog of 百鬼夜行中心部, every room at Lv.6. The first card's name alone kept."
+  },
+  {
+    "image": "schedule/rooms-du-shiratori.png",
+    "role": "tune",
+    "room": "ヴァルキューレ警察学校シラトリ支所",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the すべてのスケジュール dialog of D.U.シラトリ区, every room at Lv.6. The first card's name alone kept. The name is written on two lines (ヴァルキューレ警察学校 / シラトリ支所) and read by the first."
+  },
+  {
+    "image": "schedule/rooms-shanhaijing.png",
+    "role": "tune",
+    "room": "六和閣",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the すべてのスケジュール dialog of 山海経中央特区, every room at Lv.6. The first card's name alone kept."
+  },
+  {
+    "image": "schedule/rooms-haruhabara.png",
+    "role": "tune",
+    "room": "春葉原駅",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the すべてのスケジュール dialog of 春葉原, every room at Lv.6. The first card's name alone kept."
+  },
+  {
+    "image": "schedule/rooms-wildhunt.png",
+    "role": "tune",
+    "room": "ワイルドハント本館",
+    "note": "2026-11-23 capture of the user's game (Windows Graphics Capture), 2370x1333, the すべてのスケジュール dialog of ワイルドハント総合芸術地区, every room at Lv.6. The first card's name alone kept."
+  }
+]

@@ -105,7 +105,9 @@ size: `cargo run --release --example mask_fixture -- <screenshot.png> <fixture.p
 Level samples (`levels.json`), taken on any tab of the student screen, keep the level
 alone: add `level` after the two paths; `credit` keeps the top bar's credits, `shop` what
 a shop screen is read from, `list` the item or equipment list's panel, `name` the name plate's
-name alone (`names.json`).
+name alone (`names.json`), `title` a screen's title (`titles.json`), and for the schedule
+(`schedule.json`) `place` the title with the chosen location's name, `location` that name alone
+and `room` the first room's name on its dialog's card.
 
 To measure against the running game, run `cargo run --release --example watch -- 60`. It watches for 60 seconds and prints the frame rate and dropped frames.
 

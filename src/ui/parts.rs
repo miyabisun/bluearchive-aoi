@@ -350,6 +350,26 @@ pub fn counts_row(
         .child(div().flex_1().flex().children(cells))
 }
 
+/// `row` with a frame on its edge, telling the game shows it now (`name`, read out with what
+/// the frame tells). The frame is drawn over the row and takes no room, so a row is as large
+/// and lies where it did with the frame or without (the user's 2026-11-21 rule for rows: what
+/// comes later moves nothing); it hears no pointer, so the cells under it tell their counts
+/// on hover as before.
+pub fn here(theme: &Theme, name: &str, row: Div) -> Div {
+    let selector = name.to_owned();
+    row.relative().child(
+        div()
+            .id(SharedString::from(format!("here-{name}")))
+            .role(Role::Label)
+            .aria_label(format!("ゲームで開いている場所: {name}"))
+            .debug_selector(move || format!("frame:{selector}"))
+            .absolute()
+            .inset_0()
+            .border_2()
+            .border_color(theme.here),
+    )
+}
+
 /// A school's row of counts: its emblem (its name on hover), then each of `tiers`' BD and tech
 /// note either side of the slash (the user's 2026-11-08 「学園のエンブレム」「[BD] / [ノート]」).
 pub fn school_row(

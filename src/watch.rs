@@ -28,7 +28,7 @@ use crate::{
     keep::{Kept, now},
     ledger::{self, Ledger},
     quantity::Count,
-    screen,
+    schedule, screen,
     shop::{Seen as ShopSeen, Shelves, ShopRow},
     student::{Training, roster::Roster},
     tally::{CONFIRM, Tally},
@@ -70,12 +70,33 @@ pub enum Screen {
 }
 
 /// Where the game is, for the window to follow (its work tab opens what the
-/// game shows): a shop by its name, or a screen by its title (see `title`).
+/// game shows): a shop by its name, a screen by its title (see `title`), or
+/// the schedule with a location chosen, by the school whose goods the location
+/// gives (see `schedule`; none at a location that gives no one school's).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", content = "name", rename_all = "snake_case")]
 pub enum Place {
     Shop(&'static str),
     Screen(&'static str),
+    Schedule(Option<&'static str>),
+}
+
+/// Where the game is on a screen nothing is counted from: the screen its title
+/// tells; with the schedule's location chosen, the school the location's name
+/// tells; and under that screen's dialog, which dims the title, the school
+/// the first room's name tells (the user's 2026-11-23 「更に中の画面へ画面遷移
+/// すると…対象外の画面になってしまう」「左上の「ゲヘナ第一校舎」を認識する」).
+pub fn place_of(recognizer: &Recognizer, shot: &RgbImage) -> Option<Place> {
+    match recognizer.read_title(shot) {
+        Some(schedule::CHOSEN) => {
+            let school = recognizer.read_location(shot).and_then(|l| l.school);
+            Some(Place::Schedule(school))
+        }
+        Some(name) => Some(Place::Screen(name)),
+        None => recognizer
+            .read_first_room(shot)
+            .map(|location| Place::Schedule(location.school)),
+    }
 }
 
 /// A student seen, for the window.
@@ -607,7 +628,7 @@ impl Read {
         let place = match &read {
             Some(Shown::Shop(seen)) => Some(Place::Shop(seen.shop)),
             Some(_) => None,
-            None => recognizer.read_title(&shot).map(Place::Screen),
+            None => place_of(recognizer, &shot),
         };
         if let Some(place) = self.place.observe(place) {
             board.changed(Update::Place(place));

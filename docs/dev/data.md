@@ -44,7 +44,10 @@ left ("学園交流会"), which tells the work tab where the game is when no lis
 (the titles are taken from the game's own drawing in `tests/fixtures/titles.json`; the 任務
 screen, "任務" on its Normal and Hard tabs alike, is told by its campaign's label and text, read so
 too up to the rate, and the shop screen of a shop whose offers are not read, 通常アイテム, by the
-name its menu has chosen). A video keeps the colour at half
+name its menu has chosen; the schedule past its list of locations by the location's name at the top
+right of the screen "スケジュールを選択", whose title no "?" button follows, and under its
+"すべてのスケジュール" dialog, which dims the title, by the first room's name on the top left card,
+both labeled in `tests/fixtures/schedule.json`). A video keeps the colour at half
 the resolution of the brightness (4:2:0), so the student screen's coloured texts (a tier, an
 ability release, the weapon level's white fill) are cut out by their brightness; the colour only
 tells where a badge is and whether there is one, over its whole area. An equipment slot's level
@@ -66,7 +69,8 @@ cargo run --release --example build_glyphs -- <folder of the fonts>
 
 A screen newly labeled in `tests/fixtures/titles.json` needs its title alone: `build_glyphs -- titles`
 adds the titles the banks lack and leaves every other tile and word as it is (no font needed), where
-drawing the banks anew would move other readings.
+drawing the banks anew would move other readings. `build_glyphs -- schedule` adds so the schedule's
+locations and first rooms newly labeled in `tests/fixtures/schedule.json`.
 
 The lists' counts are read as the other texts are, with a bank of their own
 (`data/counts.png` and `.json`, one for every width), from the fixtures and from a collection of

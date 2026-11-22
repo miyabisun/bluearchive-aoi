@@ -43,6 +43,9 @@ pub struct Theme {
     pub danger_subtle: Hsla,
     pub ok: Hsla,
     pub warn: Hsla,
+    /// The frame around what the game shows now: yellow (the user's 2026-11-23 「ゲヘナ学園の
+    /// 行を黄色のborderで括る」), apart from `warn`'s orange, which warns.
+    pub here: Hsla,
     /// The four tiers of a material, 初級 to 最上級.
     pub tiers: [Hsla; 4],
     pub eleph: Hsla,
@@ -67,6 +70,7 @@ impl Theme {
             danger_subtle: rgb(0x003a_1a1a).into(),
             ok: rgb(0x006f_cf8a).into(),
             warn: rgb(0x00f0_a050).into(),
+            here: rgb(0x00ff_d84a).into(),
             tiers: [
                 rgb(0x002b_2b2b).into(),
                 rgb(0x001b_2b3f).into(),
@@ -92,6 +96,7 @@ impl Theme {
             danger_subtle: rgb(0x00f9_e9e4).into(),
             ok: rgb(0x001d_6b35).into(),
             warn: rgb(0x009a_4a06).into(),
+            here: rgb(0x00a2_7900).into(),
             tiers: [
                 rgb(0x00eb_e7e0).into(),
                 rgb(0x00dc_e8f6).into(),

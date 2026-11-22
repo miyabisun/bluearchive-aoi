@@ -185,7 +185,10 @@ impl Aoi {
                 title: h3("スケジュール"),
                 extra: None,
             },
-            |this| vec![schedule_table(&t, &this.shown.kinds.schools)],
+            |this| {
+                let marked = view::schedule_marked(this.shown.place);
+                vec![schedule_table(&t, &this.shown.kinds.schools, marked)]
+            },
             cx,
         );
         folds.push(heading("2倍キャンペーン", false));
@@ -754,16 +757,25 @@ fn bounty_table(theme: &Theme, place: &crate::work::BountyRow) -> AnyElement {
 /// The schedule's table (the user's 2026-11-22 「基本はスキル素材のページと同様」): a row for each
 /// school the schedule's locations give the materials of, in their order, its emblem twice the
 /// bounties' at the left, then its BDs and tech notes of 中級 to 最上級 as the skill materials'
-/// table writes them.
-fn schedule_table(theme: &Theme, schools: &[crate::kinds::SchoolMaterials]) -> AnyElement {
+/// table writes them. The row of the school `marked` (see `view::schedule_marked`) is framed.
+fn schedule_table(
+    theme: &Theme,
+    schools: &[crate::kinds::SchoolMaterials],
+    marked: Option<&str>,
+) -> AnyElement {
     let rows = view::schedule_schools(schools).into_iter().map(|school| {
-        parts::school_row(
+        let row = parts::school_row(
             theme,
             "schedule",
             school,
             view::SCHEDULE_TIERS,
             RowSize::DOUBLE,
-        )
+        );
+        if marked == Some(school.name.as_str()) {
+            parts::here(theme, &school.name, row)
+        } else {
+            row
+        }
     });
     div()
         .flex()

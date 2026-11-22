@@ -10,20 +10,28 @@
 //! item or equipment list's panel, read with the list the screen names
 //! (`tests/fixtures/tablet.json`); with `name`, the name plate's name alone
 //! (`tests/fixtures/names.json`); with `title`, the title at the top left, the
-//! 任務 screen's campaign and the shop screen's menu (`tests/fixtures/titles.json`).
+//! 任務 screen's campaign and the shop screen's menu (`tests/fixtures/titles.json`);
+//! with `place`, the title and the chosen location's name at the top right of
+//! the schedule, with `location`, that name alone (the title is the same at
+//! every location), and with `room`, the first room's name on the card of its
+//! dialog (`tests/fixtures/schedule.json`).
 
 use std::path::Path;
 
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 
 use aoi::{
-    Recognizer, campaign, credit, grid,
+    Recognizer, campaign, credit, grid, schedule,
     screen::{self, Region},
     shop, student, title,
 };
 
 /// Room kept around each area, in units (see `screen::unit`).
 const ROOM: f32 = 0.02;
+/// Room kept around the schedule's areas: the map shows around them, which
+/// costs more than their text to keep, and the black beyond comes no nearer to
+/// them than a screen drawn 1500 wide blends (under two pixels at 2370).
+const SCHEDULE_ROOM: f32 = 0.006;
 /// Room kept around the title and the tab, in card heights (beyond the slack
 /// the screen is searched with).
 const SCREEN_ROOM: f32 = 0.5;
@@ -50,10 +58,16 @@ fn kept(image: &image::RgbImage, only: Option<&str>) -> Vec<(f32, f32, f32, f32)
             .chain(campaign::TEXTS.iter().map(|t| campaign::text_area(t.to)))
             .chain(shop::areas())
             .collect(),
+        Some("place") => vec![title::AREA, schedule::NAME_AREA],
+        Some("location") => vec![schedule::NAME_AREA],
+        Some("room") => vec![schedule::ROOM_AREA],
         Some(_) => vec![credit::NUMBER, credit::ICON],
         None => student::areas(),
     };
-    let room = ROOM * u;
+    let room = match only {
+        Some("place" | "location" | "room") => SCHEDULE_ROOM * u,
+        _ => ROOM * u,
+    };
     let mut kept: Vec<(f32, f32, f32, f32)> = areas
         .into_iter()
         .filter_map(|area| student::rect(image, area))
@@ -117,12 +131,15 @@ fn main() {
     let (from, to, only) = match &args[..] {
         [from, to] => (from, to, None),
         [from, to, only]
-            if ["level", "credit", "shop", "list", "name", "title"].contains(&only.as_str()) =>
+            if [
+                "level", "credit", "shop", "list", "name", "title", "place", "location", "room",
+            ]
+            .contains(&only.as_str()) =>
         {
             (from, to, Some(only.as_str()))
         }
         _ => panic!(
-            "usage: mask_fixture <screenshot.png> <fixture.png> [level|credit|shop|list|name|title]"
+            "usage: mask_fixture <screenshot.png> <fixture.png> [level|credit|shop|list|name|title|place|location|room]"
         ),
     };
     let image = image::open(from).expect("the image opens").to_rgb8();
@@ -167,6 +184,10 @@ fn main() {
         );
         return save(&masked, to);
     }
+    if matches!(only, Some("place" | "location" | "room")) {
+        schedule_reads_the_same(only, from, &image, &read);
+        return save(&masked, to);
+    }
     if only == Some("name") {
         let (whole, part) = (student::name::plate(&image), student::name::plate(&read));
         assert!(whole.is_some(), "{from} shows no name plate");
@@ -208,6 +229,28 @@ fn main() {
     assert!(whole.is_some(), "{from} is no student screen");
     assert_eq!(whole, part, "{from} reads otherwise once masked");
     save(&masked, to);
+}
+
+/// Refuses a fixture of the schedule (`only`: `place`, `location` or `room`) whose letters
+/// are cut otherwise from what is kept (`read`) than from the screenshot (`image`).
+fn schedule_reads_the_same(
+    only: Option<&str>,
+    from: &str,
+    image: &image::RgbImage,
+    read: &image::RgbImage,
+) {
+    if only == Some("place") {
+        let (whole, part) = (title::ink(image), title::ink(read));
+        assert!(whole.is_some(), "{from} shows no title");
+        assert_eq!(whole, part, "{from}'s title reads otherwise once masked");
+    }
+    let (whole, part) = if only == Some("room") {
+        (schedule::room_ink(image), schedule::room_ink(read))
+    } else {
+        (schedule::name_ink(image), schedule::name_ink(read))
+    };
+    assert!(whole.is_some(), "{from} names nothing of the schedule");
+    assert_eq!(whole, part, "{from} reads otherwise once masked");
 }
 
 /// Writes `image` with the best compression: a fixture is written once and kept for good.

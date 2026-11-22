@@ -60,6 +60,13 @@ pub struct Index {
     /// The 任務 screen's campaign label and its texts' starts as the game draws
     /// them (see `campaign`).
     pub campaign: Vec<Word>,
+    /// The schedule's locations as the chosen screen names them, and their
+    /// first rooms as the dialog's card does (see `schedule`); none in a bank
+    /// written before them, as the counts' is.
+    #[serde(default)]
+    pub locations: Vec<Word>,
+    #[serde(default)]
+    pub rooms: Vec<Word>,
 }
 
 /// A word as `word::compare` takes it: what it stands for and how it reads,

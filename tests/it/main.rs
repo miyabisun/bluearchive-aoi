@@ -10,6 +10,7 @@ mod kinds;
 mod plan;
 mod recognition;
 mod reuse;
+mod schedule;
 mod shops;
 mod students;
 mod supply;
