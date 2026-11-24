@@ -40,10 +40,6 @@ pub struct Snapshot {
     pub items: Vec<Row>,
     pub equipment: Vec<Row>,
     pub students: Vec<StudentRow>,
-    /// Each student's place in the order of acceptance, by id (see
-    /// `student::accepted`): kept and written to the YAML, shown nowhere.
-    #[serde(skip)]
-    pub accepted: BTreeMap<i64, u32>,
     pub credits: Option<u64>,
     pub shops: Vec<ShopRow>,
     /// The students marked for training and their targets.
@@ -118,7 +114,6 @@ impl Snapshot {
             items: rows(List::Items, &kept.items),
             equipment: rows(List::Equipment, &kept.equipment),
             students: watch::student_rows(recognizer, &kept.students),
-            accepted: kept.accepted.clone(),
             credits: kept.credits,
             shops: recognizer.shop_rows(&kept.shops, &kept.items.clone().into_iter().collect()),
             targets: Vec::new(),
@@ -228,7 +223,6 @@ impl Snapshot {
             items: counts(&self.items),
             equipment: counts(&self.equipment),
             students: self.students.iter().map(|s| (s.id, s.training)).collect(),
-            accepted: self.accepted.clone(),
             credits: self.credits,
             shops: self
                 .shops
@@ -254,7 +248,7 @@ impl Snapshot {
             stamp,
             &self.read_at,
             self.credits,
-            (&self.students, &self.accepted),
+            &self.students,
             &self.items,
             &self.equipment,
             &self.shops,
@@ -297,8 +291,6 @@ impl Snapshot {
                 self.students = rows;
                 self.read_at.students = read;
             }
-            // The students' training was not read: when it last was stays.
-            Update::Accepted(accepted) => self.accepted = accepted,
             Update::Credits(credits) => {
                 self.credits = Some(credits);
                 self.read_at.credits = read;

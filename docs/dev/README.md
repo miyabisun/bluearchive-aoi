@@ -107,12 +107,7 @@ alone: add `level` after the two paths; `credit` keeps the top bar's credits, `s
 a shop screen is read from, `list` the item or equipment list's panel, `name` the name plate's
 name alone (`names.json`), `title` a screen's title (`titles.json`), and for the schedule
 (`schedule.json`) `place` the title with the chosen location's name, `location` that name alone
-and `room` the first room's name on its dialog's card. A screen of the student list
-(`student-lists.json`) takes `students`: what the list is read from, the cards' pictures
-black; `students:<part>,...` with another fixture after it keeps only the parts named
-(`title`, `narrow`, `tabs`, `search`, `sort`, `view`), which the tests lay over that fixture.
-The sort buttons the list is told by (`data/student-sort-*.png`) come from
-`make_templates -- student-list <newest first.png> <oldest first.png>`.
+and `room` the first room's name on its dialog's card.
 
 To measure against the running game, run `cargo run --release --example watch -- 60`. It watches for 60 seconds and prints the frame rate and dropped frames.
 

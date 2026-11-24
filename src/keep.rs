@@ -26,10 +26,6 @@ pub struct Kept {
     pub items: BTreeMap<i64, Count>,
     pub equipment: BTreeMap<i64, Count>,
     pub students: BTreeMap<i64, Training>,
-    /// Each student's place in the order of acceptance (1 the student accepted
-    /// first), by id, as the student list told it (see `student::accepted`);
-    /// also of students whose training was never read.
-    pub accepted: BTreeMap<i64, u32>,
     pub credits: Option<u64>,
     /// The shops' shelves by shop.
     pub shops: BTreeMap<String, Shelf>,
@@ -51,9 +47,6 @@ impl Kept {
             }
             if let Some(target) = self.targets.remove(&own) {
                 self.targets.entry(listed).or_insert(target);
-            }
-            if let Some(number) = self.accepted.remove(&own) {
-                self.accepted.entry(listed).or_insert(number);
             }
         }
     }
@@ -165,7 +158,6 @@ mod tests {
                     held: vec![Some(530), None],
                 },
             )]),
-            accepted: BTreeMap::from([(10059, 7)]),
             targets: BTreeMap::from([(10059, Target::default())]),
             reserved: std::collections::BTreeSet::from([Reserve {
                 shop: "総力戦".to_owned(),
@@ -206,19 +198,6 @@ mod tests {
         let kept = load(&path).unwrap();
         assert_eq!(kept.items.get(&1), Some(&Count::Exact(5)));
         assert_eq!(kept.credits, None);
-        assert!(kept.accepted.is_empty());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    /// The students' numbers in the order of acceptance come back as kept.
-    #[test]
-    fn the_order_of_acceptance_comes_back() {
-        let dir = folder("accepted");
-        let path = dir.join("state.json");
-        let mut numbered = kept();
-        numbered.accepted = BTreeMap::from([(10059, 7), (-1, 8), (16003, 2)]);
-        save(&path, &numbered).unwrap();
-        assert_eq!(load(&path).unwrap().accepted, numbered.accepted);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -232,14 +211,12 @@ mod tests {
         older.level = Some(1);
         moved.students = BTreeMap::from([(-1, training), (-2, older), (10059, training)]);
         moved.targets = BTreeMap::from([(-1, Target::default())]);
-        moved.accepted = BTreeMap::from([(-1, 9), (-2, 3), (10059, 7)]);
         moved.renumber(&[(-1, 10152), (-2, 10059)]);
         assert_eq!(
             moved.students,
             BTreeMap::from([(10059, training), (10152, training)])
         );
         assert_eq!(moved.targets, BTreeMap::from([(10152, Target::default())]));
-        assert_eq!(moved.accepted, BTreeMap::from([(10059, 7), (10152, 9)]));
     }
 
     #[test]

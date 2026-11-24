@@ -47,10 +47,7 @@ too up to the rate, and the shop screen of a shop whose offers are not read, 通
 name its menu has chosen; the schedule past its list of locations by the location's name at the top
 right of the screen "スケジュールを選択", whose title no "?" button follows, and under its
 "すべてのスケジュール" dialog, which dims the title, by the first room's name on the top left card,
-both labeled in `tests/fixtures/schedule.json`). The names under the student list's cards are
-told as the name on a student's plate is, with the plate's letters; the list spaces the
-letters otherwise than the font the names' bounds come from, so each is cut at the gap
-beside it (`Ink::letters_at_gaps`). A video keeps the colour at half
+both labeled in `tests/fixtures/schedule.json`). A video keeps the colour at half
 the resolution of the brightness (4:2:0), so the student screen's coloured texts (a tier, an
 ability release, the weapon level's white fill) are cut out by their brightness; the colour only
 tells where a badge is and whether there is one, over its whole area. An equipment slot's level
@@ -100,18 +97,6 @@ cargo run --release --example build_counts -- <collection>
 - Event items, from the event points to the Valentine chocolates, are never listed.
 - A student's training is taken once three frames in a row read alike; a field read later
   keeps its known value when a frame cannot read it.
-- The order the students were accepted in is read from the student list (生徒リスト) while
-  it shows every student sorted by it (the All tab, 受け入れ順, either direction, no filter
-  and no search: `student::list`, labeled in `tests/fixtures/student-lists.json`). The
-  student accepted first is 1 and each later one a number higher, so a number never changes
-  as students join (`student::accepted`). The numbers start where the list shows it: with
-  the newest first, at the held card before the first card not held (grey, under the banner
-  未所属) or the first empty place; with the oldest first, at the list's first card, the
-  scroll bar's thumb at its start. Any other frame counts from a student whose number is
-  known, and the frames between are laid over one another by the students they name or by
-  the cards' pictures. A place counts once three frames in a row show the same there; a card
-  whose name is not told is still a place. A frame at odds with the numbers known is not
-  taken, and no number given is changed.
 - A shop's goods are told by their icon; icons too alike to tell apart (the tiers'
   blueprint boxes) by the price the shop sells each at. How many more times one can be
   bought is taken once three frames in a row read alike. A shop frame whose cards are the
@@ -154,7 +139,6 @@ students:
     level: 90
     rarity: 5
     bond: 43
-    index: 131  # the 131st student accepted; null until the student list told it
     skills: [5, 10, 10, 10]  # EX, normal, passive, sub
     weapon: {stars: 3, level: 50}  # `locked` before it is unlocked
     equipment: [{tier: 10}, {tier: 10}, null]
@@ -182,5 +166,4 @@ shops:
 ```
 
 `null` marks a field Aoi could not read, apart from what the student lacks. A student
-SchaleDB does not list yet has `id: null`. The numbers of students whose training was never
-read are kept in `state.json` (`accepted`, by id) and written once the student is listed.
+SchaleDB does not list yet has `id: null`.

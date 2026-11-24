@@ -450,40 +450,6 @@ pub fn sorted_by_default(image: &RgbImage, card_height: u32, template: &RgbImage
     best >= MATCH
 }
 
-/// How alike the frame's `region` is to `template` (a picture of it `HEIGHT`
-/// tall, as `crop` cuts it): the likeness of the template's columns before
-/// `split` (a share of its width: a sort key's name) and of those from it on
-/// (the direction button), at the size and place tried where the lesser of the
-/// two is greatest. The student list's sort buttons are told so, each
-/// direction with a template of its own (see `student::list::header`).
-pub fn alike(
-    image: &RgbImage,
-    card_height: u32,
-    region: Region,
-    template: &RgbImage,
-    split: f32,
-) -> (f32, f32) {
-    let split = (template.width() as f32 * split) as u32;
-    let best = std::cell::Cell::new((f32::MIN, f32::MIN));
-    best_match(
-        image,
-        card_height,
-        (region, HEIGHT),
-        &SIZES,
-        template,
-        |area, ox, oy| {
-            let name = ncc(template, 0..split, area, ox, oy);
-            let direction = ncc(template, split..template.width(), area, ox, oy);
-            let (best_name, best_direction) = best.get();
-            if name.min(direction) > best_name.min(best_direction) {
-                best.set((name, direction));
-            }
-            name.min(direction)
-        },
-    );
-    best.get()
-}
-
 /// Which of `titles` (pictures of `TITLE`) the screen shows, if one clearly does.
 pub fn title(image: &RgbImage, card_height: u32, titles: &[RgbImage]) -> Option<usize> {
     let scores: Vec<f32> = titles

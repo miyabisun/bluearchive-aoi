@@ -31,9 +31,6 @@ fn main() {
                     let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
                     println!("{at:6.1}s students {}: {}", rows.len(), names.join(" "));
                 }
-                Some(aoi::watch::Update::Accepted(numbers)) => {
-                    println!("{at:6.1}s students numbered {}", numbers.len());
-                }
                 Some(aoi::watch::Update::Credits(credits)) => {
                     println!("{at:6.1}s credits {credits}");
                 }

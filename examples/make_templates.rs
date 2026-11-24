@@ -6,45 +6,14 @@
 //! student screen, and `data/student-tab-other.png` (the same tab while
 //! another is selected) from one of the student screen on the レベルアップ tab.
 //! Run with `cargo run --example make_templates -- <item list.png> <equipment list.png> <student.png> <student on レベルアップ.png>`.
-//!
-//! `cargo run --example make_templates -- student-list <newest first.png> <oldest first.png>`
-//! writes instead `data/student-sort-newest.png` and `data/student-sort-oldest.png`
-//! alone: the student list's sort key 受け入れ順 beside each direction button
-//! (see `aoi::student::list::SORT`), from screenshots of the list sorted so.
 
 use std::path::Path;
 
 use aoi::{grid, screen};
 
-/// The student list's sort buttons, from a screenshot of each direction
-/// (see the top).
-fn student_list(data: &Path, mut screenshots: impl Iterator<Item = String>) {
-    for name in ["student-sort-newest.png", "student-sort-oldest.png"] {
-        let path = screenshots
-            .next()
-            .expect("the student list, sorted each way");
-        let image = image::open(&path).expect("the image opens").to_rgb8();
-        let unit =
-            (screen::unit(image.width(), image.height()) * screen::STUDENT_UNIT).round() as u32;
-        let picture = screen::crop(
-            &image,
-            unit,
-            aoi::student::list::SORT,
-            (0.0, 0.0),
-            screen::HEIGHT,
-        )
-        .expect("sort buttons");
-        picture.save(data.join(name)).expect("the image saves");
-        println!("{name}: {}x{}", picture.width(), picture.height());
-    }
-}
-
 fn main() {
     let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
-    let mut args = std::env::args().skip(1).peekable();
-    if args.peek().is_some_and(|arg| arg == "student-list") {
-        return student_list(&data, args.skip(1));
-    }
+    let mut args = std::env::args().skip(1);
     let (items, equipment) = (
         args.next().expect("item list"),
         args.next().expect("equipment list"),

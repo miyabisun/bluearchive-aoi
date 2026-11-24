@@ -30,11 +30,7 @@ use crate::{
     quantity::Count,
     schedule, screen,
     shop::{Seen as ShopSeen, Shelves, ShopRow},
-    student::{
-        Training,
-        accepted::{Counting, Took},
-        roster::Roster,
-    },
+    student::{Training, roster::Roster},
     tally::{CONFIRM, Tally},
 };
 
@@ -117,8 +113,6 @@ pub struct StudentRow {
 pub enum Update {
     List(List, Vec<Row>),
     Students(Vec<StudentRow>),
-    /// Each student's place in the order of acceptance, by id.
-    Accepted(BTreeMap<i64, u32>),
     Credits(u64),
     Shops(Vec<ShopRow>),
     /// Where the game is now, or nowhere the window follows.
@@ -516,8 +510,6 @@ fn receiver(latest: &Arc<Latest>, board: &Arc<Board>) -> Receiver {
 struct Read {
     tallies: HashMap<List, Tally>,
     roster: Roster,
-    /// The students' places in the order of acceptance, from the student list.
-    accepted: Counting,
     credits: Credits,
     /// When the credits were last read.
     credits_at: Option<Instant>,
@@ -539,7 +531,6 @@ impl Read {
                 ),
             ]),
             roster: Roster::seeded(kept.students),
-            accepted: Counting::seeded(kept.accepted),
             credits: Credits(Steady::new(kept.credits)),
             credits_at: None,
             place: Steady::new(None),
@@ -647,15 +638,12 @@ impl Read {
                 Sight::Screen(match frame {
                     Shown::List(List::Items, ..) => Screen::Items,
                     Shown::List(List::Equipment, ..) => Screen::Equipment,
-                    Shown::Student(..) | Shown::Students(_) => Screen::Students,
+                    Shown::Student(..) => Screen::Students,
                     Shown::Shop(_) => Screen::Shops,
                 })
             });
         });
         self.ledger.frame();
-        if !matches!(read, Some(Shown::Students(_))) {
-            self.accepted.away();
-        }
         match read {
             Some(Shown::List(list, cells, start)) => {
                 self.ledger.listed(list);
@@ -675,11 +663,6 @@ impl Read {
                 }
                 for list in lists {
                     self.tell_list(recognizer, board, list);
-                }
-            }
-            Some(Shown::Students(seen)) => {
-                if matches!(self.accepted.frame(&seen), Took::Numbered(new) if new > 0) {
-                    board.changed(Update::Accepted(self.accepted.known().clone()));
                 }
             }
             Some(Shown::Shop(seen)) => {
@@ -1077,86 +1060,5 @@ mod tests {
             })
             .collect();
         assert_eq!(read, [0, 500, 1000]);
-    }
-
-    /// The student list in the order of acceptance numbers its students once
-    /// frames in a row agree, and the window hears the numbers; another screen
-    /// between starts the frames over and keeps the numbers.
-    #[test]
-    fn the_student_list_numbers_its_students_once_frames_agree() {
-        use std::sync::{Arc, Mutex, atomic::AtomicU32};
-
-        use crate::{Recognizer, keep::Kept, tally::CONFIRM};
-
-        type Told = Mutex<Vec<(Status, Option<super::Update>)>>;
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let recognizer = Recognizer::load(&root.join("data")).unwrap();
-        let list = image::open(root.join("tests/fixtures/student-list/newest-end.png"))
-            .unwrap()
-            .to_rgb8();
-        let told: Arc<Told> = Arc::default();
-        let board = super::Board {
-            seen: Mutex::new((
-                Seen {
-                    game: Game::Captured,
-                    ..Seen::default()
-                },
-                None,
-            )),
-            report: Box::new({
-                let told = told.clone();
-                move |status, update| told.lock().unwrap().push((status.clone(), update))
-            }),
-        };
-        let frames = AtomicU32::new(0);
-        let mut read = super::Read::seeded(Kept::default());
-        let accepted = |told: &Told| -> Vec<usize> {
-            let told = told.lock().unwrap();
-            told.iter()
-                .filter_map(|(_, update)| match update {
-                    Some(super::Update::Accepted(numbers)) => Some(numbers.len()),
-                    _ => None,
-                })
-                .collect()
-        };
-        for frame in 1..=CONFIRM {
-            assert!(read.frame(&recognizer, &board, &frames, &list));
-            let heard = if frame == CONFIRM { vec![8] } else { vec![] };
-            assert_eq!(accepted(&told), heard, "after {frame} frames");
-        }
-        let reading = |status: &Status| {
-            matches!(
-                status,
-                Status::Reading {
-                    list: Screen::Students,
-                    ..
-                }
-            )
-        };
-        assert!(
-            told.lock()
-                .unwrap()
-                .iter()
-                .any(|(status, _)| reading(status))
-        );
-        let yuuka = recognizer
-            .students()
-            .iter()
-            .find(|s| s.1 == "ユウカ")
-            .unwrap()
-            .0;
-        assert_eq!(read.accepted.known().get(&yuuka), Some(&1));
-        // Another screen, then the list again: nothing new, the numbers kept.
-        assert!(!read.frame(
-            &recognizer,
-            &board,
-            &frames,
-            &image::RgbImage::new(1600, 900)
-        ));
-        for _ in 0..CONFIRM {
-            read.frame(&recognizer, &board, &frames, &list);
-        }
-        assert_eq!(accepted(&told), [8]);
-        assert_eq!(read.accepted.known().len(), 8);
     }
 }

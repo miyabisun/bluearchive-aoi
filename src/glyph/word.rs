@@ -19,15 +19,6 @@ const ASPECT: (f32, f32) = (0.75, 1.33);
 /// right name was the nearest on every plate).
 const WIDE: f32 = 20.0;
 
-/// How far from a gap in the ink a word's bound may lie to be moved into
-/// it, as a share of a letter's width (the word's width over its letters).
-/// Measured on 2026-11-24 over the names of the student list walked both ways
-/// (1082 names seen, 266 students): from 0.15 to 0.25, one name not told and
-/// none told wrong; at 0.35, a kanji of a name in brackets parted at the gap
-/// within it (one more not told). Measured to a gap's middle instead of its
-/// edge, a bracket's wide gap lay out of reach: 12 to 22 not told.
-const GAP_REACH: f32 = 0.2;
-
 /// The runs of `on` places, each its first and last: the columns or the rows a
 /// text's letters, or a box beside it, span.
 pub fn runs(on: impl IntoIterator<Item = bool>) -> Vec<(usize, usize)> {
@@ -159,49 +150,6 @@ impl Ink {
         tile
     }
 
-    /// The ink's letters as `word` parts them, each bound between two
-    /// letters moved into the gap in the ink it lies nearest, within
-    /// `GAP_REACH` of a letter's width from the gap's edge: the game spaces a
-    /// name's letters under a card otherwise than the font the word's bounds
-    /// come from, and a bound that falls into a letter cuts a sliver of it
-    /// into its neighbour. A gap farther off lies within a letter (the strokes
-    /// of "リ", the halves of "服"), and where no gap is near, or two bounds
-    /// would meet, the word's bounds stay.
-    pub fn letters_at_gaps(&self, word: &Word) -> Vec<Tile> {
-        let Some((left, right, top, bottom)) = self.bounds() else {
-            return Vec::new();
-        };
-        let width = (right - left) as f32;
-        let mut bounds: Vec<f32> = word
-            .bounds
-            .iter()
-            .map(|&b| left as f32 + f32::from(b) / 255.0 * width)
-            .collect();
-        let inked = |x: u32| (top..bottom).any(|y| self.at(x, y));
-        // Each gap from its first column to past its last.
-        let gaps: Vec<(f32, f32)> = runs((left..right).map(|x| !inked(x)))
-            .into_iter()
-            .map(|(from, to)| (left as f32 + from as f32, left as f32 + to as f32 + 1.0))
-            .collect();
-        let reach = GAP_REACH * width / word.bounds.len().saturating_sub(1).max(1) as f32;
-        let last = bounds.len().saturating_sub(1);
-        let mut moved = bounds.clone();
-        for bound in moved.iter_mut().take(last).skip(1) {
-            let off = |gap: &(f32, f32)| (gap.0 - *bound).max(*bound - gap.1).max(0.0);
-            let nearest = gaps.iter().min_by(|a, b| off(a).total_cmp(&off(b)));
-            if let Some(gap) = nearest.filter(|gap| off(gap) <= reach) {
-                *bound = f32::midpoint(gap.0, gap.1);
-            }
-        }
-        if moved.windows(2).all(|pair| pair[0] < pair[1]) {
-            bounds = moved;
-        }
-        bounds
-            .windows(2)
-            .map(|b| self.tile(b[0], b[1], top as f32, bottom as f32))
-            .collect()
-    }
-
     /// The ink's letters as `word` parts them, each a tile.
     pub fn letters(&self, word: &Word) -> Vec<Tile> {
         let Some((left, right, top, bottom)) = self.bounds() else {
@@ -254,31 +202,16 @@ pub fn compare(
     tiles: &[Tile],
     letters: &BTreeMap<char, Vec<usize>>,
 ) -> Option<(f32, f32)> {
-    compare_cut(ink, word, tiles, letters, Ink::letters)
-}
-
-/// How a text's ink is cut into a word's letters: `Ink::letters` or
-/// `Ink::letters_at_gaps`.
-pub type Cut = fn(&Ink, &Word) -> Vec<Tile>;
-
-/// As `compare`, the letters cut by `cut`.
-pub fn compare_cut(
-    ink: &Ink,
-    word: &Word,
-    tiles: &[Tile],
-    letters: &BTreeMap<char, Vec<usize>>,
-    cut: Cut,
-) -> Option<(f32, f32)> {
-    within(ink, word, (tiles, letters), f32::INFINITY, cut)
+    within(ink, word, tiles, letters, f32::INFINITY)
 }
 
 /// As `compare`, but `None` too as soon as the mean comes past `limit`.
 fn within(
     ink: &Ink,
     word: &Word,
-    (tiles, letters): (&[Tile], &BTreeMap<char, Vec<usize>>),
+    tiles: &[Tile],
+    letters: &BTreeMap<char, Vec<usize>>,
     limit: f32,
-    cut: Cut,
 ) -> Option<(f32, f32)> {
     let (left, right, top, bottom) = ink.bounds()?;
     let ratio = ((right - left) as f32 / (bottom - top) as f32) / word.aspect;
@@ -288,7 +221,7 @@ fn within(
     let wide = WIDE * ratio.ln().abs();
     let count = word.tiles.len().max(1) as f32;
     let (mut sum, mut worst) = (0.0, 0.0f32);
-    let cut = cut(ink, word);
+    let cut = ink.letters(word);
     let chars = word.text.chars().map(Some).chain(std::iter::repeat(None));
     for ((tile, &font), c) in cut.iter().zip(&word.tiles).zip(chars) {
         let own = c.and_then(|c| letters.get(&c));
@@ -315,18 +248,6 @@ pub fn nearest<'a>(
     letters: &BTreeMap<char, Vec<usize>>,
     worst: f32,
 ) -> Option<&'a Word> {
-    nearest_cut(ink, words, tiles, letters, worst, Ink::letters)
-}
-
-/// As `nearest`, the letters cut by `cut`.
-pub fn nearest_cut<'a>(
-    ink: &Ink,
-    words: impl IntoIterator<Item = &'a Word>,
-    tiles: &[Tile],
-    letters: &BTreeMap<char, Vec<usize>>,
-    worst: f32,
-    cut: Cut,
-) -> Option<&'a Word> {
     let (left, right, top, bottom) = ink.bounds()?;
     let aspect = (right - left) as f32 / (bottom - top) as f32;
     // The words as wide as the ink first: the nearest is likely among them,
@@ -342,7 +263,7 @@ pub fn nearest_cut<'a>(
         if wide > limit {
             break;
         }
-        if let Some(compared) = within(ink, word, (tiles, letters), limit, cut) {
+        if let Some(compared) = within(ink, word, tiles, letters, limit) {
             best = Some((compared, word));
         }
     }
@@ -427,97 +348,6 @@ mod tests {
         let tile = ink.tile(8.0, 16.0, 0.0, 4.0);
         assert_eq!(tile[0], 255);
         assert_eq!(tile[TILE * TILE / 2 + TILE / 2], 0);
-    }
-
-    /// A word of three letters whose bounds lie at `bounds` of its width.
-    fn three(bounds: [u8; 4]) -> Word {
-        Word {
-            id: 1,
-            text: "I口I".into(),
-            aspect: 14.0 / 4.0,
-            bounds: bounds.to_vec(),
-            tiles: vec![0, 0, 0],
-        }
-    }
-
-    /// The game spaces a name's letters otherwise than the font the word's
-    /// bounds come from: a bound that falls into a letter is moved to the gap
-    /// beside it, so each letter is cut whole and alone.
-    #[test]
-    fn letters_part_at_the_gaps_nearest_the_words_bounds() {
-        // A bar, a box and a bar; the word's bounds both fall into the box.
-        let ink = ink(&[
-            "##..######..##",
-            "##..#....#..##",
-            "##..#....#..##",
-            "##..######..##",
-        ]);
-        let word = three([0, 80, 175, 255]);
-        let whole = [255; TILE * TILE];
-        let cut = ink.letters_at_gaps(&word);
-        assert_eq!(cut.len(), 3);
-        assert_eq!(cut[0], whole, "the bar alone");
-        assert_eq!(cut[2], whole, "the bar alone");
-        assert_eq!((cut[1][0], cut[1][TILE * TILE / 2 + TILE / 2]), (255, 0));
-        // Cut where the word's bounds lie, the first bar comes with a sliver of the box.
-        assert_ne!(ink.letters(&word)[0], whole);
-    }
-
-    /// A gap far from every bound lies within a letter (the two strokes of
-    /// "リ"): no bound moves there. Letters that touch keep the word's bound.
-    #[test]
-    fn a_gap_within_a_letter_or_none_moves_no_bound() {
-        // Two strokes of one letter, then a box.
-        let two_strokes = ink(&[
-            "##...##..######",
-            "##...##..#....#",
-            "##...##..#....#",
-            "##...##..######",
-        ]);
-        let word = Word {
-            id: 1,
-            text: "リ口".into(),
-            aspect: 15.0 / 4.0,
-            bounds: vec![0, 128, 255],
-            tiles: vec![0, 0],
-        };
-        let cut = two_strokes.letters_at_gaps(&word);
-        // Both strokes in the first tile: inked at either end, not between.
-        let row = &cut[0][..TILE];
-        assert_eq!((row[0], row[TILE / 2], row[TILE - 1]), (255, 0, 255));
-        // No gap at all: the bounds stay where the word has them.
-        let touching = ink(&["##############", "##############"]);
-        let word = three([0, 80, 175, 255]);
-        assert_eq!(touching.letters_at_gaps(&word), touching.letters(&word));
-    }
-
-    /// A word is told with its letters cut at the gaps where asked so.
-    #[test]
-    fn a_word_is_compared_as_its_letters_are_cut() {
-        let ink = ink(&[
-            "##..######..##",
-            "##..#....#..##",
-            "##..#....#..##",
-            "##..######..##",
-        ]);
-        let bar = [255; TILE * TILE];
-        let square = ink.tile(4.0, 10.0, 0.0, 4.0);
-        let tiles = vec![bar, square];
-        let word = Word {
-            tiles: vec![0, 1, 0],
-            ..three([0, 80, 175, 255])
-        };
-        let none = BTreeMap::new();
-        let at_gaps = compare_cut(&ink, &word, &tiles, &none, Ink::letters_at_gaps).unwrap();
-        let at_bounds = compare(&ink, &word, &tiles, &none).unwrap();
-        assert!(
-            at_gaps.1 < 0.01 && at_bounds.1 > 10.0,
-            "{at_gaps:?} {at_bounds:?}"
-        );
-        let words = [word];
-        let told = |cut| nearest_cut(&ink, &words, &tiles, &none, 5.0, cut);
-        assert_eq!(told(Ink::letters_at_gaps), Some(&words[0]));
-        assert_eq!(told(Ink::letters), None);
     }
 
     #[test]
