@@ -15,6 +15,15 @@
 //! the schedule, with `location`, that name alone (the title is the same at
 //! every location), and with `room`, the first room's name on the card of its
 //! dialog (`tests/fixtures/schedule.json`).
+//!
+//! `cargo run --release --example mask_fixture -- <screenshot.png> <fixture.png> students[:<part>,...] [<fixture below.png>]`
+//! keeps what the student list is read from (`aoi::student::list::areas`: the
+//! parts `title`, `narrow`, `tabs`, `search`, `sort` and `view`, the insides of
+//! the cards' pictures and the pins black), or the parts named alone: a screen
+//! that differs from another fixture in a part of its header keeps that part,
+//! and the tests lay it over the other (`tests/fixtures/student-lists.json`).
+//! Refuses when what is kept, laid over the fixture below where one is given,
+//! tells otherwise than the screenshot.
 
 use std::path::Path;
 
@@ -126,9 +135,80 @@ fn kept(image: &image::RgbImage, only: Option<&str>) -> Vec<(f32, f32, f32, f32)
     kept
 }
 
+/// The student list (see the top): `parts` of `from` kept, all for none
+/// named, and checked laid over `below`.
+fn students(from: &str, to: &str, parts: &str, below: Option<&String>) {
+    let image = image::open(from).expect("the image opens").to_rgb8();
+    let areas = student::list::areas(&image);
+    let named: Vec<&str> = parts.split(',').filter(|part| !part.is_empty()).collect();
+    for part in &named {
+        assert!(
+            areas.parts.iter().any(|(name, _)| name == part),
+            "{part} is no part of the student list"
+        );
+    }
+    let kept: Vec<(u32, u32, u32, u32)> = areas
+        .parts
+        .iter()
+        .filter(|(name, _)| named.is_empty() || named.contains(name))
+        .flat_map(|(_, rects)| rects.clone())
+        .collect();
+    let within = |rects: &[(u32, u32, u32, u32)], x: u32, y: u32| {
+        rects
+            .iter()
+            .any(|&(x0, y0, x1, y1)| x >= x0 && x < x1 && y >= y0 && y < y1)
+    };
+    let masked = image::RgbImage::from_fn(image.width(), image.height(), |x, y| {
+        if within(&kept, x, y) && !within(&areas.unread, x, y) {
+            *image.get_pixel(x, y)
+        } else {
+            image::Rgb([0, 0, 0])
+        }
+    });
+    // As the tests show it: over the fixture below, the parts kept.
+    let shown = match below {
+        None => masked.clone(),
+        Some(below) => {
+            let below = image::open(below).expect("the image opens").to_rgb8();
+            assert_eq!(below.dimensions(), masked.dimensions(), "of one size");
+            image::RgbImage::from_fn(below.width(), below.height(), |x, y| {
+                let from = if within(&kept, x, y) { &masked } else { &below };
+                *from.get_pixel(x, y)
+            })
+        }
+    };
+    let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("data");
+    let recognizer = Recognizer::load(&data).expect("the recognizer loads data/");
+    // Both read as Aoi reads them, scaled down to a width read at; the faces
+    // are of the pictures blacked out.
+    let told = |screen: &image::RgbImage| {
+        let screen = screen::normalize(screen);
+        let header = student::list::header(&screen, recognizer.student_sorts());
+        let stretch = recognizer.read_student_list(&screen).map(|seen| seen.sight);
+        (header, stretch)
+    };
+    assert_eq!(
+        told(&image),
+        told(&shown),
+        "{from} tells otherwise once masked"
+    );
+    save(&masked, to);
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let (from, to, only) = match &args[..] {
+    match args.get(2).and_then(|only| only.strip_prefix("students")) {
+        Some(parts) => {
+            let parts = parts.strip_prefix(':').unwrap_or(parts);
+            students(&args[0], &args[1], parts, args.get(3));
+        }
+        None => others(&args),
+    }
+}
+
+/// Every screen but the student list (see the top).
+fn others(args: &[String]) {
+    let (from, to, only) = match args {
         [from, to] => (from, to, None),
         [from, to, only]
             if [
@@ -139,7 +219,7 @@ fn main() {
             (from, to, Some(only.as_str()))
         }
         _ => panic!(
-            "usage: mask_fixture <screenshot.png> <fixture.png> [level|credit|shop|list|name|title|place|location|room]"
+            "usage: mask_fixture <screenshot.png> <fixture.png> [level|credit|shop|list|name|title|place|location|room|students[:<part>,...] [<fixture below.png>]]"
         ),
     };
     let image = image::open(from).expect("the image opens").to_rgb8();

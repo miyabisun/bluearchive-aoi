@@ -216,3 +216,42 @@ fn keeps_the_student_headings_over_their_columns_when_scrolled(cx: &mut TestAppC
     assert_eq!(heading(vcx), top, "the headings stay where they were");
     assert_ne!(first(vcx), row, "the rows moved under them");
 }
+
+/// The students' places in the order of acceptance, as the watcher tells them from the game's
+/// student list, are kept in the app's file and written to the YAML as each student's `index`
+/// (the user's of 2026-11-24: 「生徒の受け入れ順番を生徒のindex値として保存」); started again over
+/// what was kept, they are still there. A student's number is kept though the student is not
+/// listed yet.
+#[test]
+fn the_order_of_acceptance_is_kept_and_written() {
+    use std::collections::BTreeMap;
+
+    use crate::{
+        app::Snapshot,
+        keep,
+        watch::{Status, Update},
+    };
+
+    let recognizer = super::recognizer();
+    let places = super::places();
+    let kept = Kept {
+        students: [(hoshino().id, hoshino().training)].into(),
+        ..Kept::default()
+    };
+    let mut snapshot = Snapshot::starting(&recognizer, &kept, None);
+    let numbers = BTreeMap::from([(hoshino().id, 12), (akane().id, 3)]);
+    let told = Update::Accepted(numbers.clone());
+    snapshot.apply(&recognizer, &places, &Status::NoGame, Some(told));
+    assert_eq!(snapshot.keep_error, None);
+    // The list tells no training: when the students were last read stays.
+    assert_eq!(snapshot.read_at.students, None);
+    let back = keep::load(&places.state).unwrap();
+    assert_eq!(back.accepted, numbers);
+    let yaml = std::fs::read_to_string(&places.latest).unwrap();
+    let indexes: Vec<&str> = yaml.lines().filter(|l| l.contains("index:")).collect();
+    assert_eq!(indexes.last(), Some(&"    index: 12"), "{yaml}");
+    assert_eq!(
+        Snapshot::starting(&recognizer, &back, None).accepted,
+        numbers
+    );
+}

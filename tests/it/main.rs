@@ -12,6 +12,7 @@ mod recognition;
 mod reuse;
 mod schedule;
 mod shops;
+mod student_list;
 mod students;
 mod supply;
 mod titles;

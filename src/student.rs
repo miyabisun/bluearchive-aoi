@@ -7,6 +7,8 @@
 //! from labeled screenshots (`glyph`). A field that cannot be read for sure is
 //! left unknown.
 
+pub mod accepted;
+pub mod list;
 pub mod name;
 pub mod roster;
 

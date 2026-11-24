@@ -126,6 +126,9 @@ pub enum Frame {
     /// The student screen: the student (`None` when the name could not be
     /// told) and the training shown.
     Student(Option<i64>, student::Training),
+    /// The student list, whole and in the order of acceptance: what stands at
+    /// each place in view (see `student::list`).
+    Students(student::list::Seen),
     /// A shop and its offers.
     Shop(shop::Seen),
 }
@@ -211,6 +214,9 @@ pub struct Recognizer {
     /// The student screen's title, its selected 基本情報 tab, and the same tab
     /// while another is selected.
     student_screen: (RgbImage, RgbImage, RgbImage),
+    /// The student list's sort key 受け入れ順 beside each direction button
+    /// (`data/student-sort-*.png`).
+    student_sorts: student::list::Sorts,
     /// The references of the texts read, at each of `screen::WIDTHS`, the
     /// window's first.
     texts: Vec<Texts>,
@@ -222,6 +228,8 @@ struct Texts {
     width: u32,
     glyphs: glyph::bank::Bank,
     fonts: glyph::Fonts,
+    /// The student list's names told with these references before.
+    listed: std::sync::Mutex<student::list::Told>,
 }
 
 /// The students by id and name, and the ids of Aoi's own whose students
@@ -299,6 +307,7 @@ impl Recognizer {
                     width,
                     fonts: glyphs.fonts(),
                     glyphs,
+                    listed: std::sync::Mutex::default(),
                 })
             })
             .collect::<Result<Vec<_>, String>>()?;
@@ -360,6 +369,10 @@ impl Recognizer {
                 template("student-tab.png")?,
                 template("student-tab-other.png")?,
             ),
+            student_sorts: student::list::Sorts {
+                newest: template("student-sort-newest.png")?,
+                oldest: template("student-sort-oldest.png")?,
+            },
             texts,
         })
     }
@@ -1083,15 +1096,62 @@ impl Recognizer {
     }
 
     /// Reads whatever the frame shows that can be read: a list in its default
-    /// order, the student screen's 基本情報 tab, or a shop.
+    /// order, the student screen's 基本情報 tab, the student list in the order
+    /// of acceptance, or a shop.
     pub fn read_frame(&self, image: &RgbImage) -> Option<Frame> {
         if let Some((list, cells, start)) = self.read_list(image) {
             return Some(Frame::List(list, cells, start));
         }
-        if let Some((id, training)) = self.read_student(image) {
-            return Some(Frame::Student(id, training));
+        // The student screen and the student list share their title: told once.
+        if self.titled_student(image) {
+            if let Some((id, training)) = self.student_under_title(image) {
+                return Some(Frame::Student(id, training));
+            }
+            if let Some(sight) = self.student_list_under_title(image) {
+                return Some(Frame::Students(sight));
+            }
         }
         self.read_shop(image).map(Frame::Shop)
+    }
+
+    /// Whether the screen's title is the student screens' (生徒).
+    fn titled_student(&self, image: &RgbImage) -> bool {
+        let unit =
+            (screen::unit(image.width(), image.height()) * screen::STUDENT_UNIT).round() as u32;
+        screen::title(image, unit, std::slice::from_ref(&self.student_screen.0)).is_some()
+    }
+
+    /// Reads the student list (see `student::list`) while it shows every
+    /// student in the order of acceptance; any other screen, and the list
+    /// filtered, searched or sorted otherwise, gives `None`.
+    pub fn read_student_list(&self, image: &RgbImage) -> Option<student::list::Seen> {
+        if !self.titled_student(image) {
+            return None;
+        }
+        self.student_list_under_title(image)
+    }
+
+    /// As `read_student_list`, the title told already.
+    fn student_list_under_title(&self, image: &RgbImage) -> Option<student::list::Seen> {
+        let ascending = student::list::header(image, &self.student_sorts)?;
+        student::list::read(image, ascending, self.list_names(image))
+    }
+
+    /// What the student list's names are told with at the width `image` is
+    /// read at.
+    pub fn list_names(&self, image: &RgbImage) -> student::list::Names<'_> {
+        let texts = self.texts(image);
+        student::list::Names {
+            words: &texts.glyphs.index.names,
+            tiles: &texts.glyphs.tiles,
+            letters: &texts.glyphs.index.letters,
+            told: &texts.listed,
+        }
+    }
+
+    /// The pictures the student list's sort buttons are compared with.
+    pub fn student_sorts(&self) -> &student::list::Sorts {
+        &self.student_sorts
     }
 
     /// The credits the top bar shows; `None` where there is no bar, or its
@@ -1104,10 +1164,15 @@ impl Recognizer {
     /// (level, rarity, bond) on its other tabs, where a student is levelled up;
     /// any other screen gives `None`.
     pub fn read_student(&self, image: &RgbImage) -> Option<(Option<i64>, student::Training)> {
-        let (title, tab, other_tab) = &self.student_screen;
-        let unit =
-            (screen::unit(image.width(), image.height()) * screen::STUDENT_UNIT).round() as u32;
-        screen::title(image, unit, std::slice::from_ref(title))?;
+        if !self.titled_student(image) {
+            return None;
+        }
+        self.student_under_title(image)
+    }
+
+    /// As `read_student`, the title told already.
+    fn student_under_title(&self, image: &RgbImage) -> Option<(Option<i64>, student::Training)> {
+        let (_, tab, other_tab) = &self.student_screen;
         let basic = screen::student_tab(image, tab);
         if !basic && !screen::student_tab(image, other_tab) {
             return None;

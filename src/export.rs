@@ -2,7 +2,7 @@
 //! tool: the students' training, the counts of the item and equipment lists
 //! and the shops' offers, and the month-end shops' cards reserved.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     Row,
@@ -14,12 +14,13 @@ use crate::{
 };
 
 /// The YAML of everything read, headed by when it was written (`stamp`) and
-/// when each list was last read.
+/// when each list was last read. The students come with their places in the
+/// order of acceptance (`accepted`, by id), each written as its `index`.
 pub fn yaml(
     stamp: &str,
     read_at: &ReadAt,
     credits: Option<u64>,
-    students: &[StudentRow],
+    (students, accepted): (&[StudentRow], &BTreeMap<i64, u32>),
     items: &[Row],
     equipment: &[Row],
     shops: &[ShopRow],
@@ -36,6 +37,7 @@ pub fn yaml(
     out += "# skills は EX・ノーマル・パッシブ・サブ、ability は HP・攻撃力・治癒力の能力解放。\n";
     out += "# count の K は千単位（51K は 50,500〜51,499）。\n";
     out += "# id: null の生徒は SchaleDB に未登録（名前だけで照合）。\n";
+    out += "# index は生徒を受け入れた順番（最初に受け入れた生徒が 1。ゲームの生徒リストを「All」「受け入れ順」にして端まで送ると読む。null は未読）。\n";
     out += "# shops の left はあと何回買えるか。held は各コインの所持数。price・amount・limit は 1 回の価格・個数と回数の上限（ショップの決まり、カケラ(文字) の price はカードの値、無ければ null）。\n";
     out += "# shops の read_at はコイン数か品目が最後に変わった時刻。カケラ(文字) 以外のショップは毎月 1 日 4:00 に戻る（read_at がそれより前なら前の月の値）。\n";
     out += "# reserved は月末ショップの購買戦略で予約中のカード（ショップ・品・払うコイン）と、任務 Hard で予約中の生徒の神名文字（shop: 任務 Hard、coin: AP）。\n";
@@ -64,6 +66,12 @@ pub fn yaml(
             format!("level: {}", value(t.level)),
             format!("rarity: {}", value(t.rarity)),
             format!("bond: {}", value(t.bond)),
+            format!(
+                "index: {}",
+                accepted
+                    .get(&s.id)
+                    .map_or("null".to_owned(), ToString::to_string)
+            ),
             format!("skills: [{}]", t.skills.map(value).join(", ")),
             format!("weapon: {weapon}"),
             format!("equipment: [{}]", equipment.join(", ")),
@@ -215,6 +223,9 @@ mod tests {
         student::{Gear, Training, Weapon},
     };
 
+    /// No student numbered in the order of acceptance.
+    const NONE: BTreeMap<i64, u32> = BTreeMap::new();
+
     fn mika() -> StudentRow {
         StudentRow {
             id: 10059,
@@ -258,7 +269,7 @@ mod tests {
             "2026-10-12 15:30:00",
             &ReadAt::default(),
             None,
-            &[mika()],
+            (&[mika()], &BTreeMap::from([(10059, 131)])),
             &items,
             &equipment,
             &[],
@@ -278,6 +289,7 @@ students:
     level: 90
     rarity: 5
     bond: 43
+    index: 131
     skills: [5, 10, 10, 10]
     weapon: {stars: 3, level: 50}
     equipment: [{tier: 10}, {tier: 10}, {tier: 10}]
@@ -317,7 +329,7 @@ shops: []
             "",
             &ReadAt::default(),
             None,
-            &[student.clone()],
+            (&[student.clone()], &NONE),
             &[],
             &[],
             &[],
@@ -325,6 +337,7 @@ shops: []
         for line in [
             "    level: null",
             "    bond: null",
+            "    index: null",
             "    skills: [2, null, 3, 6]",
             "    weapon: locked",
             "    equipment: [{tier: 4}, null, null]",
@@ -334,8 +347,45 @@ shops: []
             assert!(text.lines().any(|l| l == line), "{line}\n{text}");
         }
         student.training.weapon = None;
-        let text = yaml("", &ReadAt::default(), None, &[student], &[], &[], &[]);
+        let text = yaml(
+            "",
+            &ReadAt::default(),
+            None,
+            (&[student], &NONE),
+            &[],
+            &[],
+            &[],
+        );
         assert!(text.lines().any(|l| l == "    weapon: null"), "{text}");
+    }
+
+    /// A student's place in the order of acceptance is written as `index`, a
+    /// student not numbered yet with `null`; a number of a student not listed
+    /// (seen in the student list alone) is written nowhere.
+    #[test]
+    fn writes_each_students_place_in_the_order_of_acceptance() {
+        let mut other = mika();
+        (other.id, other.name) = (10005, "ホシノ".to_owned());
+        let accepted = BTreeMap::from([(10059, 131), (20001, 5)]);
+        let text = yaml(
+            "",
+            &ReadAt::default(),
+            None,
+            (&[other, mika()], &accepted),
+            &[],
+            &[],
+            &[],
+        );
+        let indexes: Vec<&str> = text
+            .lines()
+            .filter(|l| l.starts_with("    index:"))
+            .collect();
+        assert_eq!(indexes, ["    index: null", "    index: 131"]);
+        assert!(
+            text.lines()
+                .any(|l| l.starts_with("# index は生徒を受け入れた順番")),
+            "{text}"
+        );
     }
 
     #[test]
@@ -343,7 +393,15 @@ shops: []
         let mut student = mika();
         student.id = -1;
         student.name = "ツムギ".to_owned();
-        let text = yaml("", &ReadAt::default(), None, &[student], &[], &[], &[]);
+        let text = yaml(
+            "",
+            &ReadAt::default(),
+            None,
+            (&[student], &NONE),
+            &[],
+            &[],
+            &[],
+        );
         assert!(text.lines().any(|l| l == "  - id: null"), "{text}");
         assert!(text.lines().any(|l| l == r#"    name: "ツムギ""#), "{text}");
     }
@@ -356,7 +414,15 @@ shops: []
             students: Some("2026-10-12 16:00:00".to_owned()),
             credits: None,
         };
-        let text = yaml("2026-10-12 16:05:00", &read_at, None, &[], &[], &[], &[]);
+        let text = yaml(
+            "2026-10-12 16:05:00",
+            &read_at,
+            None,
+            (&[], &NONE),
+            &[],
+            &[],
+            &[],
+        );
         let line = "# 最終読み取り: アイテム 2026-10-12 15:30:00 / 装備 なし / 生徒 2026-10-12 16:00:00 / クレジット なし";
         assert!(text.lines().any(|l| l == line), "{text}");
     }
@@ -367,13 +433,13 @@ shops: []
             "",
             &ReadAt::default(),
             Some(244_213_276),
-            &[],
+            (&[], &NONE),
             &[],
             &[],
             &[],
         );
         assert!(text.lines().any(|l| l == "credits: 244213276"), "{text}");
-        let text = yaml("", &ReadAt::default(), None, &[], &[], &[], &[]);
+        let text = yaml("", &ReadAt::default(), None, (&[], &NONE), &[], &[], &[]);
         assert!(text.lines().any(|l| l == "credits: null"), "{text}");
     }
 
@@ -421,7 +487,7 @@ shops: []
                 eleph: false,
             }],
         }];
-        let text = yaml("", &ReadAt::default(), None, &[], &[], &[], &shops);
+        let text = yaml("", &ReadAt::default(), None, (&[], &NONE), &[], &[], &shops);
         let tail: String = text
             .lines()
             .skip_while(|l| !l.starts_with("shops:"))
@@ -474,7 +540,7 @@ shops: []
 
     #[test]
     fn writes_empty_lists_as_such() {
-        let text = yaml("", &ReadAt::default(), None, &[], &[], &[], &[]);
+        let text = yaml("", &ReadAt::default(), None, (&[], &NONE), &[], &[], &[]);
         for line in ["students: []", "items: []", "equipment: []", "shops: []"] {
             assert!(text.lines().any(|l| l == line), "{line}\n{text}");
         }
@@ -483,7 +549,7 @@ shops: []
     #[test]
     fn quotes_names_the_yaml_would_misread() {
         let items = [row(7, "Lv: \"MAX\" #1", None, Count::Exact(1))];
-        let text = yaml("", &ReadAt::default(), None, &[], &items, &[], &[]);
+        let text = yaml("", &ReadAt::default(), None, (&[], &NONE), &items, &[], &[]);
         assert!(
             text.lines().any(|l| l == r#"    name: "Lv: \"MAX\" #1""#),
             "{text}"
@@ -503,6 +569,7 @@ shops: []
         kept.items.insert(5, Count::Thousands(51));
         kept.equipment.insert(2, Count::Exact(3));
         kept.read_at.items = Some("2026-11-10 12:00:00".to_owned());
+        kept.accepted.insert(10059, 7);
         kept.reserved.insert(crate::strategy::Reserve {
             shop: "総力戦".to_owned(),
             id: 9999,
